@@ -1,8 +1,11 @@
 mod tencent;
 mod util;
+mod v2ray;
 
+use tauri::Manager;
 use tencent::*;
 use util::*;
+use v2ray::*;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -23,8 +26,15 @@ pub fn run() {
       tauri_generate_uuid,
       tauri_exit_process,
       tauri_open_devtools,
-      tauri_calc_tencent_cloud_api_signature
+      tauri_calc_tencent_cloud_api_signature,
+      tauri_start_v2ray_server,
+      tauri_stop_v2ray_server
     ])
+    .setup(|_app| {
+      #[cfg(desktop)]
+      _app.manage(V2RayProc::new());
+      Ok(())
+    })
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }

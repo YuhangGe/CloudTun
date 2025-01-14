@@ -186,7 +186,7 @@ export async function startV2RayCore() {
   const conf = getV2RayCoreConf();
   if (!conf) return false;
   try {
-    await invoke('plugin:cloudv2ray|tauri_start_v2ray_server', {
+    await invoke('tauri_start_v2ray_server', {
       config: conf,
     });
     return true;
