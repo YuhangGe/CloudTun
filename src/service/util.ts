@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { platform } from '@tauri-apps/plugin-os';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { message } from './message';
+import { sendNotification } from '@tauri-apps/plugin-notification';
 
 export const currentPlatform = platform();
 
@@ -99,6 +100,8 @@ export function loadingMessage(title: string): LoadingMessage {
     content: title,
     type: 'loading',
   });
+
+  sendNotification({ title });
   return {
     update(title: string) {
       void message.open({
