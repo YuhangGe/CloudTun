@@ -1,82 +1,70 @@
 import { invoke } from '@tauri-apps/api/core';
-import { Dropdown } from 'antd';
-import type { FC, ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { Dropdown, type MenuOption } from 'jinge-antd';
+import { Portal, onMount, ref, registerEvent } from 'jinge';
 
-export function renderContextMenuItem(label: string, icon?: ReactNode) {
-  return (
-    <div className='flex items-center gap-3 py-2 pl-1 pr-2'>
-      {icon && <span className='translate-y-0.5'>{icon}</span>}
-      {label}
-    </div>
-  );
-}
-export const ContextMenu: FC = () => {
-  const [open, setOpen] = useState(false);
-  const el = useRef<HTMLDivElement>(null);
-  useEffect(() => {
+// function ContextMenuItem(label: string, icon?: ReactNode) {
+//   return (
+//     <div className='flex items-center gap-3 py-2 pl-1 pr-2'>
+//       {icon && <span className='translate-y-0.5'>{icon}</span>}
+//       {label}
+//     </div>
+//   );
+// }
+
+const ContextMenuOptions: MenuOption<string>[] = [
+  {
+    value: 'reload',
+    'slot:icon': <span className='icon-[ant-design--reload-outlined]'></span>,
+    label: '重新加载',
+  },
+  {
+    value: 'dev',
+    label: '开发面板',
+    'slot:icon': <span className='icon-[oui--app-devtools]'></span>,
+  },
+  {
+    value: 'quit',
+    label: '退出程序',
+    'slot:icon': <span className='icon-[grommet-icons--power-shutdown]'></span>,
+  },
+];
+export function ContextMenu() {
+  const state = {
+    open: false,
+  };
+  const el = ref<HTMLDivElement>();
+  onMount(() => {
     const handle = (ev: MouseEvent) => {
       if ((ev.target as HTMLElement).tagName === 'INPUT') return;
       ev.preventDefault();
-      if (!el.current) return;
-      el.current.style.left = `${ev.pageX}px`;
-      el.current.style.top = `${ev.pageY}px`;
-      setOpen(true);
+      if (!el.value) return;
+      el.value.style.left = `${ev.pageX}px`;
+      el.value.style.top = `${ev.pageY}px`;
+      state.open = true;
     };
-    document.addEventListener('contextmenu', handle);
-    return () => {
-      document.removeEventListener('contextmenu', handle);
-    };
-  }, []);
+    return registerEvent(document, 'contextmenu', handle);
+  });
 
-  return createPortal(
-    <Dropdown
-      open={open}
-      trigger={['click']}
-      onOpenChange={(v) => setOpen(v)}
-      getPopupContainer={() => document.body}
-      menu={{
-        onClick(info) {
-          if (info.key === 'quit') {
-            void invoke('tauri_exit_process');
-          } else if (info.key === 'dev') {
-            void invoke('tauri_open_devtools');
-          } else if (info.key === 'reload') {
+  return (
+    <Portal>
+      <Dropdown
+        open={state.open}
+        on:openChange={(v) => (state.open = v)}
+        options={ContextMenuOptions}
+        on:change={(v) => {
+          if (v === 'reload') {
             history.replaceState(null, '', '/');
             location.reload();
+          } else if (v == 'quit') {
+            void invoke('tauri_exit_process');
+          } else if (v == 'dev') {
+            void invoke('tauri_open_devtools');
           }
-        },
-        items: [
-          {
-            label: renderContextMenuItem(
-              '重新加载',
-              <span className='icon-[ant-design--reload-outlined]'></span>,
-            ),
-            key: 'reload',
-          },
-          {
-            label: renderContextMenuItem(
-              '开发面板',
-              <span className='icon-[oui--app-devtools]'></span>,
-            ),
-            key: 'dev',
-          },
-          {
-            type: 'divider',
-          },
-          {
-            label: renderContextMenuItem(
-              '退出程序',
-              <span className='icon-[grommet-icons--power-shutdown]'></span>,
-            ),
-            key: 'quit',
-          },
-        ],
-      }}
-    >
-      <div className='fixed z-50 size-[1px]' ref={el}></div>
-    </Dropdown>,
-    document.body,
+        }}
+      >
+        <div className='fixed z-50 size-[1px]' ref={el}></div>
+      </Dropdown>
+      ,
+    </Portal>
   );
-};
+}

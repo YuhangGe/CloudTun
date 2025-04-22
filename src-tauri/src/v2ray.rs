@@ -116,18 +116,18 @@ async fn start_v2ray_desktop_server<R: Runtime>(
 const fn get_platform_zip_file() -> &'static str {
   if cfg!(target_os = "windows") {
     if cfg!(target_arch = "x86_64") {
-      "resources/v2ray-windows-x64.zip"
+      "resources/v2ray-windows-64.zip"
     } else {
-      ""
+      todo!()
     }
   } else if cfg!(target_os = "macos") {
     if cfg!(target_arch = "aarch64") {
-      "resources/v2ray-macos-arm64.zip"
+      "resources/v2ray-macos-arm64-v8a.zip"
     } else {
-      "resources/v2ray-macos-x64.zip"
+      todo!()
     }
   } else {
-    ""
+    todo!()
   }
 }
 

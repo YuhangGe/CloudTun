@@ -1,7 +1,7 @@
-import { createStore } from 'lrhs';
 import { DefaultSettings, type Settings } from '@/service/settings';
 import type { CVMInstance } from '@/service/tencent';
 import { load } from '@tauri-apps/plugin-store';
+import { vm, vmWatch } from 'jinge';
 
 // create a new store or load the existing one
 const tauriStore = await load('store.bin', {
@@ -20,20 +20,20 @@ async function getLs<P extends keyof GlobalStore, T = string>(key: P) {
   if (typeof v !== 'string' || !v) return undefined;
   return JSON.parse(v) as T;
 }
-export const globalStore = createStore<GlobalStore>({
+export const globalStore = vm<GlobalStore>({
   settings: DefaultSettings,
   v2rayState: 'NOT_INSTALLED',
 });
 
 export async function loadGlobalSettings() {
-  globalStore.set('settings', {
+  globalStore.settings = {
     ...DefaultSettings,
     ...(await getLs('settings')),
-  });
+  };
 }
 
 ['settings'].forEach((prop) => {
-  globalStore.hook(prop as keyof GlobalStore, (v) => {
+  vmWatch(globalStore, prop as keyof GlobalStore, (v) => {
     void tauriStore.set(prop, JSON.stringify(v)).then(() => {
       return tauriStore.save();
     });

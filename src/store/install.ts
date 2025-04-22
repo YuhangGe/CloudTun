@@ -12,25 +12,25 @@ import {
   waitInstanceAutomationAgentReady,
   waitInstanceReady,
 } from '@/views/instance/helper';
-import { message } from '@/service/message';
+import { message } from 'jinge-antd';
 const abort = (msg: LoadingMessage) => {
-  globalStore.set('v2rayState', 'NOT_INSTALLED');
+  globalStore.v2rayState = 'NOT_INSTALLED';
   msg.close();
 };
 export const createInstanceAndInstallV2Ray = async () => {
   const msg = loadingMessage('正在创建主机...');
 
-  globalStore.set('v2rayState', 'INSTALLING');
+  globalStore.v2rayState = 'INSTALLING';
 
   const deps = await loadInstanceDependentResources();
   if (!deps) return abort(msg);
   const [err, res] = await CreateInstance(deps);
   if (err) return abort(msg);
-  globalStore.set('instance', res);
+  globalStore.instance = res;
   msg.update('正在等待主机启动...');
   const instWithEip = await waitInstanceReady(res);
-  globalStore.set('instance', instWithEip);
-  if (globalStore.get('settings').imageType === 'PUBLIC_IMAGE') {
+  globalStore.instance = instWithEip;
+  if (globalStore.settings.imageType === 'PUBLIC_IMAGE') {
     await installV2RayAgentOnInstance(instWithEip, msg);
   } else {
     msg.update('正在等待 v2ray 服务上线...');
@@ -57,7 +57,7 @@ async function afterInstanceReady(msg: LoadingMessage) {
       void message.error('启动本地 v2ray core 失败，请尝试退出后重启 CloudV2Ray。');
       return;
     } else {
-      globalStore.set('v2rayState', 'INSTALLED');
+      globalStore.v2rayState = 'INSTALLED';
       msg.end('远程主机安装 V2Ray 完成，已启动本地 v2ray-core 代理！');
     }
   }

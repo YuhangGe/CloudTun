@@ -1,5 +1,6 @@
-import { createStore } from 'lrhs';
 import { uid } from '@/service/util';
+import { listen } from '@tauri-apps/api/event';
+import { vm } from 'jinge';
 
 export interface Log {
   id: string;
@@ -8,21 +9,19 @@ export interface Log {
 export interface LogStore {
   logs: Log[];
 }
-export const logStore = createStore<LogStore>({
+export const logStore = vm<LogStore>({
   logs: [],
 });
 
-export const MAX_LOGS_LENGTH = 1000;
+const MAX_LOGS_LENGTH = 1000;
 
 export function appendLog(log: string) {
   // eslint-disable-next-line no-console
   console.log(log);
-  logStore.set('logs', (oldLogs) => {
-    const newLogs = oldLogs.slice();
-    newLogs.push({ id: uid(), text: log });
-    if (newLogs.length > MAX_LOGS_LENGTH) {
-      newLogs.unshift();
-    }
-    return newLogs;
-  });
+  logStore.logs.push({ id: uid(), text: log });
+  if (logStore.logs.length > MAX_LOGS_LENGTH) {
+    logStore.logs.unshift();
+  }
 }
+
+void listen('log::v2ray', (ev) => appendLog(`[v2ray] ==> ${ev.payload}`));

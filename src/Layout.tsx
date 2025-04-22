@@ -1,10 +1,7 @@
-import { App as AntApp, Button, Dropdown, Spin, Tooltip } from 'antd';
-import { type FC, Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import { Button, Spin, Tooltip, message } from 'jinge-antd';
 import { invoke } from '@tauri-apps/api/core';
-import { IS_MOBILE, cs, useQuery } from './service/util';
+import { IS_MOBILE } from './service/util';
 import { globalStore } from './store/global';
-import { useLogListen } from './views/logview/listen';
-import { appendLog } from './store/log';
 
 import {
   loadInstance,
@@ -14,49 +11,47 @@ import {
 } from './views/instance/helper';
 import imgLogo from '@/assets/logo-128x128.png';
 import { validateSettings } from './service/settings';
-
-const InstanceView = lazy(() => import('./views/instance'));
-const SettingsView = lazy(() => import('./views/settings'));
-const OverviewView = lazy(() => import('./views/overview'));
-const LogView = lazy(() => import('./views/logview'));
+import { cx, onMount, vm, watch } from 'jinge';
+import { appendLog } from './store/log';
 
 const ViewItems = [
   {
     label: '概览',
-    icon: <span className='icon-[material-symbols--overview-key-outline]'></span>,
+    'slot:icon': <span className='icon-[material-symbols--overview-key-outline]'></span>,
     key: 'overview',
   },
   {
     label: '主机',
-    icon: <span className='icon-[ant-design--cloud-server-outlined]'></span>,
+    'slot:icon': <span className='icon-[ant-design--cloud-server-outlined]'></span>,
     key: 'instance',
   },
   {
     label: '设置',
-    icon: <span className='icon-[ant-design--setting-outlined]'></span>,
+    'slot:icon': <span className='icon-[ant-design--setting-outlined]'></span>,
     key: 'settings',
   },
   {
     label: '日志',
-    icon: <span className='icon-[tabler--logs]'></span>,
+    'slot:icon': <span className='icon-[tabler--logs]'></span>,
     key: 'logs',
   },
 ];
 
-export const Layout: FC = () => {
-  const { message } = AntApp.useApp();
-  const [settings] = globalStore.useStore('settings');
-  const [loaded, setLoaded] = useState(false);
+export function Layout() {
+  const state = vm({
+    loaded: false,
+    view: validateSettings(globalStore.settings) != null ? 'settings' : 'overview',
+    title: '',
+  });
 
-  const [view, setView] = useQuery(
+  watch(
+    state,
     'view',
-    validateSettings(settings) != null ? 'settings' : 'overview',
+    (v) => {
+      state.title = ViewItems.find((it) => it.key === v)?.label!;
+    },
+    { immediate: true },
   );
-  const title = useMemo(() => {
-    return ViewItems.find((it) => it.key === view)?.label;
-  }, [view]);
-
-  useLogListen();
 
   const initialize = async () => {
     try {
@@ -64,11 +59,11 @@ export const Layout: FC = () => {
 
       if (err || !res.InstanceSet.length) return;
       const inst = res.InstanceSet[0];
-      globalStore.set('instance', inst);
+      globalStore.instance = inst;
       if (!(await pingV2RayOnce(inst))) {
         return;
       }
-      globalStore.set('v2rayState', 'INSTALLED');
+      globalStore.v2rayState = 'INSTALLED';
       appendLog('[ping] ==> 开始定时 Ping 服务');
       if (!pingV2RayInterval()) {
         void message.error('pingV2RayInterval 失败，请尝试退出后重启 CloudV2Ray。');
@@ -80,61 +75,58 @@ export const Layout: FC = () => {
     } catch (ex) {
       void message.error(`${ex}`);
     } finally {
-      if (!globalStore.get('instance') || globalStore.get('v2rayState') !== 'INSTALLED') {
-        setView('instance');
+      if (!globalStore.instance || globalStore.v2rayState !== 'INSTALLED') {
+        state.view = 'instance';
       }
-      setLoaded(true);
+      state.loaded = true;
     }
   };
-  useEffect(() => {
-    const settings = globalStore.get('settings');
-    if (validateSettings(settings) != null) {
-      setLoaded(true);
-      return;
+  onMount(() => {
+    if (validateSettings(globalStore.settings) != null) {
+      state.loaded = true;
+    } else {
+      void initialize();
     }
-    void initialize();
-  }, []);
+  });
 
   // const [x, setX] = useState(false);
 
-  return loaded ? (
+  return state.loaded ? (
     <>
-      <div className='flex w-28 flex-shrink-0 flex-col border-r border-solid border-border max-sm:hidden'>
-        <div className='pl-5 pt-[5px]'>
+      <div className='border-border flex w-28 flex-shrink-0 flex-col border-r border-solid max-sm:hidden'>
+        <div className='pt-[5px] pl-5'>
           <img src={imgLogo} className='size-16' />
         </div>
         {ViewItems.map((item) => (
           <div
             key={item.key}
-            onClick={() => {
-              const err = validateSettings(settings);
+            on:click={() => {
+              const err = validateSettings(globalStore.settings);
               if (err != null) {
                 void message.error(err);
                 return;
               }
-              setView(item.key);
+              state.view = item.key;
             }}
-            className={cs(
-              'flex w-full cursor-pointer items-center py-5 pl-5 text-lg hover:bg-hover hover:text-white',
-              view === item.key && 'text-blue',
+            className={cx(
+              'hover:bg-hover flex w-full cursor-pointer items-center py-5 pl-5 text-lg hover:text-white',
+              state.view === item.key && 'text-blue',
             )}
           >
-            {item.icon}
+            {item['slot:icon']}
             <span className='ml-2'>{item.label}</span>
           </div>
         ))}
         <div className='flex-1'></div>
-        <Tooltip title='退出 CloudV2Ray，结束本地代理'>
+        <Tooltip content='退出 CloudV2Ray，结束本地代理'>
           <Button
-            onClick={async () => {
+            on:click={async () => {
               await invoke('plugin:cloudv2ray|tauri_stop_v2ray_server');
               await invoke('tauri_exit_process');
             }}
-            className='flex items-center justify-center pb-4 pt-2'
-            style={{ width: '100%' }}
-            icon={<span className='icon-[grommet-icons--power-shutdown]'></span>}
+            className='flex w-full items-center justify-center pt-2 pb-4'
+            slot:icon={<span className='icon-[grommet-icons--power-shutdown]'></span>}
             type='link'
-            danger
           />
         </Tooltip>
       </div>
@@ -145,7 +137,7 @@ export const Layout: FC = () => {
             <span className='ml-2 font-medium'>CloudV2Ray</span>
             <span className='mx-2'>-</span>
           </div>
-          <div className='whitespace-nowrap text-2xl max-sm:text-secondary-text'>{title}</div>
+          <div className='max-sm:text-secondary-text text-2xl whitespace-nowrap'>{state.title}</div>
           <div className='flex-1' />
           {/* <Button
             loading={x}
@@ -158,8 +150,8 @@ export const Layout: FC = () => {
           >
             T
           </Button> */}
-          <Dropdown
-            trigger={['click']}
+          {/* <Dropdown
+            
             menu={{
               items: ViewItems.map((item) => ({
                 label: (
@@ -177,30 +169,11 @@ export const Layout: FC = () => {
           >
             <Button
               className='sm:hidden'
-              icon={<span className='icon-[ant-design--menu-outlined] shrink-0'></span>}
+              slot:icon={<span className='icon-[ant-design--menu-outlined] shrink-0'></span>}
             />
-          </Dropdown>
+          </Dropdown> */}
         </div>
-        {view === 'overview' && (
-          <Suspense>
-            <OverviewView />
-          </Suspense>
-        )}
-        {view === 'instance' && (
-          <Suspense>
-            <InstanceView />
-          </Suspense>
-        )}
-        {view === 'settings' && (
-          <Suspense>
-            <SettingsView />
-          </Suspense>
-        )}
-        {view === 'logs' && (
-          <Suspense>
-            <LogView />
-          </Suspense>
-        )}
+        {state.view}
       </div>
     </>
   ) : (
@@ -208,4 +181,4 @@ export const Layout: FC = () => {
       <Spin />
     </div>
   );
-};
+}

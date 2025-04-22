@@ -1,0 +1,12 @@
+@import 'tailwindcss';
+@plugin "@iconify/tailwind4";
+
+/* GENERATED_THEME */
+
+html,
+body {
+  width: 100vw;
+  height: 100vh;
+  color: var(--antd-normal-text);
+  position: relative;
+}

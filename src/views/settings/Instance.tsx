@@ -154,7 +154,7 @@ export const InstancePanel: FC<{
         <Select options={imageOptions} placeholder='选择镜像' />
       </Form.Item>
       <Form.Item label='带宽' name='bandWidth' required rules={[{ required: true }]}>
-        <InputNumber className='w-full' min={1} max={10} suffix='Mbps' />
+        <InputNumber className='w-full' min={1} max={1000} suffix='Mbps' />
       </Form.Item>
 
       <Form.Item label='登录密码' name='loginPwd' required rules={[{ required: true }]}>

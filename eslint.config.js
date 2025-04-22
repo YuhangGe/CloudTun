@@ -11,7 +11,7 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        project: ['./tsconfig.json', './packages/*/tsconfig.json'],
+        project: ['./tsconfig.json'],
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
@@ -51,7 +51,7 @@ export default tseslint.config(
   },
   // Node scripts
   {
-    files: ['packages/*/script/**', '*.{js,mjs,ts}'],
+    files: ['script/**', '*.{js,mjs,ts}'],
     rules: {
       'no-console': 'off',
     },

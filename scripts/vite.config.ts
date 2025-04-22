@@ -1,9 +1,12 @@
 import path from 'node:path';
 import { networkInterfaces } from 'node:os';
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react-swc';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import imagemin from 'vite-plugin-minipic';
+import tailwindcss from '@tailwindcss/vite';
+import { jingeVitePlugin } from 'jinge-compiler';
+
+import { TailwindThemePlugin } from './vite-plugin';
 
 let IPv4 = '';
 Object.entries(networkInterfaces()).some(([, nets]) => {
@@ -43,11 +46,24 @@ export default defineConfig({
       ignored: ['**/src-tauri/**'],
     },
   },
+  optimizeDeps: {
+    exclude: ['jinge-antd'],
+  },
+  resolve: {
+    alias: {
+      'jinge-antd': 'jinge-antd/source',
+    },
+  },
   build: {
     target: 'esnext',
   },
   plugins: [
-    react(),
+    tailwindcss(),
+    tsconfigPaths({
+      projects: [path.resolve(__dirname, '../tsconfig.json')],
+    }),
+    TailwindThemePlugin(),
+    jingeVitePlugin(),
     imagemin(),
     tsconfigPaths({
       projects: [path.resolve(__dirname, '../tsconfig.json')],

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "cloudv2ray",
+  "productName": "CloudV2ray",
   "version": "0.1.0",
   "identifier": "com.cloudv2ray.app",
   "build": {
