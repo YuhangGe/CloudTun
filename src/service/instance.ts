@@ -8,9 +8,9 @@ import {
   DescribeVpcs,
 } from './tencent';
 import { renderTpl } from './util';
-import { message } from './message';
 import { globalStore } from '@/store/global';
 import shellTpl from '@/assets/shell-template/agent.sh?raw';
+import { message } from 'jinge-antd';
 
 export interface InstanceDeps {
   vpcId: string;
@@ -35,9 +35,9 @@ async function loadVpc(resourceName: string) {
 }
 
 export async function loadInstanceDependentResources(): Promise<InstanceDeps | undefined> {
-  const settings = globalStore.get('settings');
+  const settings = globalStore.settings;
   if (!settings.zone || !settings.imageId) {
-    void message.error('请先配置可用区、镜像等信息');
+    message.error('请先配置可用区、镜像等信息');
     return;
   }
   const resourceName = settings.resourceName;
@@ -104,7 +104,7 @@ export async function loadInstanceDependentResources(): Promise<InstanceDeps | u
 }
 
 export function getInstanceAgentShell() {
-  const settings = globalStore.get('settings');
+  const settings = globalStore.settings;
   return renderTpl(shellTpl, {
     secretKey: settings.secretKey,
     secretId: settings.secretId,

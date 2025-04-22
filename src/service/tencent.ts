@@ -1,8 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
-import { message } from './message';
 import type { InstanceDeps } from './instance';
 import { globalStore } from '@/store/global';
+import { message } from 'jinge-antd';
 
 export type ApiResult<T> = [Error] | [undefined, T];
 const ServiceVersionMap = {
@@ -23,7 +23,7 @@ async function callTencentApi<T>({
   action: string;
   data?: Record<string, unknown>;
 }): Promise<ApiResult<T>> {
-  const params = globalStore.get('settings');
+  const params = globalStore.settings;
   const timestamp = Math.floor(Date.now() / 1000);
   const body = data ? JSON.stringify(data) : '{}';
   const sign = await invoke<string>('tauri_calc_tencent_cloud_api_signature', {
@@ -73,7 +73,7 @@ async function callTencentApi<T>({
   if (Err) {
     const err = new Error(Err.Message);
     err.name = Err.Code;
-    void message.error(`${Err.Code}::${Err.Message}`, 5);
+    message.error(`${Err.Code}::${Err.Message}`);
     return [err];
   }
   return [undefined, resData.Response as T];
@@ -137,7 +137,7 @@ export function DescribeInstanceTypeConfigs({
   });
 }
 function getInstanceApiParams() {
-  const settings = globalStore.get('settings');
+  const settings = globalStore.settings;
   if (!settings.zone || !settings.imageId) throw new Error('settings missing');
   return {
     InstanceChargeType: 'SPOTPAID',
