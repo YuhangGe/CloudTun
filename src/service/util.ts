@@ -4,6 +4,10 @@ import { sendNotification } from '@tauri-apps/plugin-notification';
 import { message } from 'jinge-antd';
 
 export const currentPlatform = platform();
+/**
+ * 当前是否在纯浏览器的 web 模拟环境。比如没有启动 rust 后端时直接通过浏览器访问。
+ */
+export const currentInWebMock = (currentPlatform as string) === 'webmock';
 
 const pwd = [
   'abcdefghijklmnopqrstuvwxyz', // lower chars

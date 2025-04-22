@@ -9,4 +9,5 @@ body {
   height: 100vh;
   color: var(--antd-normal-text);
   position: relative;
+  font-size: 14px;
 }

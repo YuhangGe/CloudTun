@@ -1,15 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { Dropdown, type MenuOption } from 'jinge-antd';
-import { Portal, onMount, ref, registerEvent } from 'jinge';
+import { Portal, onMount, ref, registerEvent, vm } from 'jinge';
 
-// function ContextMenuItem(label: string, icon?: ReactNode) {
-//   return (
-//     <div className='flex items-center gap-3 py-2 pl-1 pr-2'>
-//       {icon && <span className='translate-y-0.5'>{icon}</span>}
-//       {label}
-//     </div>
-//   );
-// }
+
 
 const ContextMenuOptions: MenuOption<string>[] = [
   {
@@ -29,9 +22,9 @@ const ContextMenuOptions: MenuOption<string>[] = [
   },
 ];
 export function ContextMenu() {
-  const state = {
+  const state = vm({
     open: false,
-  };
+  });
   const el = ref<HTMLDivElement>();
   onMount(() => {
     const handle = (ev: MouseEvent) => {
@@ -48,8 +41,9 @@ export function ContextMenu() {
   return (
     <Portal>
       <Dropdown
+
         open={state.open}
-        on:openChange={(v) => (state.open = v)}
+        on:openChange={(v) => state.open = v}
         options={ContextMenuOptions}
         on:change={(v) => {
           if (v === 'reload') {
@@ -62,9 +56,8 @@ export function ContextMenu() {
           }
         }}
       >
-        <div className='fixed z-50 size-[1px]' ref={el}></div>
+        <div className='fixed z-50 size-0 bg-red' ref={el}></div>
       </Dropdown>
-      ,
     </Portal>
   );
 }

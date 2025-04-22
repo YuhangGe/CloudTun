@@ -13,6 +13,7 @@ import imgLogo from '@/assets/logo-128x128.png';
 import { validateSettings } from './service/settings';
 import { cx, onMount, vm, watch } from 'jinge';
 import { appendLog } from './store/log';
+import { SettingsView } from './views/settings';
 
 const ViewItems = [
   {
@@ -173,7 +174,7 @@ export function Layout() {
             />
           </Dropdown> */}
         </div>
-        {state.view}
+        {state.view === 'settings' && <SettingsView />}
       </div>
     </>
   ) : (

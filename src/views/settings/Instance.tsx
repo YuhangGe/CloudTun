@@ -9,7 +9,7 @@ import { DescribeImages, DescribeInstanceTypeConfigs, DescribeZones } from '@/se
 import { copyToClipboard, generateStrongPassword } from '@/service/util';
 import { RegionOptions } from '@/service/region';
 
-export const InstancePanel: FC<{
+export function InstancePanel: FC<{
   form: FormInstance<Settings>;
 }> = ({ form }) => {
   const [settings] = globalStore.useStore('settings');
@@ -190,6 +190,17 @@ export const InstancePanel: FC<{
           }
         />
       </Form.Item>
+      <div className='my-4 flex items-center gap-8'>
+        <Button
+          type='primary'
+          on:click={() => {
+            void save();
+          }}
+        >
+          保存
+        </Button>
+        {globalStore.settings.instanceType && <Price />}
+      </div>
     </>
   );
 };

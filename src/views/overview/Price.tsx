@@ -1,48 +1,57 @@
-import { Button } from 'antd';
-import { type FC, useEffect, useState } from 'react';
+
 import type { CVMPrice } from '@/service/tencent';
 import { InquiryPriceRunInstances } from '@/service/tencent';
 import { globalStore } from '@/store/global';
 import { validateSettings } from '@/service/settings';
+import { vm, watch } from 'jinge';
+import { Button } from 'jinge-antd';
 
-export const Price: FC = () => {
-  const [price, setPrice] = useState<CVMPrice>();
-  const [settings] = globalStore.useStore('settings');
-  const [loading, setLoading] = useState(false);
+export function Price() {
+  const state = vm<{
+    price?: CVMPrice,
+    loading: boolean
+  }>({
+    loading: false,
+  })
+
   const loadPrice = async () => {
-    if (validateSettings(settings) != null) {
+    if (validateSettings(globalStore.settings) != null) {
       return;
     }
-    setLoading(true);
+    state.loading = (true);
     const [err, res] = await InquiryPriceRunInstances();
-    setLoading(false);
+    state.loading = (false);
     if (!err) {
-      setPrice(res.Price);
+      state.price = res.Price;
     }
   };
-  useEffect(() => {
+
+  watch(globalStore.settings, 'instanceType', () => {
     void loadPrice();
-  }, [settings.instanceType, settings.imageId]);
+  })
+  watch(globalStore.settings, 'imageId', () => {
+    void loadPrice();
+  });
 
   return (
     <div className='flex items-center gap-2'>
       <span className='whitespace-nowrap'>当前价格：</span>
-      {price && (
+      {state.price && (
         <>
           <span className='whitespace-nowrap'>
-            ¥{price.InstancePrice.UnitPriceDiscount.toFixed(2)}/小时
+            ¥{state.price.InstancePrice.UnitPriceDiscount.toFixed(2)}/小时
           </span>
-          <span className='whitespace-nowrap'>¥{price.BandwidthPrice.UnitPriceDiscount}/GB</span>
+          <span className='whitespace-nowrap'>¥{state.price.BandwidthPrice.UnitPriceDiscount}/GB</span>
         </>
       )}
       <Button
-        loading={loading}
+        loading={state.loading}
         className='relative translate-y-[1.5px]'
-        onClick={() => {
+        on:click={() => {
           void loadPrice();
         }}
-        icon={<span className='icon-[ant-design--reload-outlined]'></span>}
-        size='small'
+        slot:icon={<span className='icon-[ant-design--reload-outlined]'></span>}
+        size='sm'
         type='link'
       ></Button>
     </div>
