@@ -25,7 +25,7 @@ export async function loadInstance(id?: string) {
           Filters: [
             {
               Name: 'instance-name',
-              Values: [globalStore.get('settings').resourceName],
+              Values: [globalStore.settings.resourceName],
             },
           ],
         }),
@@ -119,7 +119,7 @@ export async function installV2RayAgent(inst: CVMInstance) {
 }
 
 export async function pingV2RayOnce(inst: CVMInstance) {
-  const settings = globalStore.get('settings');
+  const settings = globalStore.settings;
   if (!settings.token) return false;
   if (!inst) return false;
   const ip = inst.PublicIpAddresses?.[0];
@@ -139,9 +139,9 @@ export async function pingV2RayOnce(inst: CVMInstance) {
 
 let pingInt = 0;
 export function pingV2RayInterval() {
-  const settings = globalStore.get('settings');
+  const settings = globalStore.settings;
   if (!settings.token) return false;
-  const inst = globalStore.get('instance');
+  const inst = globalStore.instance;
   if (!inst) return false;
   const ip = inst.PublicIpAddresses?.[0];
   if (!ip) return false;
@@ -172,8 +172,8 @@ export function pingV2RayInterval() {
   return true;
 }
 export function getV2RayCoreConf() {
-  const settings = globalStore.get('settings');
-  const inst = globalStore.get('instance');
+  const settings = globalStore.settings;
+  const inst = globalStore.instance;
   if (!inst) return '';
   const ip = inst.PublicIpAddresses?.[0];
   if (!ip) return '';

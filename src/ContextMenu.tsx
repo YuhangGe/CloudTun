@@ -2,8 +2,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { Dropdown, type MenuOption } from 'jinge-antd';
 import { Portal, onMount, ref, registerEvent, vm } from 'jinge';
 
-
-
 const ContextMenuOptions: MenuOption<string>[] = [
   {
     value: 'reload',
@@ -41,9 +39,9 @@ export function ContextMenu() {
   return (
     <Portal>
       <Dropdown
-
+        placement='bottom-start'
         open={state.open}
-        on:openChange={(v) => state.open = v}
+        on:openChange={(v) => (state.open = v)}
         options={ContextMenuOptions}
         on:change={(v) => {
           if (v === 'reload') {
@@ -56,7 +54,7 @@ export function ContextMenu() {
           }
         }}
       >
-        <div className='fixed z-50 size-0 bg-red' ref={el}></div>
+        <div className='bg-red fixed z-50 size-0' ref={el}></div>
       </Dropdown>
     </Portal>
   );

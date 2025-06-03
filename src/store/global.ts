@@ -26,10 +26,13 @@ export async function loadGlobalSettings() {
   (await tauriSettingStore.entries()).forEach(([k, v]) => {
     //@ts-ignore
     globalStore.settings[k] = v;
+    console.info('load setting:', k, v);
+  });
+
+  vmWatch(globalStore.settings, (v, _, p) => {
+    const prop = (p as string[])[0] as keyof Settings;
+    if (!prop) return;
+    console.info('save setting:', prop, v[prop]);
+    void tauriSettingStore?.set(prop, v[prop]);
   });
 }
-
-vmWatch(globalStore.settings, (v, _, p) => {
-  if (!p?.length) return;
-  void tauriSettingStore?.set(p[0] as string, v);
-});

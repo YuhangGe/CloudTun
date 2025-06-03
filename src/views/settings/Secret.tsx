@@ -1,19 +1,21 @@
-import { generateStrongPassword } from "@/service/util";
-import { globalStore } from "@/store/global";
-import { invoke } from "@tauri-apps/api/core";
-import { onMount } from "jinge";
-import { Button, Controller, Input, message, useForm } from "jinge-antd";
-import { z } from "zod";
-import { FormItem } from "./FormItem";
+import { copyToClipboard, generateStrongPassword } from '@/service/util';
+import { globalStore } from '@/store/global';
+import { invoke } from '@tauri-apps/api/core';
+import { onMount } from 'jinge';
+import { Button, Controller, Input, InputAddon, InputWrapper, message, useForm } from 'jinge-antd';
+import { z } from 'zod';
+import { FormItem } from './FormItem';
 
 export function SecretTokenForm() {
-
-  const { formState, formErrors, validate, control } = useForm(z.object({
-    token: z.string(),
-    secretId: z.string().min(1),
-    secretKey: z.string().min(1),
-    loginPwd: z.string().min(1)
-  }), { defaultValues: globalStore.settings });
+  const { formState, formErrors, validate, control } = useForm(
+    z.object({
+      token: z.string(),
+      secretId: z.string().min(1),
+      secretKey: z.string().min(1),
+      loginPwd: z.string().min(1),
+    }),
+    { defaultValues: globalStore.settings },
+  );
 
   function resetToken() {
     invoke('tauri_generate_uuid').then(
@@ -26,7 +28,7 @@ export function SecretTokenForm() {
     );
   }
   function resetPwd() {
-    formState.loginPwd = generateStrongPassword()
+    formState.loginPwd = generateStrongPassword();
   }
   async function save() {
     const [err, data] = await validate();
@@ -43,83 +45,86 @@ export function SecretTokenForm() {
     }
   });
 
-  return <>
-    <div className="flex flex-col gap-6 mt-6 max-w-md max-sm:max-w-full text-sm">
-      <FormItem label='Secret Id：' required error={formErrors.secretId} >
-        <Controller control={control} name='secretId'>
-          {(field) => (
-            <Input
-              value={formState.secretId}
-              on:change={field['on:change']}
-              on:blur={field['on:blur']}
-            />
-          )}
-        </Controller>
-      </FormItem>
-      <FormItem label='Secret Key：' required error={formErrors.secretKey} >
-        <Controller control={control} name='secretKey'>
-          {(field) => (
-            <Input
-              value={formState.secretKey}
-              on:change={field['on:change']}
-              on:blur={field['on:blur']}
-            />
-          )}
-        </Controller>
-      </FormItem>
+  return (
+    <>
+      <div className='mt-6 flex max-w-md flex-col gap-6 text-sm max-sm:max-w-full'>
+        <FormItem label='Secret Id：' required error={formErrors.secretId}>
+          <Controller control={control} name='secretId'>
+            {(field) => (
+              <Input
+                value={field.value}
+                on:change={field['on:change']}
+                on:blur={field['on:blur']}
+              />
+            )}
+          </Controller>
+        </FormItem>
+        <FormItem label='Secret Key：' required error={formErrors.secretKey}>
+          <Controller control={control} name='secretKey'>
+            {(field) => (
+              <Input
+                value={field.value}
+                on:change={field['on:change']}
+                on:blur={field['on:blur']}
+              />
+            )}
+          </Controller>
+        </FormItem>
 
-      <FormItem label='VMess Id：' required>
-        <Controller control={control} name='token'>
-          {(field) => (
-
-            <Input
-              className='cursor-pointer'
-              value={formState.secretKey}
-              on:change={field['on:change']}
-              on:blur={field['on:blur']}
-              on:focus={(evt) => {
-                setTimeout(() => evt.target.select());
-              }}
-            // addonAfter={
-            //   <Button.Group size='small'>
-            //     <Tooltip title='生成 UUID'>
-            //       <Button
-            //         onClick={() => {
-            //           void resetToken();
-            //         }}
-            //         icon={<span className='icon-[ant-design--reload-outlined]'></span>}
-            //         type='link'
-            //       ></Button>
-            //     </Tooltip>
-            //     <Button
-            //       onClick={() => {
-            //         const tk = form.getFieldValue('token');
-            //         if (tk) {
-            //           void copyToClipboard(tk).then(() => {
-            //             void message.success('已复制！');
-            //           });
-            //         }
-            //       }}
-            //       type='link'
-            //       icon={<span className='icon-[ant-design--copy-outlined]'></span>}
-            //     />
-            //   </Button.Group>
-            // }
-            />
-
-          )}
-        </Controller>
-      </FormItem>
-    </div>
-    <div className='my-4 flex items-center gap-8'>
-      <Button
-        type='primary'
-        on:click={() => {
-          void save();
-        }}
-      >
-        保存
-      </Button>
-    </div>
-  </>
+        <FormItem label='VMess Id：' required>
+          <Controller control={control} name='token'>
+            {(field) => (
+              <InputWrapper>
+                <Input
+                  className='cursor-pointer'
+                  noRoundedR
+                  value={field.value}
+                  on:change={field['on:change']}
+                  on:blur={field['on:blur']}
+                  on:focus={(evt) => {
+                    setTimeout(() => evt.target.select());
+                  }}
+                />
+                <InputAddon>
+                  <Button
+                    on:click={() => {
+                      void resetToken();
+                    }}
+                    className='!px-2'
+                    slot:icon={
+                      <span className='icon-[ant-design--reload-outlined] text-base'></span>
+                    }
+                    type='link'
+                  />
+                  <Button
+                    on:click={() => {
+                      const tk = formState.token;
+                      if (tk) {
+                        void copyToClipboard(tk).then(() => {
+                          void message.success('已复制！');
+                        });
+                      }
+                    }}
+                    className='!border-l-border !rounded-none !px-2'
+                    type='link'
+                    slot:icon={<span className='icon-[ant-design--copy-outlined] text-base'></span>}
+                  />
+                </InputAddon>
+              </InputWrapper>
+            )}
+          </Controller>
+        </FormItem>
+      </div>
+      <div className='my-4 flex items-center gap-8'>
+        <Button
+          type='primary'
+          on:click={() => {
+            void save();
+          }}
+        >
+          保存
+        </Button>
+      </div>
+    </>
+  );
 }

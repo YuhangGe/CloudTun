@@ -159,66 +159,6 @@ pub fn extract_v2ray_if_need<R: Runtime>(h: &AppHandle<R>) -> anyhow::Result<()>
   Ok(())
 }
 
-// #[cfg(mobile)]
-// pub async fn start_v2ray_mobile_server<R: Runtime>(
-//   config: &str,
-//   files_dir: &str,
-//   libs_dir: &str,
-//   h: AppHandle<R>,
-//   state: State<'_, V2RayProc>,
-// ) -> anyhow::Result<String> {
-//   use std::path::PathBuf;
-
-//   emit_log(&h, "log::v2ray", "starting v2ray core server...");
-//   let v2ray_proc = state.0.clone();
-//   if let Some(mut proc) = v2ray_proc.lock().await.take() {
-//     // 如果存在旧的 v2ray 进程，先关闭。
-//     let _ = proc.kill().await;
-//   }
-
-//   // println!("{:?}", resource_path);
-//   let v2ray_bin = PathBuf::from(libs_dir).join("libv2ray.so");
-//   if !v2ray_bin.exists() {
-//     anyhow::bail!("v2ray not found.");
-//     // std::fs::remove_dir_all(&v2ray_bin_dir)?;
-//   }
-//   let cwd = PathBuf::from(files_dir);
-//   let config_file = cwd.join("config.json");
-//   tokio::fs::write(&config_file, config).await?;
-
-//   let mut command = tokio::process::Command::new(v2ray_bin);
-//   command.arg("run");
-//   command.arg("-c");
-//   command.arg(config_file.to_str().unwrap());
-//   command.env("v2ray.location.asset", files_dir);
-//   command.stdout(std::process::Stdio::piped());
-//   command.stderr(std::process::Stdio::piped());
-//   command.stdin(std::process::Stdio::piped());
-//   command.current_dir(files_dir);
-
-//   let mut proc = command.spawn()?;
-//   let pid = proc.id().unwrap();
-//   emit_log(&h, "log::v2ray", &format!("v2ray core pid: {}", pid));
-
-//   tokio::task::spawn(async move {
-//     drop(proc.stdin.take());
-//     let stdo = proc.stdout.take().unwrap();
-//     let stde = proc.stderr.take().unwrap();
-//     {
-//       v2ray_proc.clone().lock().await.replace(proc);
-//     }
-
-//     tokio::join!(read(stdo, &h), read(stde, &h));
-//     // let mut buffer = Vec::<u8>::with_capacity(10);
-
-//     {
-//       v2ray_proc.clone().lock().await.take();
-//     }
-//   });
-
-//   Ok(format!("{{\"pid\":{}}}", pid))
-// }
-
 #[tauri::command]
 pub async fn tauri_start_v2ray_server<R: Runtime>(
   config: &str,

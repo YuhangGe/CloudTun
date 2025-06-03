@@ -1,48 +1,66 @@
-import type { FormInstance } from 'antd';
-import type { FC } from 'react';
-import { useEffect, useState } from 'react';
-import { App, Button, Form, Input, InputNumber, Select, Tooltip } from 'antd';
-import type { DefaultOptionType } from 'antd/es/select';
-import type { Settings } from '@/service/settings';
-import { globalStore } from '@/store/global';
+import {
+  Button,
+  Controller,
+  Input,
+  InputAddon,
+  InputNumber,
+  InputWrapper,
+  type MenuOption,
+  Select,
+  message,
+  useForm,
+} from 'jinge-antd';
+
 import { DescribeImages, DescribeInstanceTypeConfigs, DescribeZones } from '@/service/tencent';
 import { copyToClipboard, generateStrongPassword } from '@/service/util';
 import { RegionOptions } from '@/service/region';
+import { onMount, vm, vmRaw, watch } from 'jinge';
+import { z } from 'zod';
+import { globalStore } from '@/store/global';
+import { FormItem } from './FormItem';
 
-export function InstancePanel: FC<{
-  form: FormInstance<Settings>;
-}> = ({ form }) => {
-  const [settings] = globalStore.useStore('settings');
-  const { message } = App.useApp();
-  const [region, setRegion] = useState(settings.region);
-  useEffect(() => {
-    setRegion(settings.region);
-  }, [settings.region]);
-  const [zoneOptions, setZoneOptions] = useState<DefaultOptionType[]>([]);
-  const [instTypeOptions, setInstTypeOptions] = useState<DefaultOptionType[]>([]);
-  useEffect(() => {
-    setZoneOptions([]);
-    void DescribeZones({
-      region,
-    }).then(([err, res]) => {
-      if (!err) {
-        setZoneOptions(
-          res.ZoneSet.map((zone) => ({
-            label: zone.ZoneName,
-            value: zone.Zone,
-          })),
-        );
-      }
-    });
-  }, [region]);
+const ImageTypeOpts = [
+  {
+    label: '私有镜像',
+    value: 'PRIVATE_IMAGE',
+  },
+  {
+    label: '公共镜像',
+    value: 'PUBLIC_IMAGE',
+  },
+];
 
-  const zone = Form.useWatch(['zone'], form);
-  useEffect(() => {
-    if (!region || !zone) {
-      setInstTypeOptions([]);
-      return;
-    }
-    void DescribeInstanceTypeConfigs({
+export function InstanceConfigForm() {
+  const settings = vmRaw(globalStore.settings);
+  const { formErrors, formState, control, validate } = useForm(
+    z.object({
+      region: z.string(),
+      zone: z.string(),
+      instanceType: z.string(),
+      imageType: z.string(),
+      imageId: z.string(),
+      loginPwd: z.string(),
+      resourceName: z.string(),
+      bandWidth: z.number().min(1).max(100),
+    }),
+    {
+      defaultValues: settings,
+    },
+  );
+
+  const state = vm<{
+    imageOpts: MenuOption<string>[];
+    zoneOpts: MenuOption<string>[];
+    instTypeOpts: MenuOption<string>[];
+  }>({
+    imageOpts: [],
+    zoneOpts: [],
+    instTypeOpts: [],
+  });
+
+  async function updateInstanceTypes(region?: string, zone?: string) {
+    if (!region || !zone) return;
+    const [err, res] = await DescribeInstanceTypeConfigs({
       region,
       Filters: [
         {
@@ -50,25 +68,48 @@ export function InstancePanel: FC<{
           Values: [zone],
         },
       ],
-    }).then(([err, res]) => {
-      if (!err) {
-        const arr = res.InstanceTypeConfigSet.sort((a, b) => {
-          if (a.CPU === b.CPU) return a.Memory - b.Memory;
-          return a.CPU - b.CPU;
-        });
-        setInstTypeOptions(
-          arr.map((instType) => ({
-            label: `${instType.InstanceType}(${instType.CPU} CPU, ${instType.Memory} GB)`,
-            value: instType.InstanceType,
-          })),
-        );
-      }
     });
-  }, [region, zone]);
+    if (!err) {
+      const arr = res.InstanceTypeConfigSet.sort((a, b) => {
+        if (a.CPU === b.CPU) return a.Memory - b.Memory;
+        return a.CPU - b.CPU;
+      });
+      state.instTypeOpts = arr.map((instType) => ({
+        label: `${instType.InstanceType}(${instType.CPU} CPU, ${instType.Memory} GB)`,
+        value: instType.InstanceType,
+      }));
+    }
+  }
+  watch(
+    formState,
+    'region',
+    (v) => {
+      if (!v) return;
+      state.zoneOpts = [];
+      void DescribeZones({
+        region: v,
+      }).then(([err, res]) => {
+        if (!err) {
+          state.zoneOpts = res.ZoneSet.map((zone) => ({
+            label: zone.ZoneName,
+            value: zone.Zone,
+          }));
+        }
+      });
+      void updateInstanceTypes(v, formState.zone);
+      void loadImages(v, formState.imageType);
+    },
+    { immediate: true },
+  );
 
-  const [imageOptions, setImageOptions] = useState<DefaultOptionType[]>([]);
-  const loadImages = async (imageType: Settings['imageType']) => {
-    const Filters = [{ Name: 'image-type', Values: [imageType as string] }];
+  watch(formState, 'zone', (v) => {
+    void updateInstanceTypes(formState.region, v);
+  });
+
+  // const [imageOptions, setImageOptions] = useState<DefaultOptionType[]>([]);
+  async function loadImages(region?: string, imageType?: string) {
+    if (!region || !imageType) return;
+    const Filters = [{ Name: 'image-type', Values: [imageType] }];
     if (imageType === 'PUBLIC_IMAGE') {
       Filters.push({
         Name: 'platform',
@@ -81,115 +122,144 @@ export function InstancePanel: FC<{
     });
     if (err) return;
     if (res.TotalCount > 0) {
-      setImageOptions(
-        res.ImageSet.map((image) => ({
-          label: image.ImageName,
-          value: image.ImageId,
-        })),
-      );
-      if (settings.imageType === 'PRIVATE_IMAGE' && settings.token) {
+      state.imageOpts = res.ImageSet.map((image) => ({
+        label: image.ImageName,
+        value: image.ImageId,
+      }));
+      if (formState.imageType === 'PRIVATE_IMAGE' && settings.token) {
         // 私有镜像约定使用 vmess uuid 作为镜像名。如果找到了，则填充 image id。
         const img = res.ImageSet.find((ii) => ii.ImageName == settings.token);
         if (img && settings.imageId !== img.ImageId) {
-          form.setFieldValue('imageId', img.ImageId);
+          formState.imageId = img.ImageId;
         }
       }
     } else {
-      setImageOptions([]);
+      state.imageOpts = [];
     }
-  };
-  useEffect(() => {
-    if (!region) return;
-    void loadImages(settings.imageType);
-  }, [region]);
-  const resetPwd = () => {
-    form.setFieldValue('loginPwd', generateStrongPassword());
-    void form.validateFields(['loginPwd']); // clear error
-  };
+  }
 
-  useEffect(() => {
+  function resetPwd() {
+    formState.loginPwd = generateStrongPassword();
+  }
+  async function save() {
+    const [err, data] = await validate();
+    if (err) return;
+    Object.assign(globalStore.settings, data);
+  }
+
+  onMount(() => {
     if (!settings.loginPwd) {
       resetPwd();
     }
-  }, []);
-  return (
-    <>
-      <Form.Item label='区域' name='region' required rules={[{ required: true }]}>
-        <Select
-          options={RegionOptions}
-          onChange={(v) => {
-            form.setFieldValue('zone', '');
-            form.setFieldValue('instanceType', '');
-            setRegion(v);
-          }}
-        />
-      </Form.Item>
-      <Form.Item label='可用区' name='zone' required rules={[{ required: true }]}>
-        <Select options={zoneOptions} />
-      </Form.Item>
-      <Form.Item label='规格' name='instanceType' required rules={[{ required: true }]}>
-        <Select options={instTypeOptions} />
-      </Form.Item>
-      <Form.Item label='资源名' name='resourceName' required rules={[{ required: true }]}>
-        <Input />
-      </Form.Item>
-      <Form.Item label='镜像类型' name='imageType' required rules={[{ required: true }]}>
-        <Select
-          onChange={(v) => {
-            void loadImages(v);
-          }}
-          options={[
-            {
-              label: '私有镜像',
-              value: 'PRIVATE_IMAGE',
-            },
-            {
-              label: '公共镜像',
-              value: 'PUBLIC_IMAGE',
-            },
-          ]}
-        />
-      </Form.Item>
-      <Form.Item label='镜像' name='imageId' required rules={[{ required: true }]}>
-        <Select options={imageOptions} placeholder='选择镜像' />
-      </Form.Item>
-      <Form.Item label='带宽' name='bandWidth' required rules={[{ required: true }]}>
-        <InputNumber className='w-full' min={1} max={1000} suffix='Mbps' />
-      </Form.Item>
+  });
 
-      <Form.Item label='登录密码' name='loginPwd' required rules={[{ required: true }]}>
-        <Input
-          className='cursor-pointer [&_.ant-input-group-addon]:p-0'
-          onFocus={(evt) => {
-            setTimeout(() => evt.target.select());
-          }}
-          addonAfter={
-            <Button.Group size='small'>
-              <Tooltip title='生成密码'>
-                <Button
-                  onClick={() => {
-                    resetPwd();
-                  }}
-                  icon={<span className='icon-[ant-design--reload-outlined]'></span>}
-                  type='link'
-                ></Button>
-              </Tooltip>
-              <Button
-                onClick={() => {
-                  const tk = form.getFieldValue('loginPwd');
-                  if (tk) {
-                    void copyToClipboard(tk).then(() => {
-                      void message.success('已复制！');
-                    });
-                  }
+  return (
+    <div className='mt-6 flex max-w-md flex-col gap-6 text-sm max-sm:max-w-full'>
+      <FormItem label='区域：' required error={formErrors.region}>
+        <Controller control={control} name='region'>
+          {(field) => (
+            <Select options={RegionOptions} value={field.value} on:change={field['on:change']} />
+          )}
+        </Controller>
+      </FormItem>
+      <FormItem label='可用区：' required>
+        <Controller control={control} name='zone'>
+          {(field) => (
+            <Select options={state.zoneOpts} value={field.value} on:change={field['on:change']} />
+          )}
+        </Controller>
+      </FormItem>
+      <FormItem label='规格：' required>
+        <Controller control={control} name='instanceType'>
+          {(field) => (
+            <Select
+              options={state.instTypeOpts}
+              value={field.value}
+              on:change={field['on:change']}
+            />
+          )}
+        </Controller>
+      </FormItem>
+      <FormItem label='登录密码：' required>
+        <Controller control={control} name='loginPwd'>
+          {(field) => (
+            <InputWrapper>
+              <Input
+                className='cursor-pointer'
+                noRoundedR
+                value={field.value}
+                on:change={field['on:change']}
+                on:blur={field['on:blur']}
+                on:focus={(evt) => {
+                  setTimeout(() => evt.target.select());
                 }}
-                type='link'
-                icon={<span className='icon-[ant-design--copy-outlined]'></span>}
               />
-            </Button.Group>
-          }
-        />
-      </Form.Item>
+              <InputAddon>
+                <Button
+                  on:click={() => {
+                    void resetPwd();
+                  }}
+                  className='!px-2'
+                  slot:icon={<span className='icon-[ant-design--reload-outlined] text-base'></span>}
+                  type='link'
+                />
+                <Button
+                  on:click={() => {
+                    const tk = formState.loginPwd;
+                    if (tk) {
+                      void copyToClipboard(tk).then(() => {
+                        void message.success('已复制！');
+                      });
+                    }
+                  }}
+                  className='!border-l-border !rounded-none !px-2'
+                  type='link'
+                  slot:icon={<span className='icon-[ant-design--copy-outlined] text-base'></span>}
+                />
+              </InputAddon>
+            </InputWrapper>
+          )}
+        </Controller>
+      </FormItem>
+      <FormItem label='资源名：' required>
+        <Controller control={control} name='resourceName'>
+          {(field) => (
+            <Input value={field.value} on:change={field['on:change']} on:blur={field['on:blur']} />
+          )}
+        </Controller>
+      </FormItem>
+      <FormItem label='镜像类型：' required>
+        <Controller control={control} name='imageType'>
+          {(field) => (
+            <Select options={ImageTypeOpts} value={field.value} on:change={field['on:change']} />
+          )}
+        </Controller>
+      </FormItem>
+      <FormItem label='镜像：' required>
+        <Controller control={control} name='imageId'>
+          {(field) => (
+            <Select options={state.imageOpts} value={field.value} on:change={field['on:change']} />
+          )}
+        </Controller>
+      </FormItem>
+      <FormItem label='带宽' required>
+        <Controller control={control} name='bandWidth'>
+          {(field) => (
+            <InputWrapper>
+              <InputNumber
+                min={1}
+                max={100}
+                noRoundedR
+                value={field.value}
+                on:change={field['on:change']}
+                on:blur={field['on:blur']}
+              />
+              <InputAddon className='px-2'>Mbps</InputAddon>
+            </InputWrapper>
+          )}
+        </Controller>
+      </FormItem>
+
       <div className='my-4 flex items-center gap-8'>
         <Button
           type='primary'
@@ -199,8 +269,7 @@ export function InstancePanel: FC<{
         >
           保存
         </Button>
-        {globalStore.settings.instanceType && <Price />}
       </div>
-    </>
+    </div>
   );
-};
+}
