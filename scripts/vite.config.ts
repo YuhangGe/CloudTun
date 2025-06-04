@@ -56,6 +56,12 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+    rollupOptions: {
+      input: {
+        index: path.resolve(__dirname, '../index.html'),
+        notify: path.resolve(__dirname, '../notify.html'),
+      },
+    },
   },
   plugins: [
     tailwindcss(),

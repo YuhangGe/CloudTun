@@ -132,35 +132,6 @@ export async function pingV2RayOnce(ip: string) {
   }
 }
 
-let pingInt = 0;
-export function pingV2RayInterval(ip: string) {
-  if (!globalSettings.token) return false;
-  if (pingInt) clearInterval(pingInt);
-  pingInt = window.setInterval(
-    async () => {
-      const fail = () => {
-        appendLog('[ping] ==> 服务器响应异常，可能是竞价实例被回收，请刷新主机信息后重新购买');
-      };
-      try {
-        const res = await fetch(`http://${ip}:2081/ping?token=${globalSettings.token}`);
-        if (res.status !== 200) {
-          return fail();
-        }
-
-        const txt = await res.text();
-        if (txt !== 'pong!') {
-          return fail();
-        }
-        appendLog('[ping] ==> 服务器正常响应');
-      } catch (ex) {
-        console.error(ex);
-        fail();
-      }
-    },
-    2 * 60 * 1000,
-  );
-  return true;
-}
 export function getV2RayCoreConf(ip: string) {
   return renderTpl(configTpl, {
     REMOTE_IP: ip,

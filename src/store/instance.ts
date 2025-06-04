@@ -4,6 +4,7 @@ import { IS_MOBILE } from '@/service/util';
 import { loadInstance, pingV2RayOnce, startV2RayCore } from '@/views/proxy/helper';
 import { vm } from 'jinge';
 import { message } from 'jinge-antd';
+import { appendLog } from './log';
 
 export interface InstanceState {
   data?: CVMInstance;
@@ -24,6 +25,23 @@ export const globalInst = vm<InstanceState>({
   state: 0,
 });
 
+let pingInt = 0;
+export function startPingV2RayInterval() {
+  if (pingInt) clearInterval(pingInt);
+  pingInt = window.setInterval(
+    async () => {
+      if (!globalInst.ip) return;
+      const ret = await pingV2RayOnce(globalInst.ip!);
+      if (!ret) {
+        appendLog('[ping] ==> 服务器响应异常，可能是竞价实例被回收，请刷新主机信息后重新购买');
+      } else {
+        appendLog('[ping] ==> 服务器正常响应');
+      }
+    },
+    2 * 60 * 1000,
+  );
+}
+
 export async function loadGlobalInst(id?: string) {
   globalInst.loading = true;
   const [err, res] = await loadInstance(id);
@@ -35,7 +53,6 @@ export async function createGlobalInst() {
   const deps = await loadInstanceDependentResources();
   if (!deps) {
     message.error('创建失败！');
-
     return false;
   }
   const [err, res] = await CreateInstance(deps);
@@ -82,6 +99,7 @@ async function updateConnect() {
   if (ret) {
     globalInst.state = 3;
     // state.status = getStatus();
+    startPingV2RayInterval();
     if (!IS_MOBILE) {
       await enableProxy();
     }

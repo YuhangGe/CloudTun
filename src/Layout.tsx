@@ -8,6 +8,7 @@ import { cx, vm, watch } from 'jinge';
 import { SettingsView } from './views/settings';
 import { LogView } from './views/logview';
 import { ProxyView } from './views/proxy';
+import { showNotifyWindow } from './service/notify';
 
 const ViewItems: MenuOption<string>[] = [
   {
@@ -41,41 +42,6 @@ export function Layout() {
     },
     { immediate: true },
   );
-
-  // const initialize = async () => {
-  //   try {
-  //     const [err, res] = await loadInstance();
-
-  //     if (err || !res.InstanceSet.length) return;
-  //     const inst = res.InstanceSet[0];
-  //     globalStore.instance = inst;
-  //     // if (!(await pingV2RayOnce(inst))) {
-  //     //   return;
-  //     // }
-  //     // globalStore.v2rayState = 'INSTALLED';
-  //     // appendLog('[ping] ==> 开始定时 Ping 服务');
-  //     // if (!pingV2RayInterval()) {
-  //     //   void message.error('pingV2RayInterval 失败，请尝试退出后重启 CloudV2Ray。');
-  //     //   return;
-  //     // }
-  //     // if (!IS_MOBILE && !(await startV2RayCore())) {
-  //     //   void message.error('本地 v2ray-core 启动失败，请尝试退出后重启 CloudV2Ray。');
-  //     // }
-  //   } catch (ex) {
-  //     void message.error(`${ex}`);
-  //   } finally {
-  //     state.loaded = true;
-  //   }
-  // };
-  // onMount(() => {
-  //   if (validateSettings(globalStore.settings) != null) {
-  //     state.loaded = true;
-  //   } else {
-  //     void initialize();
-  //   }
-  // });
-
-  // const [x, setX] = useState(false);
 
   return (
     <>
@@ -125,17 +91,13 @@ export function Layout() {
           </div>
           <div className='max-sm:text-secondary-text text-2xl whitespace-nowrap'>{state.title}</div>
           <div className='flex-1' />
-          {/* <Button
-            loading={x}
-            onClick={async () => {
-              setX(true);
-              const r = await invoke('plugin:cloudv2ray|startVpn');
-              console.log(r);
-              setX(false);
+          <button
+            on:click={() => {
+              void showNotifyWindow();
             }}
           >
-            T
-          </Button> */}
+            TEST
+          </button>
           <Dropdown
             placement='bottom-end'
             options={ViewItems}
