@@ -28,7 +28,8 @@ pub fn run() {
       tauri_open_devtools,
       tauri_calc_tencent_cloud_api_signature,
       tauri_start_v2ray_server,
-      tauri_stop_v2ray_server
+      tauri_stop_v2ray_server,
+      tauri_kill_progress_by_pid,
     ])
     .setup(|_app| {
       #[cfg(desktop)]

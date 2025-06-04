@@ -1,8 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
 import type { InstanceDeps } from './instance';
-import { globalStore } from '@/store/global';
 import { message } from 'jinge-antd';
+import { globalSettings } from '@/store/settings';
 
 export type ApiResult<T> = [Error] | [undefined, T];
 const ServiceVersionMap = {
@@ -23,12 +23,11 @@ async function callTencentApi<T>({
   action: string;
   data?: Record<string, unknown>;
 }): Promise<ApiResult<T>> {
-  const params = globalStore.settings;
   const timestamp = Math.floor(Date.now() / 1000);
   const body = data ? JSON.stringify(data) : '{}';
   const sign = await invoke<string>('tauri_calc_tencent_cloud_api_signature', {
-    secretId: params.secretId,
-    secretKey: params.secretKey,
+    secretId: globalSettings.secretId,
+    secretKey: globalSettings.secretKey,
     service,
     timestamp,
     body,
@@ -41,12 +40,13 @@ async function callTencentApi<T>({
     'X-TC-Action': action,
     'X-TC-Version': ServiceVersionMap[service],
     'X-TC-Timestamp': timestamp.toString(),
-    'X-TC-Region': region ?? params.region,
+    'X-TC-Region': region ?? globalSettings.region,
   };
   const res = await fetch(`https://${host}`, {
     method: 'POST',
     headers,
     body,
+    connectTimeout: 5000,
   });
   if (res.status !== 200) {
     throw new Error(`bad status code: ${res.status}`);
@@ -137,20 +137,19 @@ export function DescribeInstanceTypeConfigs({
   });
 }
 function getInstanceApiParams() {
-  const settings = globalStore.settings;
-  if (!settings.zone || !settings.imageId) throw new Error('settings missing');
+  if (!globalSettings.zone || !globalSettings.imageId) throw new Error('settings missing');
   return {
     InstanceChargeType: 'SPOTPAID',
-    InstanceType: settings.instanceType,
+    InstanceType: globalSettings.instanceType,
     InstanceCount: 1,
-    LoginSettings: { Password: settings.loginPwd },
-    Placement: { Zone: settings.zone, ProjectId: 0 },
+    LoginSettings: { Password: globalSettings.loginPwd },
+    Placement: { Zone: globalSettings.zone, ProjectId: 0 },
     SystemDisk: {
       DiskSize: 20,
       DiskType: 'CLOUD_PREMIUM', // 'CLOUD_BSSD'
     },
-    ImageId: settings.imageId,
-    InstanceName: settings.resourceName,
+    ImageId: globalSettings.imageId,
+    InstanceName: globalSettings.resourceName,
     HostName: 'vray',
     EnhancedService: {
       AutomationService: { Enabled: true },
@@ -163,7 +162,7 @@ function getInstanceApiParams() {
     //   PublicIpAssigned: false,
     // },
     InternetAccessible: {
-      InternetMaxBandwidthOut: settings.bandWidth,
+      InternetMaxBandwidthOut: globalSettings.bandWidth,
       PublicIpAssigned: true,
       InternetChargeType: 'TRAFFIC_POSTPAID_BY_HOUR',
       InternetServiceProvider: 'BGP',

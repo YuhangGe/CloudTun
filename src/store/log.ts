@@ -16,8 +16,7 @@ export const logStore = vm<LogStore>({
 const MAX_LOGS_LENGTH = 1000;
 
 export function appendLog(log: string) {
-  // eslint-disable-next-line no-console
-  console.log(log);
+  console.info(log);
   logStore.logs.push({ id: uid(), text: log });
   if (logStore.logs.length > MAX_LOGS_LENGTH) {
     logStore.logs.unshift();

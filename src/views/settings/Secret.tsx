@@ -1,10 +1,10 @@
 import { copyToClipboard, generateStrongPassword } from '@/service/util';
-import { globalStore } from '@/store/global';
 import { invoke } from '@tauri-apps/api/core';
 import { onMount } from 'jinge';
 import { Button, Controller, Input, InputAddon, InputWrapper, message, useForm } from 'jinge-antd';
 import { z } from 'zod';
 import { FormItem } from './FormItem';
+import { globalSettings } from '@/store/settings';
 
 export function SecretTokenForm() {
   const { formState, formErrors, validate, control } = useForm(
@@ -14,7 +14,7 @@ export function SecretTokenForm() {
       secretKey: z.string().min(1),
       loginPwd: z.string().min(1),
     }),
-    { defaultValues: globalStore.settings },
+    { defaultValues: globalSettings },
   );
 
   function resetToken() {
@@ -33,14 +33,14 @@ export function SecretTokenForm() {
   async function save() {
     const [err, data] = await validate();
     if (err) return;
-    Object.assign(globalStore.settings, data);
+    Object.assign(globalSettings, data);
   }
 
   onMount(() => {
-    if (!globalStore.settings.token) {
+    if (!globalSettings.token) {
       void resetToken();
     }
-    if (!globalStore.settings.loginPwd) {
+    if (!globalSettings.loginPwd) {
       resetPwd();
     }
   });

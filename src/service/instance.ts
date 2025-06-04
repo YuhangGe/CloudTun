@@ -1,3 +1,4 @@
+import { globalSettings } from '@/store/settings';
 import type { ApiFilter } from './tencent';
 import {
   CreateSecurityGroupWithPolicies,
@@ -8,7 +9,6 @@ import {
   DescribeVpcs,
 } from './tencent';
 import { renderTpl } from './util';
-import { globalStore } from '@/store/global';
 import shellTpl from '@/assets/shell-template/agent.sh?raw';
 import { message } from 'jinge-antd';
 
@@ -35,16 +35,17 @@ async function loadVpc(resourceName: string) {
 }
 
 export async function loadInstanceDependentResources(): Promise<InstanceDeps | undefined> {
-  const settings = globalStore.settings;
-  if (!settings.zone || !settings.imageId) {
+  if (!globalSettings.zone || !globalSettings.imageId) {
     message.error('请先配置可用区、镜像等信息');
     return;
   }
-  const resourceName = settings.resourceName;
+  const resourceName = globalSettings.resourceName;
 
   const [vpc, b, c] = await Promise.all([
     loadVpc(resourceName),
-    DescribeSubnets(params('subnet', resourceName, { Name: 'zone', Values: [settings.zone] })),
+    DescribeSubnets(
+      params('subnet', resourceName, { Name: 'zone', Values: [globalSettings.zone] }),
+    ),
     DescribeSecurityGroups(params('security-group', resourceName)),
   ]);
   if (!vpc || b[0] || c[0]) {
@@ -55,7 +56,7 @@ export async function loadInstanceDependentResources(): Promise<InstanceDeps | u
     const [err, res] = await CreateSubnet({
       VpcId: vpc.VpcId,
       SubnetName: resourceName,
-      Zone: settings.zone,
+      Zone: globalSettings.zone,
       CidrBlock: '10.8.0.0/16',
     });
     if (err || !res.Subnet) return;
@@ -104,12 +105,11 @@ export async function loadInstanceDependentResources(): Promise<InstanceDeps | u
 }
 
 export function getInstanceAgentShell() {
-  const settings = globalStore.settings;
   return renderTpl(shellTpl, {
-    secretKey: settings.secretKey,
-    secretId: settings.secretId,
-    resourceName: settings.resourceName,
-    token: settings.token,
-    region: settings.region,
+    secretKey: globalSettings.secretKey,
+    secretId: globalSettings.secretId,
+    resourceName: globalSettings.resourceName,
+    token: globalSettings.token,
+    region: globalSettings.region,
   });
 }

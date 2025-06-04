@@ -14,9 +14,9 @@ import {
 import { DescribeImages, DescribeInstanceTypeConfigs, DescribeZones } from '@/service/tencent';
 import { copyToClipboard, generateStrongPassword } from '@/service/util';
 import { RegionOptions } from '@/service/region';
-import { onMount, vm, vmRaw, watch } from 'jinge';
+import { onMount, vm, watch } from 'jinge';
 import { z } from 'zod';
-import { globalStore } from '@/store/global';
+import { globalSettings } from '@/store/settings';
 import { FormItem } from './FormItem';
 
 const ImageTypeOpts = [
@@ -31,7 +31,6 @@ const ImageTypeOpts = [
 ];
 
 export function InstanceConfigForm() {
-  const settings = vmRaw(globalStore.settings);
   const { formErrors, formState, control, validate } = useForm(
     z.object({
       region: z.string(),
@@ -44,7 +43,7 @@ export function InstanceConfigForm() {
       bandWidth: z.number().min(1).max(100),
     }),
     {
-      defaultValues: settings,
+      defaultValues: globalSettings,
     },
   );
 
@@ -126,10 +125,10 @@ export function InstanceConfigForm() {
         label: image.ImageName,
         value: image.ImageId,
       }));
-      if (formState.imageType === 'PRIVATE_IMAGE' && settings.token) {
+      if (formState.imageType === 'PRIVATE_IMAGE' && globalSettings.token) {
         // 私有镜像约定使用 vmess uuid 作为镜像名。如果找到了，则填充 image id。
-        const img = res.ImageSet.find((ii) => ii.ImageName == settings.token);
-        if (img && settings.imageId !== img.ImageId) {
+        const img = res.ImageSet.find((ii) => ii.ImageName == globalSettings.token);
+        if (img && globalSettings.imageId !== img.ImageId) {
           formState.imageId = img.ImageId;
         }
       }
@@ -144,11 +143,11 @@ export function InstanceConfigForm() {
   async function save() {
     const [err, data] = await validate();
     if (err) return;
-    Object.assign(globalStore.settings, data);
+    Object.assign(globalSettings, data);
   }
 
   onMount(() => {
-    if (!settings.loginPwd) {
+    if (!globalSettings.loginPwd) {
       resetPwd();
     }
   });

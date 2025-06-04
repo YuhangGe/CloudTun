@@ -1,37 +1,35 @@
-import { Button, Spin, Tooltip, message } from 'jinge-antd';
+import { Button, Dropdown, type MenuOption, Tooltip, message } from 'jinge-antd';
 import { invoke } from '@tauri-apps/api/core';
-import { globalStore } from './store/global';
+import { globalSettings } from './store/settings';
 
-import { loadInstance } from './views/instance/helper';
 import imgLogo from '@/assets/logo-128x128.png';
 import { validateSettings } from './service/settings';
-import { cx, onMount, vm, watch } from 'jinge';
+import { cx, vm, watch } from 'jinge';
 import { SettingsView } from './views/settings';
 import { LogView } from './views/logview';
 import { ProxyView } from './views/proxy';
 
-const ViewItems = [
+const ViewItems: MenuOption<string>[] = [
   {
     label: '代理',
     'slot:icon': <span className='icon-[material-symbols--wifi-proxy-outline]'></span>,
-    key: 'proxy',
+    value: 'proxy',
   },
   {
     label: '日志',
     'slot:icon': <span className='icon-[tabler--logs]'></span>,
-    key: 'logs',
+    value: 'logs',
   },
   {
     label: '设置',
     'slot:icon': <span className='icon-[ant-design--setting-outlined]'></span>,
-    key: 'settings',
+    value: 'settings',
   },
 ];
 
 export function Layout() {
   const state = vm({
-    loaded: false,
-    view: validateSettings(globalStore.settings) != null ? 'settings' : 'proxy',
+    view: validateSettings(globalSettings) != null ? 'settings' : 'proxy',
     title: '',
   });
 
@@ -39,66 +37,66 @@ export function Layout() {
     state,
     'view',
     (v) => {
-      state.title = ViewItems.find((it) => it.key === v)?.label!;
+      state.title = ViewItems.find((it) => it.value === v)?.label!;
     },
     { immediate: true },
   );
 
-  const initialize = async () => {
-    try {
-      const [err, res] = await loadInstance();
+  // const initialize = async () => {
+  //   try {
+  //     const [err, res] = await loadInstance();
 
-      if (err || !res.InstanceSet.length) return;
-      const inst = res.InstanceSet[0];
-      globalStore.instance = inst;
-      // if (!(await pingV2RayOnce(inst))) {
-      //   return;
-      // }
-      // globalStore.v2rayState = 'INSTALLED';
-      // appendLog('[ping] ==> 开始定时 Ping 服务');
-      // if (!pingV2RayInterval()) {
-      //   void message.error('pingV2RayInterval 失败，请尝试退出后重启 CloudV2Ray。');
-      //   return;
-      // }
-      // if (!IS_MOBILE && !(await startV2RayCore())) {
-      //   void message.error('本地 v2ray-core 启动失败，请尝试退出后重启 CloudV2Ray。');
-      // }
-    } catch (ex) {
-      void message.error(`${ex}`);
-    } finally {
-      state.loaded = true;
-    }
-  };
-  onMount(() => {
-    if (validateSettings(globalStore.settings) != null) {
-      state.loaded = true;
-    } else {
-      void initialize();
-    }
-  });
+  //     if (err || !res.InstanceSet.length) return;
+  //     const inst = res.InstanceSet[0];
+  //     globalStore.instance = inst;
+  //     // if (!(await pingV2RayOnce(inst))) {
+  //     //   return;
+  //     // }
+  //     // globalStore.v2rayState = 'INSTALLED';
+  //     // appendLog('[ping] ==> 开始定时 Ping 服务');
+  //     // if (!pingV2RayInterval()) {
+  //     //   void message.error('pingV2RayInterval 失败，请尝试退出后重启 CloudV2Ray。');
+  //     //   return;
+  //     // }
+  //     // if (!IS_MOBILE && !(await startV2RayCore())) {
+  //     //   void message.error('本地 v2ray-core 启动失败，请尝试退出后重启 CloudV2Ray。');
+  //     // }
+  //   } catch (ex) {
+  //     void message.error(`${ex}`);
+  //   } finally {
+  //     state.loaded = true;
+  //   }
+  // };
+  // onMount(() => {
+  //   if (validateSettings(globalStore.settings) != null) {
+  //     state.loaded = true;
+  //   } else {
+  //     void initialize();
+  //   }
+  // });
 
   // const [x, setX] = useState(false);
 
-  return state.loaded ? (
+  return (
     <>
       <div className='border-border flex w-28 flex-shrink-0 flex-col border-r border-solid max-sm:hidden'>
-        <div className='pt-[5px] pl-5'>
+        <div className='pt-[5px] pl-5 max-sm:pl-3'>
           <img src={imgLogo} className='size-16' />
         </div>
         {ViewItems.map((item) => (
           <div
-            key={item.key}
+            key={item.value}
             on:click={() => {
-              const err = validateSettings(globalStore.settings);
+              const err = validateSettings(globalSettings);
               if (err != null) {
                 void message.error(err);
                 return;
               }
-              state.view = item.key;
+              state.view = item.value;
             }}
             className={cx(
               'hover:bg-hover flex w-full cursor-pointer items-center py-5 pl-5 text-lg hover:text-white',
-              state.view === item.key && 'text-blue',
+              state.view === item.value && 'text-blue',
             )}
           >
             {item['slot:icon']}
@@ -118,7 +116,7 @@ export function Layout() {
           />
         </Tooltip>
       </div>
-      <div className='flex flex-1 flex-col overflow-x-hidden px-6 pt-6'>
+      <div className='flex flex-1 flex-col overflow-x-hidden px-6 pt-6 max-sm:px-4'>
         <div className='mb-4 flex items-center sm:mb-5'>
           <div className='flex items-center text-2xl sm:hidden'>
             <img src={imgLogo} className='block size-10' />
@@ -138,37 +136,26 @@ export function Layout() {
           >
             T
           </Button> */}
-          {/* <Dropdown
-            
-            menu={{
-              items: ViewItems.map((item) => ({
-                label: (
-                  <div className='flex items-center gap-3 py-2 pl-1 pr-2'>
-                    <span className='translate-y-0.5'>{item.icon}</span>
-                    {item.label}
-                  </div>
-                ),
-                key: item.key,
-              })),
-              onClick(info) {
-                setView(info.key);
-              },
+          <Dropdown
+            placement='bottom-end'
+            options={ViewItems}
+            on:change={(v) => {
+              state.view = v;
             }}
           >
             <Button
-              className='sm:hidden'
-              slot:icon={<span className='icon-[ant-design--menu-outlined] shrink-0'></span>}
+              className='sm:!hidden'
+              type='link'
+              slot:icon={
+                <span className='icon-[ant-design--menu-outlined] shrink-0 text-xl'></span>
+              }
             />
-          </Dropdown> */}
+          </Dropdown>
         </div>
         {state.view === 'proxy' && <ProxyView />}
         {state.view === 'settings' && <SettingsView />}
         {state.view === 'logs' && <LogView />}
       </div>
     </>
-  ) : (
-    <div className='flex w-full items-center justify-center'>
-      <Spin />
-    </div>
   );
 }

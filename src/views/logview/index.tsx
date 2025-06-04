@@ -10,9 +10,12 @@ export function LogView() {
   });
 
   return (
-    <div className='mt-3 mb-4 flex-1 overflow-y-auto' ref={el}>
+    <div
+      className='border-border mb-4 flex-1 overflow-auto rounded-lg py-3 max-sm:border max-sm:px-3'
+      ref={el}
+    >
       {logStore.logs.map((log) => (
-        <p className='text-secondary-text mb-0.5 font-mono leading-[1.2]' key={log.id}>
+        <p className='text-secondary-text mb-2 font-mono leading-[1.2]' key={log.id}>
           {log.text}
         </p>
       ))}

@@ -1,6 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
-import { globalStore } from '@/store/global';
 import configTpl from '@/assets/v2ray.conf.template.json?raw';
 import {
   type CVMInstance,
@@ -8,12 +7,12 @@ import {
   DescribeAutomationAgentStatus,
   DescribeCommands,
   DescribeInstances,
-  InvokeCommand,
   ModifyCommand,
 } from '@/service/tencent';
 import { renderTpl } from '@/service/util';
 import { appendLog } from '@/store/log';
-import { getInstanceAgentShell } from '@/service/instance';
+import { globalSettings } from '@/store/settings';
+import { savePid } from '@/store/pid';
 
 export async function loadInstance(id?: string) {
   return await DescribeInstances({
@@ -25,7 +24,7 @@ export async function loadInstance(id?: string) {
           Filters: [
             {
               Name: 'instance-name',
-              Values: [globalStore.settings.resourceName],
+              Values: [globalSettings.resourceName],
             },
           ],
         }),
@@ -91,43 +90,39 @@ export async function createOrUpdateCommand(shellContent: string) {
   return id;
 }
 
-export async function installV2RayAgent(inst: CVMInstance) {
-  const shellContent = window.btoa(getInstanceAgentShell());
-  const commandId = await createOrUpdateCommand(shellContent);
-  if (!commandId) {
-    appendLog('[agent] ==> 安装 V2Ray 自动化脚本执行失败');
-    return false;
-  }
-  try {
-    await InvokeCommand({
-      CommandId: commandId,
-      InstanceIds: [inst.InstanceId],
-    });
-  } catch (ex) {
-    console.error(ex);
-    appendLog('[agent] ==> 安装 V2Ray 自动化脚本执行失败');
-    return false;
-  }
-  for (let i = 0; i < 150; i++) {
-    await new Promise((res) => setTimeout(res, 2000));
-    const pinged = await pingV2RayOnce(inst);
-    if (pinged) {
-      return true;
-    }
-  }
-  return false; // timeout
-}
+// export async function installV2RayAgent(inst: CVMInstance) {
+//   const shellContent = window.btoa(getInstanceAgentShell());
+//   const commandId = await createOrUpdateCommand(shellContent);
+//   if (!commandId) {
+//     appendLog('[agent] ==> 安装 V2Ray 自动化脚本执行失败');
+//     return false;
+//   }
+//   try {
+//     await InvokeCommand({
+//       CommandId: commandId,
+//       InstanceIds: [inst.InstanceId],
+//     });
+//   } catch (ex) {
+//     console.error(ex);
+//     appendLog('[agent] ==> 安装 V2Ray 自动化脚本执行失败');
+//     return false;
+//   }
+//   for (let i = 0; i < 150; i++) {
+//     await new Promise((res) => setTimeout(res, 2000));
+//     const pinged = await pingV2RayOnce(inst);
+//     if (pinged) {
+//       return true;
+//     }
+//   }
+//   return false; // timeout
+// }
 
-export async function pingV2RayOnce(inst: CVMInstance) {
-  const settings = globalStore.settings;
-  if (!settings.token) return false;
-  if (!inst) return false;
-  const ip = inst.PublicIpAddresses?.[0];
-  if (!ip) return false;
+export async function pingV2RayOnce(ip: string) {
+  if (!globalSettings.token) return false;
   try {
-    const url = `http://${ip}:2081/ping?token=${settings.token}`;
+    const url = `http://${ip}:2081/ping?token=${globalSettings.token}`;
     appendLog(`[ping] ==> ${url}`);
-    const res = await fetch(url);
+    const res = await fetch(url, { connectTimeout: 5000 });
     if (res.status !== 200) throw new Error(`bad response status: ${res.status}`);
     const txt = await res.text();
     return txt === 'pong!';
@@ -138,13 +133,8 @@ export async function pingV2RayOnce(inst: CVMInstance) {
 }
 
 let pingInt = 0;
-export function pingV2RayInterval() {
-  const settings = globalStore.settings;
-  if (!settings.token) return false;
-  const inst = globalStore.instance;
-  if (!inst) return false;
-  const ip = inst.PublicIpAddresses?.[0];
-  if (!ip) return false;
+export function pingV2RayInterval(ip: string) {
+  if (!globalSettings.token) return false;
   if (pingInt) clearInterval(pingInt);
   pingInt = window.setInterval(
     async () => {
@@ -152,7 +142,7 @@ export function pingV2RayInterval() {
         appendLog('[ping] ==> 服务器响应异常，可能是竞价实例被回收，请刷新主机信息后重新购买');
       };
       try {
-        const res = await fetch(`http://${ip}:2081/ping?token=${settings.token}`);
+        const res = await fetch(`http://${ip}:2081/ping?token=${globalSettings.token}`);
         if (res.status !== 200) {
           return fail();
         }
@@ -171,24 +161,20 @@ export function pingV2RayInterval() {
   );
   return true;
 }
-export function getV2RayCoreConf() {
-  const settings = globalStore.settings;
-  const inst = globalStore.instance;
-  if (!inst) return '';
-  const ip = inst.PublicIpAddresses?.[0];
-  if (!ip) return '';
+export function getV2RayCoreConf(ip: string) {
   return renderTpl(configTpl, {
     REMOTE_IP: ip,
-    TOKEN: settings.token,
+    TOKEN: globalSettings.token,
   });
 }
-export async function startV2RayCore() {
-  const conf = getV2RayCoreConf();
+export async function startV2RayCore(ip: string) {
+  const conf = getV2RayCoreConf(ip);
   if (!conf) return false;
   try {
-    await invoke('tauri_start_v2ray_server', {
+    const pid = await invoke<{ pid: string }>('tauri_start_v2ray_server', {
       config: conf,
     });
+    void savePid(pid.pid);
     return true;
   } catch (ex) {
     console.error(ex);

@@ -48,6 +48,23 @@ pub async fn stop_v2ray_server(state: State<'_, V2RayProc>) {
   };
 }
 
+pub fn kill_process_by_pid(pid: &str) -> std::io::Result<()> {
+  if cfg!(target_os = "windows") {
+    // Windows 使用 taskkill
+    std::process::Command::new("taskkill")
+      .args(&["/PID", pid, "/F"])
+      .spawn()?
+      .wait()?;
+  } else {
+    // Unix-like 系统使用 kill
+    std::process::Command::new("kill")
+      .args(&["-9", pid]) // -9 是 SIGKILL 信号
+      .spawn()?
+      .wait()?;
+  }
+  Ok(())
+}
+
 async fn start_v2ray_desktop_server<R: Runtime>(
   config: &str,
   h: AppHandle<R>,
@@ -177,5 +194,15 @@ pub async fn tauri_stop_v2ray_server<R: Runtime>(
 ) -> TAResult<()> {
   stop_v2ray_server(state).await;
   emit_log(&handle, "log::v2ray", "v2ray core server stopped.");
+  Ok(())
+}
+
+#[tauri::command]
+pub async fn tauri_kill_progress_by_pid<R: Runtime>(
+  pid: &str,
+  handle: AppHandle<R>,
+) -> TAResult<()> {
+  let _: bool = kill_process_by_pid(pid).is_ok();
+  emit_log(&handle, "log::v2ray", "kill progress by pid.");
   Ok(())
 }

@@ -75,7 +75,7 @@
         "outboundTag": "adblock"
       },
       {
-        "domain": ["tiktok.com",  "tiktokcdn.com", "ttwstatic.com"],
+        "domain": ["tiktok.com", "tiktokcdn.com", "ttwstatic.com"],
         "type": "field",
         "outboundTag": "proxy"
       },

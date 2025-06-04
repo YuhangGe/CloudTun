@@ -1,6 +1,6 @@
 import { Tabs, message } from 'jinge-antd';
 
-import { globalStore } from '@/store/global';
+import { globalSettings } from '@/store/settings';
 import { vm } from 'jinge';
 
 import { SecretTokenForm } from './Secret';
@@ -19,7 +19,7 @@ const TabOptions = [
 
 export function SettingsView() {
   const state = vm({
-    tab: globalStore.settings.secretKey ? 'instance' : 'secret',
+    tab: globalSettings.secretKey ? 'instance' : 'secret',
   });
 
   return (
@@ -27,7 +27,7 @@ export function SettingsView() {
       <Tabs
         activeKey={state.tab}
         on:change={(t) => {
-          if (t !== 'secret' && !globalStore.settings.secretKey) {
+          if (t !== 'secret' && !globalSettings.secretKey) {
             void message.error('请先填写密钥信息');
           } else {
             state.tab = t;
