@@ -4,6 +4,8 @@ import App from './App';
 import { loadGlobalSettings } from './store/settings';
 import { killPreviousPid } from './store/pid';
 
+import { initTray } from './tray';
+
 const root = document.querySelector('#root')!;
 if (!root) throw new Error('#root not found');
 
@@ -14,6 +16,6 @@ window.onerror = (evt) => {
   console.error(evt);
 };
 
-void Promise.all([killPreviousPid(), loadGlobalSettings()]).then(() => {
+void Promise.all([initTray(), killPreviousPid(), loadGlobalSettings()]).then(() => {
   bootstrap(App, root as HTMLElement);
 });

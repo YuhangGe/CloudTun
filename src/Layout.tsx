@@ -72,7 +72,7 @@ export function Layout() {
         <Tooltip content='退出 CloudV2Ray，结束本地代理' placement='top-start'>
           <Button
             on:click={async () => {
-              await invoke('plugin:cloudv2ray|tauri_stop_v2ray_server');
+              await invoke('tauri_stop_v2ray_server');
               await invoke('tauri_exit_process');
             }}
             className='flex w-full items-center justify-center pt-2 pb-4'

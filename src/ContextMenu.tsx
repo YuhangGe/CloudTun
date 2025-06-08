@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { Dropdown, type MenuOption } from 'jinge-antd';
 import { Portal, onMount, ref, registerEvent, vm } from 'jinge';
+import { clearTray } from './tray';
 
 const ContextMenuOptions: MenuOption<string>[] = [
   {
@@ -45,6 +46,7 @@ export function ContextMenu() {
         options={ContextMenuOptions}
         on:change={(v) => {
           if (v === 'reload') {
+            clearTray();
             history.replaceState(null, '', '/');
             location.reload();
           } else if (v == 'quit') {

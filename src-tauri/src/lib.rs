@@ -36,6 +36,18 @@ pub fn run() {
       _app.manage(V2RayProc::new());
       Ok(())
     })
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while running tauri application")
+    .run(|_app_handle, event| match event {
+      tauri::RunEvent::ExitRequested { api, code, .. } => {
+        if code.is_none() {
+          api.prevent_exit();
+        } else {
+          //
+        }
+      }
+      _ => {
+        // println!("event: {:?}", event);
+      }
+    });
 }
