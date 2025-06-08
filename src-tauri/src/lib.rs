@@ -2,7 +2,7 @@ mod tencent;
 mod util;
 mod v2ray;
 
-use tauri::Manager;
+use tauri::{Manager, WindowEvent};
 use tencent::*;
 use util::*;
 use v2ray::*;
@@ -16,8 +16,10 @@ pub fn run() {
     ))
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_os::init())
-    .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {
-      // Write your code here...
+    .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+      let win = app.get_webview_window("main").expect("no main window");
+      win.show().unwrap();
+      let _ = win.set_focus();
     }))
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_store::Builder::new().build())
@@ -36,15 +38,27 @@ pub fn run() {
       _app.manage(V2RayProc::new());
       Ok(())
     })
+    .on_window_event(|window, event| match event {
+      WindowEvent::CloseRequested { api, .. } => {
+        api.prevent_close();
+        window.hide().unwrap();
+      }
+      _ => {} // event.window().hide().unwrap();
+    })
     .build(tauri::generate_context!())
     .expect("error while running tauri application")
-    .run(|_app_handle, event| match event {
+    .run(|app, event| match event {
       tauri::RunEvent::ExitRequested { api, code, .. } => {
         if code.is_none() {
           api.prevent_exit();
         } else {
           //
         }
+      }
+      tauri::RunEvent::Reopen { .. } => {
+        let win = app.get_webview_window("main").expect("no main window");
+        win.show().unwrap();
+        let _ = win.set_focus();
       }
       _ => {
         // println!("event: {:?}", event);
