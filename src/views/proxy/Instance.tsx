@@ -35,7 +35,7 @@ export function Instance() {
       {globalInst.state >= 3 && (
         <div className='flex items-center'>
           <span className='mr-1 whitespace-nowrap'>远程地址：</span>
-          <Tag className='mr-2 w-56 flex-shrink overflow-x-auto font-mono'>
+          <Tag className='mr-2 w-60 flex-shrink overflow-x-auto font-mono'>
             vmess://{globalInst.ip!}:2080
           </Tag>
           <div className='flex w-10 shrink-0 items-center'>
@@ -46,15 +46,15 @@ export function Instance() {
       {globalInst.state === 4 && (
         <div className='flex'>
           <span className='mr-1 pt-1 whitespace-nowrap'>本地代理：</span>
-          <div className='flex-shrink basis-56'>
+          <div className='flex-shrink'>
             <div className='flex items-center'>
-              <Tag className='mr-2 w-56 overflow-x-auto font-mono tracking-[0.08em]'>
+              <Tag className='mr-2 w-60 overflow-x-auto font-mono tracking-[0.08em]'>
                 socks5://127.0.0.1:7890
               </Tag>
               <CopyButton text='socks5://127.0.0.1:7890' />
             </div>
             <div className='flex items-center'>
-              <Tag className='mt-2 mr-2 w-56 overflow-x-auto font-mono tracking-[0.15em]'>
+              <Tag className='mt-2 mr-2 w-60 overflow-x-auto font-mono tracking-[0.15em]'>
                 http://127.0.0.1:7891
               </Tag>
               <CopyButton text='http://127.0.0.1:7891' />

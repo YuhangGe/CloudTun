@@ -12,10 +12,15 @@
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
+    "core:event:allow-emit",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
     "core:window:allow-create",
     "core:window:allow-show",
     "core:window:allow-hide",
+    "core:window:allow-destroy",
     "core:window:allow-current-monitor",
+    "core:window:allow-set-position",
     "core:webview:allow-create-webview-window"
   ]
 }

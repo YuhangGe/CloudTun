@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "notifyWindow",
+  "description": "Capability for the notify window",
+  "windows": [
+    "notifyWindow"
+  ],
+  "permissions": [
+    "core:event:default",
+    "notification:default"
+  ]
+}
