@@ -4,7 +4,7 @@ import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 
 let notifyWindow: Window | undefined = undefined;
 
-const WINDOW_WIDTH = 220;
+const WINDOW_WIDTH = 230;
 const WINDOW_HEIGHT = 80;
 
 let aniTm = 0;

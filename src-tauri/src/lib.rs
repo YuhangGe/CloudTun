@@ -2,7 +2,12 @@ mod tencent;
 mod util;
 mod v2ray;
 
-use tauri::{Manager, WindowEvent};
+use tauri::{
+  async_runtime::block_on,
+  menu::{Menu, MenuItem},
+  tray::TrayIconBuilder,
+  Manager, WindowEvent,
+};
 use tencent::*;
 use util::*;
 use v2ray::*;
@@ -35,7 +40,44 @@ pub fn run() {
     ])
     .setup(|_app| {
       #[cfg(desktop)]
-      _app.manage(V2RayProc::new());
+      {
+        _app.manage(V2RayProc::new());
+
+        let quit_i = MenuItem::with_id(_app, "quit", "退出CloudV2Ray", true, None::<&str>).unwrap();
+        let menu = Menu::with_items(_app, &[&quit_i]).unwrap();
+        let _ = TrayIconBuilder::new()
+          .icon(_app.default_window_icon().unwrap().clone())
+          .menu(&menu)
+          .tooltip("CloudV2Ray - 基于云计算的 V2Ray 客户端")
+          .show_menu_on_left_click(false)
+          .on_tray_icon_event(|ic, event| {
+            use tauri::tray::TrayIconEvent;
+
+            if let TrayIconEvent::Click { button, .. } = &event {
+              use tauri::tray::MouseButton;
+
+              if matches!(button, MouseButton::Left) {
+                let win = ic
+                  .app_handle()
+                  .get_webview_window("main")
+                  .expect("no main window");
+                win.show().unwrap();
+                let _ = win.set_focus();
+              }
+            }
+          })
+          .on_menu_event(|app, event| match event.id.as_ref() {
+            "quit" => {
+              block_on(stop_v2ray_server(app.state()));
+              app.exit(0);
+            }
+            _ => {
+              println!("menu item {:?} not handled", event.id);
+            }
+          })
+          .build(_app)
+          .unwrap();
+      }
       Ok(())
     })
     .on_window_event(|window, event| match event {
@@ -47,21 +89,24 @@ pub fn run() {
     })
     .build(tauri::generate_context!())
     .expect("error while running tauri application")
-    .run(|app, event| match event {
-      tauri::RunEvent::ExitRequested { api, code, .. } => {
-        if code.is_none() {
-          api.prevent_exit();
-        } else {
-          //
+    .run(|_app, event| {
+      match event {
+        tauri::RunEvent::ExitRequested { api, code, .. } => {
+          if code.is_none() {
+            api.prevent_exit();
+          } else {
+            //
+          }
         }
-      }
-      tauri::RunEvent::Reopen { .. } => {
-        let win = app.get_webview_window("main").expect("no main window");
-        win.show().unwrap();
-        let _ = win.set_focus();
-      }
-      _ => {
-        // println!("event: {:?}", event);
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Reopen { .. } => {
+          let win = _app.get_webview_window("main").expect("no main window");
+          win.show().unwrap();
+          let _ = win.set_focus();
+        }
+        _ => {
+          // println!("event: {:?}", event);
+        }
       }
     });
 }
