@@ -172,6 +172,7 @@ export function InstanceConfigForm() {
         <Controller control={control} name='instanceType'>
           {(field) => (
             <Select
+              className='max-h-[200px] overflow-y-auto'
               options={state.instTypeOpts}
               value={field.value}
               on:change={field['on:change']}

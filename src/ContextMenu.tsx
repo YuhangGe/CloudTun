@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { Dropdown, type MenuOption } from 'jinge-antd';
 import { Portal, onMount, ref, registerEvent, vm } from 'jinge';
-import { clearTray } from './tray';
+import { IS_MOBILE } from './service/util';
 
 const ContextMenuOptions: MenuOption<string>[] = [
   {
@@ -44,15 +44,20 @@ export function ContextMenu() {
         open={state.open}
         on:openChange={(v) => (state.open = v)}
         options={ContextMenuOptions}
-        on:change={(v) => {
+        on:change={async (v) => {
           if (v === 'reload') {
-            clearTray();
+            if (!IS_MOBILE) {
+              await invoke('tauri_stop_v2ray_server');
+              await invoke('tauri_close_notify_window');
+            }
+
+            await invoke('tauri_interval_ping_stop');
             history.replaceState(null, '', '/');
             location.reload();
           } else if (v == 'quit') {
-            void invoke('tauri_exit_process');
+            await invoke('tauri_exit_process');
           } else if (v == 'dev') {
-            void invoke('tauri_open_devtools');
+            await invoke('tauri_open_devtools');
           }
         }}
       >

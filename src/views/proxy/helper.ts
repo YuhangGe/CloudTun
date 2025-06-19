@@ -125,7 +125,12 @@ export async function pingV2RayOnce(ip: string) {
     const res = await fetch(url, { connectTimeout: 5000 });
     if (res.status !== 200) throw new Error(`bad response status: ${res.status}`);
     const txt = await res.text();
-    return txt === 'pong!';
+    if (txt === 'pong!') {
+      appendLog('[ping] ==> 远程 V2Ray 运行中，服务器正常响应！');
+      return true;
+    } else {
+      return false;
+    }
   } catch (ex) {
     console.error(ex);
     return false;

@@ -1,11 +1,13 @@
 import { loadInstanceDependentResources } from '@/service/instance';
 import { type CVMInstance, CreateInstance } from '@/service/tencent';
-import { IS_MOBILE } from '@/service/util';
+import { IS_MOBILE, IS_REOPEN } from '@/service/util';
 import { loadInstance, pingV2RayOnce, startV2RayCore } from '@/views/proxy/helper';
 import { vm } from 'jinge';
 import { type MessageInstance, message } from 'jinge-antd';
-import { appendLog } from './log';
-import { hideNotifyWindow, showNotifyWindow } from '@/service/notify';
+// import { appendLog } from './log';
+import { showNotifyWindow } from '@/service/notify';
+import { invoke } from '@tauri-apps/api/core';
+import { globalSettings } from './settings';
 
 export interface InstanceState {
   data?: CVMInstance;
@@ -28,27 +30,27 @@ export const globalInst = vm<InstanceState>({
   state: 0,
 });
 
-let pingInt = 0;
-export function startPingV2RayInterval() {
-  if (pingInt) clearInterval(pingInt);
-  pingInt = window.setInterval(
-    async () => {
-      if (!globalInst.ip) return;
-      const ret = await pingV2RayOnce(globalInst.ip!);
-      if (!ret) {
-        appendLog('[ping] ==> 服务器响应异常，可能是竞价实例被回收，请刷新主机信息后重新购买');
-        if (IS_MOBILE) {
-          message.error('V2Ray 远程主机失联！');
-        } else {
-          void showNotifyWindow({ type: 'error', message: 'V2Ray 远程主机失联！' });
-        }
-      } else {
-        appendLog('[ping] ==> 服务器正常响应');
-      }
-    },
-    2 * 60 * 1000,
-  );
-}
+// let pingInt = 0;
+// export function startPingV2RayInterval() {
+//   if (pingInt) clearInterval(pingInt);
+//   pingInt = window.setInterval(
+//     async () => {
+//       if (!globalInst.ip) return;
+//       const ret = await pingV2RayOnce(globalInst.ip!);
+//       if (!ret) {
+//         appendLog('[ping] ==> 服务器响应异常，可能是竞价实例被回收，请刷新主机信息后重新购买');
+//         if (IS_MOBILE) {
+//           message.error('V2Ray 远程主机失联！');
+//         } else {
+//           void showNotifyWindow({ notifyType: 'error', notifyMessage: 'V2Ray 远程主机失联！' });
+//         }
+//       } else {
+//         appendLog('[ping] ==> 服务器正常响应');
+//       }
+//     },
+//     2 * 60 * 1000,
+//   );
+// }
 
 export async function loadGlobalInst(id?: string) {
   globalInst.loading = true;
@@ -69,14 +71,14 @@ export async function createGlobalInst() {
   if (IS_MOBILE) {
     msg = message.loading(S1);
   } else {
-    void showNotifyWindow({ type: 'processing', message: S1 });
+    void showNotifyWindow({ notifyType: 'processing', notifyMessage: S1 });
   }
   const deps = await loadInstanceDependentResources();
   if (!deps) {
     if (IS_MOBILE) {
       msg?.update({ content: E1, type: 'error' });
     } else {
-      void showNotifyWindow({ type: 'error', message: E1 });
+      void showNotifyWindow({ notifyType: 'error', notifyMessage: E1 });
     }
     return false;
   }
@@ -86,7 +88,7 @@ export async function createGlobalInst() {
     if (IS_MOBILE) {
       msg?.update({ content: E1, type: 'error' });
     } else {
-      void showNotifyWindow({ type: 'error', message: E1 });
+      void showNotifyWindow({ notifyType: 'error', notifyMessage: E1 });
     }
     return false;
   } else {
@@ -118,10 +120,12 @@ async function updateInst(inst?: CVMInstance) {
       void loadGlobalInst(inst?.InstanceId);
     }, 2000);
   } else {
-    if (IS_MOBILE) {
-      msg?.update({ content: S2 });
-    } else {
-      void showNotifyWindow({ type: 'processing', message: S2 });
+    if (!IS_REOPEN) {
+      if (IS_MOBILE) {
+        msg?.update({ content: S2 });
+      } else {
+        void showNotifyWindow({ notifyType: 'processing', notifyMessage: S2 });
+      }
     }
     await updateConnect();
   }
@@ -132,10 +136,14 @@ async function updateConnect() {
   const ret = await pingV2RayOnce(globalInst.ip!);
   if (ret) {
     globalInst.state = 3;
-    // state.status = getStatus();
-    startPingV2RayInterval();
-    if (!IS_MOBILE) {
-      await enableProxy();
+    if (!IS_REOPEN) {
+      await invoke('tauri_interval_ping_start', {
+        ip: globalInst.ip!,
+        token: globalSettings.token,
+      });
+      if (!IS_MOBILE) {
+        await enableProxy();
+      }
     }
   } else {
     if (tm) clearTimeout(tm);
@@ -151,7 +159,7 @@ async function enableProxy() {
     if (IS_MOBILE) {
       // message.error('启动本地 v2ray core 失败，请尝试退出后重启 CloudV2Ray。');
     } else {
-      await showNotifyWindow({ type: 'error', message: '启动 V2Ray 失败！' });
+      await showNotifyWindow({ notifyType: 'error', notifyMessage: '启动 V2Ray 失败！' });
     }
   } else {
     globalInst.state = 4;
@@ -159,12 +167,12 @@ async function enableProxy() {
       // message.success('远程主机安装 V2Ray 完成，已启动本地 v2ray-core 代理！');
     } else {
       await showNotifyWindow({
-        type: 'success',
-        message: 'V2Ray 代理启动成功！',
+        notifyType: 'success',
+        notifyMessage: 'V2Ray 代理启动成功！',
       });
-      setTimeout(() => {
-        void hideNotifyWindow();
-      }, 3000);
+      // setTimeout(() => {
+      //   void hideNotifyWindow();
+      // }, 3000);
     }
   }
 }
