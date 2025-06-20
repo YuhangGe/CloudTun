@@ -1,13 +1,19 @@
+mod notify;
+mod ping;
 mod tencent;
 mod util;
 mod v2ray;
 
+use tauri::Wry;
 use tauri::{
   async_runtime::block_on,
   menu::{Menu, MenuItem},
   tray::TrayIconBuilder,
   Manager, WindowEvent,
 };
+
+use notify::*;
+use ping::*;
 use tencent::*;
 use util::*;
 use v2ray::*;
@@ -37,6 +43,10 @@ pub fn run() {
       tauri_start_v2ray_server,
       tauri_stop_v2ray_server,
       tauri_kill_progress_by_pid,
+      tauri_show_notify_window,
+      tauri_close_notify_window,
+      tauri_interval_ping_start,
+      tauri_interval_ping_stop
     ])
     .setup(|_app| {
       #[cfg(desktop)]
@@ -78,12 +88,15 @@ pub fn run() {
           .build(_app)
           .unwrap();
       }
+      _app.manage(NotifyWindow::<Wry>::new());
+      _app.manage(Ping::new());
       Ok(())
     })
     .on_window_event(|window, event| match event {
       WindowEvent::CloseRequested { api, .. } => {
-        api.prevent_close();
-        window.hide().unwrap();
+        // api.prevent_close();
+        // window.hide().unwrap();
+        // TODO: 如果正在创建实例，不允许关闭。
       }
       _ => {} // event.window().hide().unwrap();
     })
@@ -100,9 +113,21 @@ pub fn run() {
         }
         #[cfg(target_os = "macos")]
         tauri::RunEvent::Reopen { .. } => {
-          let win = _app.get_webview_window("main").expect("no main window");
-          win.show().unwrap();
-          let _ = win.set_focus();
+          if let Some(x) = app.get_webview_window("main") {
+            x.show().unwrap();
+            let _ = x.set_focus();
+          } else {
+            let cfg = &app.config().app.windows[0];
+            let _ = WebviewWindowBuilder::new(
+              app,
+              "main",
+              tauri::WebviewUrl::App("/index.html?mode=reopen".into()),
+            )
+            .title(cfg.title.clone())
+            .inner_size(cfg.width, cfg.height)
+            .build()
+            .unwrap();
+          }
         }
         _ => {
           // println!("event: {:?}", event);

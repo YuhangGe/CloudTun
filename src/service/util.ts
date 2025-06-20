@@ -70,6 +70,7 @@ export function loadingMessage(title: string): LoadingMessage {
   };
 }
 
+export const IS_REOPEN = location.search.includes('mode=reopen');
 export const IS_MOBILE = currentPlatform === 'android' || currentPlatform === 'ios';
 export const IS_IOS = currentPlatform === 'ios';
 export const IS_ANDROID = currentPlatform === 'android';

@@ -36,7 +36,7 @@ importers:
         specifier: ^4.1.7
         version: 4.1.7
       jinge-antd:
-        specifier: file:..\jinge-antd
+        specifier: file:../jinge-antd
         version: file:../jinge-antd(jinge@4.1.7)(zod@3.25.49)
       qrcode:
         specifier: ^1.5.4

@@ -29,7 +29,7 @@
     "@tauri-apps/plugin-os": "~2.2.1",
     "@tauri-apps/plugin-store": "~2.2.0",
     "jinge": "^4.1.7",
-    "jinge-antd": "file:..\\jinge-antd",
+    "jinge-antd": "file:../jinge-antd",
     "qrcode": "^1.5.4",
     "zod": "^3.25.49"
   },
