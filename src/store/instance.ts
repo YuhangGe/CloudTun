@@ -144,6 +144,8 @@ async function updateConnect() {
       if (!IS_MOBILE) {
         await enableProxy();
       }
+    } else {
+      globalInst.state = 4;
     }
   } else {
     if (tm) clearTimeout(tm);

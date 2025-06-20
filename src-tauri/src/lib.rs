@@ -4,19 +4,37 @@ mod tencent;
 mod util;
 mod v2ray;
 
-use tauri::Wry;
 use tauri::{
   async_runtime::block_on,
   menu::{Menu, MenuItem},
   tray::TrayIconBuilder,
-  Manager, WindowEvent,
+  Manager, WebviewWindowBuilder, WindowEvent,
 };
+use tauri::{AppHandle, Runtime, Wry};
 
 use notify::*;
 use ping::*;
 use tencent::*;
 use util::*;
 use v2ray::*;
+
+fn open_main_window<R: Runtime>(app: &AppHandle<R>) {
+  if let Some(x) = app.get_webview_window("main") {
+    x.show().unwrap();
+    let _ = x.set_focus();
+  } else {
+    let cfg = &app.config().app.windows[0];
+    let _ = WebviewWindowBuilder::new(
+      app,
+      "main",
+      tauri::WebviewUrl::App("/index.html?mode=reopen".into()),
+    )
+    .title(cfg.title.clone())
+    .inner_size(cfg.width, cfg.height)
+    .build()
+    .unwrap();
+  }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -67,12 +85,7 @@ pub fn run() {
               use tauri::tray::MouseButton;
 
               if matches!(button, MouseButton::Left) {
-                let win = ic
-                  .app_handle()
-                  .get_webview_window("main")
-                  .expect("no main window");
-                win.show().unwrap();
-                let _ = win.set_focus();
+                open_main_window(ic.app_handle());
               }
             }
           })
@@ -113,21 +126,7 @@ pub fn run() {
         }
         #[cfg(target_os = "macos")]
         tauri::RunEvent::Reopen { .. } => {
-          if let Some(x) = app.get_webview_window("main") {
-            x.show().unwrap();
-            let _ = x.set_focus();
-          } else {
-            let cfg = &app.config().app.windows[0];
-            let _ = WebviewWindowBuilder::new(
-              app,
-              "main",
-              tauri::WebviewUrl::App("/index.html?mode=reopen".into()),
-            )
-            .title(cfg.title.clone())
-            .inner_size(cfg.width, cfg.height)
-            .build()
-            .unwrap();
-          }
+          open_main_window(_app);
         }
         _ => {
           // println!("event: {:?}", event);

@@ -26,7 +26,7 @@ struct NotifyPayload {
   notify_message: String,
 }
 
-const WINDOW_WIDTH: f64 = 220.0;
+const WINDOW_WIDTH: f64 = 230.0;
 const WINDOW_HEIGHT: f64 = 80.0;
 const POSITION_Y: f64 = 90.0;
 
@@ -72,16 +72,20 @@ pub async fn show_notify_window<R: Runtime>(
     )
     .inner_size(WINDOW_WIDTH, WINDOW_HEIGHT)
     .position(leaved_left, POSITION_Y)
-    .hidden_title(true)
     .closable(false)
     .minimizable(false)
     .maximizable(false)
     .resizable(false)
-    .title_bar_style(tauri::TitleBarStyle::Overlay)
     .skip_taskbar(true)
     .always_on_top(true)
     .decorations(cfg!(target_os = "macos"))
     .visible(true);
+
+    #[cfg(target_os = "macos")]
+    let builder = builder
+      .title_bar_style(tauri::TitleBarStyle::Overlay)
+      .hidden_title(true);
+
     let win = builder.build().unwrap();
     let loc2 = loc.clone();
     loc.lock().await.replace(win);

@@ -8,7 +8,6 @@ import { cx, vm, watch } from 'jinge';
 import { SettingsView } from './views/settings';
 import { LogView } from './views/logview';
 import { ProxyView } from './views/proxy';
-import { showNotifyWindow } from './service/notify';
 
 const ViewItems: MenuOption<string>[] = [
   {
@@ -91,13 +90,6 @@ export function Layout() {
           </div>
           <div className='max-sm:text-secondary-text text-2xl whitespace-nowrap'>{state.title}</div>
           <div className='flex-1' />
-          <button
-            on:click={() => {
-              void showNotifyWindow({ type: 'success', message: 'HELLO' });
-            }}
-          >
-            SHOW
-          </button>
 
           <Dropdown
             placement='bottom-end'
