@@ -19,16 +19,19 @@
   },
   "inbounds": [
     {
-      "port": 7890, // 监听端口
-      "protocol": "socks", // 入口协议为 SOCKS 5
+      "port": 7890,
+      "protocol": "socks",
       "sniffing": {
         "enabled": true,
-        "destOverride": ["http", "tls"]
+        "destOverride": [
+          "http",
+          "tls"
+        ]
       },
       "settings": {
         "udp": true,
         "userLevel": 8,
-        "auth": "noauth" //socks的认证设置，noauth 代表不认证，由于 socks 通常在客户端使用，所以这里不认证
+        "auth": "noauth"
       }
     },
     {
@@ -38,16 +41,16 @@
   ],
   "outbounds": [
     {
-      "protocol": "vmess", // 出口协议
+      "protocol": "vmess",
       "settings": {
         "vnext": [
           {
-            "address": "$REMOTE_IP$", // 服务器地址，请修改为你自己的服务器 IP 或域名
-            "port": 2080, // 服务器端口
+            "address": "$REMOTE_IP$",
+            "port": 2080,
             "users": [
               {
-                "id": "$TOKEN$", // 用户 ID，必须与服务器端配置相同
-                "alterId": 0 // 此处的值也应当与服务器相同
+                "id": "$TOKEN$",
+                "alterId": 0
               }
             ]
           }
@@ -58,41 +61,63 @@
     {
       "protocol": "freedom",
       "settings": {},
-      "tag": "direct" //如果要使用路由，这个 tag 是一定要有的，在这里 direct 就是 freedom 的一个标号，在路由中说 direct V2Ray 就知道是这里的 freedom 了
+      "tag": "direct"
     },
     {
       "protocol": "blackhole",
       "settings": {},
-      "tag": "adblock" //同样的，这个 tag 也是要有的，在路由中说 adblock 就知道是这里的 blackhole（黑洞） 了
+      "tag": "adblock"
     }
   ],
   "routing": {
     "domainStrategy": "IPOnDemand",
     "rules": [
       {
-        "domain": ["tanx.com", "googeadsserving.cn", "baidu.com"],
+        "domain": [
+          "tanx.com",
+          "googeadsserving.cn",
+          "baidu.com"
+        ],
         "type": "field",
         "outboundTag": "adblock"
       },
       {
-        "domain": ["tiktok.com", "tiktokv.com", "tiktokcdn.com", "ttwstatic.com", "gstatic.com"],
+        "domain": [
+          "tiktok.com",
+          "tiktokv.com",
+          "tiktokcdn.com",
+          "ttwstatic.com",
+          "gstatic.com",
+          "githubusercontent.com"
+        ],
         "type": "field",
         "outboundTag": "proxy"
       },
       {
-        "domain": ["amazon.com", "microsoft.com", "jd.com", "youku.com", "baidu.com"],
+        "domain": [
+          "amazon.com",
+          "microsoft.com",
+          "jd.com",
+          "youku.com",
+          "baidu.com"
+        ],
         "type": "field",
         "outboundTag": "direct"
       },
       {
         "type": "field",
         "outboundTag": "direct",
-        "domain": ["geosite:cn"]
+        "domain": [
+          "geosite:cn"
+        ]
       },
       {
         "type": "field",
         "outboundTag": "direct",
-        "ip": ["geoip:cn", "geoip:private"]
+        "ip": [
+          "geoip:cn",
+          "geoip:private"
+        ]
       }
     ]
   }
