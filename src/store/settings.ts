@@ -14,6 +14,7 @@ export async function loadGlobalSettings() {
   if (currentInWebMock) return;
 
   tauriSettingStore = await load('settings.bin', {
+    defaults: {},
     autoSave: true,
   });
   (await tauriSettingStore.entries()).forEach(([k, v]) => {

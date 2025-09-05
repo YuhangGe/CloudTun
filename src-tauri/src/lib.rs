@@ -50,7 +50,6 @@ pub fn run() {
       win.show().unwrap();
       let _ = win.set_focus();
     }))
-    .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_store::Builder::new().build())
     .plugin(tauri_plugin_http::init())
     .invoke_handler(tauri::generate_handler![

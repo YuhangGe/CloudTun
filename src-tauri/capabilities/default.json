@@ -9,7 +9,6 @@
     "core:event:default",
     "core:default",
     "store:default",
-    "notification:default",
     {
       "identifier": "http:default",
       "allow": [

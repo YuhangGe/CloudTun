@@ -1,13 +1,14 @@
 import { validateSettings } from '@/service/settings';
 import { type CVMPrice, InquiryPriceRunInstances } from '@/service/tencent';
-import { onMount, vm, watch } from 'jinge';
-import { Spin, Tag } from 'jinge-antd';
+import { onMount, ref, vm, watch } from 'jinge';
+import { Spin, Tag, message } from 'jinge-antd';
 import { Bandwidth } from './Bandwind';
 import { Balance } from './Balance';
 import { Instance } from './Instance';
 import { Control } from './Control';
 import { globalSettings } from '@/store/settings';
 import { globalInst, loadGlobalInst } from '@/store/instance';
+import { IS_RELOAD, IS_REOPEN } from '@/service/util';
 
 export function ProxyView() {
   const state = vm<{
@@ -16,6 +17,8 @@ export function ProxyView() {
   }>({
     loading: true,
   });
+
+  const ctrl = ref<typeof Control>();
 
   async function loadPrice() {
     if (validateSettings(globalSettings) != null) {
@@ -46,6 +49,20 @@ export function ProxyView() {
       loadGlobalInst().then(
         () => {
           state.loading = false;
+          if (
+            !IS_RELOAD &&
+            !IS_REOPEN &&
+            globalSettings.autoProxy &&
+            globalInst.state === 0 &&
+            !globalInst.data
+          ) {
+            void message
+              .info('即将创建主机~')
+              .waitClose()
+              .then(() => {
+                ctrl.value?.create();
+              });
+          }
         },
         (ex) => {
           console.error(ex);
@@ -80,7 +97,7 @@ export function ProxyView() {
         </div>
         <Bandwidth price={state.price} />
       </div>
-      <Control />
+      <Control ref={ctrl} />
     </div>
   );
 }

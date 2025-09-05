@@ -10,6 +10,8 @@ export interface Settings {
   loginPwd: string;
   bandWidth: number;
   token: string;
+  autoProxy: boolean;
+  autoStartApp: boolean;
 }
 export const DefaultSettings: Settings = {
   region: import.meta.env.VITE_SETTING_REGION ?? 'ap-singapore',
@@ -23,6 +25,8 @@ export const DefaultSettings: Settings = {
   bandWidth: 10,
   secretKey: import.meta.env.VITE_SECRET_KEY ?? '',
   secretId: import.meta.env.VITE_SECRET_ID ?? '',
+  autoProxy: false,
+  autoStartApp: false,
 };
 
 export function validateSettings(s: Settings) {
@@ -34,7 +38,8 @@ export function validateSettings(s: Settings) {
   }
   if (
     Object.keys(s).some((k) => {
-      if (!s[k as keyof Settings]) {
+      const v = s[k as keyof Settings];
+      if (v == null || typeof v === 'undefined') {
         return true;
       } else {
         return false;

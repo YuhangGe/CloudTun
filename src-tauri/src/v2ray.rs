@@ -1,4 +1,8 @@
-use std::{io::Cursor, sync::Arc};
+use std::{
+  fs::{self, File},
+  io::{self, Cursor},
+  sync::Arc,
+};
 
 use tauri::{AppHandle, Manager, Runtime};
 
@@ -165,13 +169,57 @@ pub fn extract_v2ray_if_need<R: Runtime>(h: &AppHandle<R>) -> anyhow::Result<()>
   let zip_file: &str = &get_platform_zip_file();
   let zip_file_path = resource_path.join(zip_file);
   println!("{:?}", zip_file_path);
-  let buf = std::fs::read(&zip_file_path)?;
-  println!("buf: {:?}", buf.len());
 
-  std::fs::create_dir(&v2ray_bin_dir)?;
-  // println!("begin extract");
-  zip_extract::extract(Cursor::new(buf), &v2ray_bin_dir, true)?;
-  // println!("extract done");
+  // let buf = std::fs::read(&zip_file_path)?;
+  // println!("buf: {:?}", buf.len());
+
+  // std::fs::create_dir(&v2ray_bin_dir)?;
+  // // println!("begin extract");
+  // zip_extract::extract(Cursor::new(buf), &v2ray_bin_dir, true)?;
+  // // println!("extract done");
+
+  let file = File::open(zip_file_path)?;
+  let mut archive = zip::ZipArchive::new(file).unwrap();
+
+  for i in 0..archive.len() {
+    let mut file = archive.by_index(i).unwrap();
+    let outpath = match file.enclosed_name() {
+      Some(path) => v2ray_bin_dir.join(path),
+      None => continue,
+    };
+
+    // {
+    //   let comment = file.comment();
+    //   if !comment.is_empty() {
+    //     println!("File {i} comment: {comment}");
+    //   }
+    // }
+
+    println!("zip extract: {:#?}", outpath);
+
+    if file.is_dir() {
+      fs::create_dir_all(&outpath)?;
+    } else {
+      if let Some(p) = outpath.parent() {
+        if !p.exists() {
+          fs::create_dir_all(p)?;
+        }
+      }
+      let mut outfile = fs::File::create(&outpath)?;
+      io::copy(&mut file, &mut outfile)?;
+    }
+
+    // Get and Set permissions
+    #[cfg(unix)]
+    {
+      use std::os::unix::fs::PermissionsExt;
+
+      if let Some(mode) = file.unix_mode() {
+        fs::set_permissions(&outpath, fs::Permissions::from_mode(mode))?;
+      }
+    }
+  }
+
   emit_log(h, "log::sys", "V2Ray 压缩包解压完成");
   Ok(())
 }

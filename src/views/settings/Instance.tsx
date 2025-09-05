@@ -144,6 +144,7 @@ export function InstanceConfigForm() {
     const [err, data] = await validate();
     if (err) return;
     Object.assign(globalSettings, data);
+    message.success('保存成功！');
   }
 
   onMount(() => {

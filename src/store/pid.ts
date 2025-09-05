@@ -9,6 +9,7 @@ export async function loadSavedPid() {
   if (currentInWebMock) return;
 
   tauriPidStore = await load('pid.bin', {
+    defaults: {},
     autoSave: true,
   });
   const pid = await tauriPidStore.get('pid');

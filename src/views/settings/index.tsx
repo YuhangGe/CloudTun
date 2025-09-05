@@ -5,6 +5,7 @@ import { vm } from 'jinge';
 
 import { SecretTokenForm } from './Secret';
 import { InstanceConfigForm } from './Instance';
+import { CommonSettingsForm } from './Common';
 
 const TabOptions = [
   {
@@ -15,6 +16,7 @@ const TabOptions = [
     label: '主机参数',
     key: 'instance',
   },
+  { label: '通用配置', key: 'common' },
 ];
 
 export function SettingsView() {
@@ -36,7 +38,9 @@ export function SettingsView() {
         options={TabOptions}
       ></Tabs>
 
-      {state.tab === 'secret' ? <SecretTokenForm /> : <InstanceConfigForm />}
+      {state.tab === 'secret' && <SecretTokenForm />}
+      {state.tab === 'instance' && <InstanceConfigForm />}
+      {state.tab === 'common' && <CommonSettingsForm />}
     </>
   );
 }

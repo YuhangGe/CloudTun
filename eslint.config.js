@@ -3,8 +3,9 @@ import tseslint from 'typescript-eslint';
 import importX from 'eslint-plugin-import-x';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import { builtinModules } from 'node:module';
+import { defineConfig } from 'eslint/config';
 
-export default tseslint.config(
+export default defineConfig(
   eslint.configs.recommended,
   eslintConfigPrettier,
   ...tseslint.configs.stylisticTypeChecked,

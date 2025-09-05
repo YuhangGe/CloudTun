@@ -2,10 +2,15 @@ import { Button, Popconfirm } from 'jinge-antd';
 
 import { invoke } from '@tauri-apps/api/core';
 import { TerminateInstance } from '@/service/tencent';
-import { vm } from 'jinge';
+import { type WithExpose, expose, vm } from 'jinge';
 import { createGlobalInst, globalInst } from '@/store/instance';
 
-export function Control() {
+export function Control(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _props: WithExpose<{
+    create: () => void;
+  }>,
+) {
   const state = vm<{
     creating?: boolean;
     destroing?: boolean;
@@ -27,6 +32,10 @@ export function Control() {
     await createGlobalInst();
     state.creating = false;
   }
+
+  expose({
+    create,
+  });
 
   return (
     <div className='mt-6 flex flex-wrap items-center gap-2 border-t border-t-blue-200 pt-3'>
