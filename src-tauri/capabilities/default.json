@@ -16,7 +16,6 @@
         "http://*:2081"
       ]
     },
-    "os:default",
-    "clipboard-manager:allow-write-text"
+    "os:default"
   ]
 }

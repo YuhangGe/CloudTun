@@ -1,6 +1,5 @@
 {
   "log": {
-    // "access": "none",
     "loglevel": "error"
   },
   "policy": {
@@ -23,7 +22,10 @@
       "protocol": "socks",
       "sniffing": {
         "enabled": true,
-        "destOverride": ["http", "tls"]
+        "destOverride": [
+          "http",
+          "tls"
+        ]
       },
       "settings": {
         "udp": true,
@@ -70,7 +72,11 @@
     "domainStrategy": "IPOnDemand",
     "rules": [
       {
-        "domain": ["tanx.com", "googeadsserving.cn", "baidu.com"],
+        "domain": [
+          "tanx.com",
+          "googeadsserving.cn",
+          "baidu.com"
+        ],
         "type": "field",
         "outboundTag": "adblock"
       },
@@ -87,19 +93,30 @@
         "outboundTag": "proxy"
       },
       {
-        "domain": ["amazon.com", "microsoft.com", "jd.com", "youku.com", "baidu.com"],
+        "domain": [
+          "amazon.com",
+          "microsoft.com",
+          "jd.com",
+          "youku.com",
+          "baidu.com"
+        ],
         "type": "field",
         "outboundTag": "direct"
       },
       {
         "type": "field",
         "outboundTag": "direct",
-        "domain": ["geosite:cn"]
+        "domain": [
+          "geosite:cn"
+        ]
       },
       {
         "type": "field",
         "outboundTag": "direct",
-        "ip": ["geoip:cn", "geoip:private"]
+        "ip": [
+          "geoip:cn",
+          "geoip:private"
+        ]
       }
     ]
   }

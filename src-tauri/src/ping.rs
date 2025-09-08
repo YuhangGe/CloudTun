@@ -5,10 +5,10 @@ use tauri::{http::StatusCode, AppHandle, Manager, Runtime, State};
 use tauri_plugin_http::reqwest::get;
 use tokio::{sync::Mutex, task::JoinHandle, time::interval};
 
-use crate::{
-  notify::{show_notify_window, NotifyWindow},
-  util::emit_log,
-};
+use crate::util::emit_log;
+
+#[cfg(desktop)]
+use crate::notify::{show_notify_window, NotifyWindow};
 
 pub struct Ping(Arc<Mutex<Option<JoinHandle<()>>>>);
 
@@ -51,7 +51,7 @@ pub async fn tauri_interval_ping_start<R: Runtime>(
     loop {
       interval.tick().await;
       if !ping(&a_ip, &a_token).await {
-        #[cfg(target_os = "macos")]
+        #[cfg(desktop)]
         {
           let h2 = h.clone();
           let h3 = h2.clone();

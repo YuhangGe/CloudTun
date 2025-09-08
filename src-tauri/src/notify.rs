@@ -125,6 +125,8 @@ async fn close_notify_window<R: Runtime>(state: State<'_, NotifyWindow<R>>) -> a
   loc.lock().await.take();
   Ok(())
 }
+
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn tauri_show_notify_window<R: Runtime>(
   notify_type: &str,
@@ -136,6 +138,7 @@ pub async fn tauri_show_notify_window<R: Runtime>(
   Ok(())
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn tauri_close_notify_window<R: Runtime>(
   _handle: AppHandle<R>,
