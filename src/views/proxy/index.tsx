@@ -102,7 +102,7 @@ export function ProxyView() {
       <div>
         <Button
           on:click={async () => {
-            const x = await invoke('tauri_start_vpn', { value: 'okkk' });
+            const x = await invoke('tauri_start_vpn', { config: 'testconfig' });
             console.info(x);
             message.info(`${x}`);
           }}

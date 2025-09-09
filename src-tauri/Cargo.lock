@@ -606,7 +606,6 @@ dependencies = [
  "tauri-plugin-os",
  "tauri-plugin-single-instance",
  "tauri-plugin-store",
- "tauri-plugin-vpn",
  "tokio",
  "uuid",
  "zip",
@@ -4563,16 +4562,6 @@ dependencies = [
  "thiserror 2.0.16",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "tauri-plugin-vpn"
-version = "0.1.0"
-dependencies = [
- "serde",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.16",
 ]
 
 [[package]]

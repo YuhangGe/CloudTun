@@ -24,8 +24,6 @@ use notify::*;
 use v2ray::*;
 
 #[cfg(mobile)]
-use tauri_plugin_vpn::init;
-#[cfg(mobile)]
 use vpn::tauri_start_vpn;
 
 use ping::*;
@@ -88,8 +86,10 @@ pub fn run() {
 
   #[cfg(mobile)]
   {
+    use crate::vpn::init_tauri_vpn;
+
     builder = builder
-      .plugin(tauri_plugin_vpn::init())
+      .plugin(init_tauri_vpn())
       .invoke_handler(tauri::generate_handler![
         tauri_generate_uuid,
         tauri_calc_tencent_cloud_api_signature,

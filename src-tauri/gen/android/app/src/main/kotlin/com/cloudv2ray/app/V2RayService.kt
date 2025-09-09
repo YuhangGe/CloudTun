@@ -1,16 +1,8 @@
 package com.cloudv2ray.app
 
 import android.content.Context
-import android.net.LocalSocket
-import android.net.LocalSocketAddress
-import android.os.ParcelFileDescriptor
-import android.util.Log
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import java.io.File
-import java.net.Socket
 
 const val CONFIG = """
 {
@@ -43,7 +35,7 @@ const val CONFIG = """
       "settings": {
         "vnext": [
           {
-            "address": "43.130.14.193:2080",
+            "address": "170.106.148.222",
             "port": 2080,
             "users": [
               {
@@ -108,7 +100,7 @@ class V2RayService(
 
   private lateinit var process: Process
 
- fun startTun2Socks() {
+ fun startRunV2Ray() {
    
     val cfgFile = File(context.filesDir, "config.json")
     if (!cfgFile.exists()) {
@@ -118,8 +110,7 @@ class V2RayService(
       File(context.applicationInfo.nativeLibraryDir, TUN2SOCKS).absolutePath,
       "-config", cfgFile.absolutePath,
     )
- 
-//    Log.i(AppConfig.TAG, cmd.toString())
+    println("XXX: cmd:${cmd.toString()}")
 
     try {
       val proBuilder = ProcessBuilder(cmd)
@@ -128,30 +119,30 @@ class V2RayService(
         .directory(context.filesDir)
         .start()
       Thread {
-//        Log.i(AppConfig.TAG, "$TUN2SOCKS check")
+        println("$TUN2SOCKS check")
         process.waitFor()
-//        Log.i(AppConfig.TAG, "$TUN2SOCKS exited")
+        println("$TUN2SOCKS exited")
         if (isRunningProvider()) {
-//          Log.i(AppConfig.TAG, "$TUN2SOCKS restart")
+          println("$TUN2SOCKS restart")
           restartCallback()
         }
       }.start()
-//      Log.i(AppConfig.TAG, "$TUN2SOCKS process info: $process")
+      println("XXX: $TUN2SOCKS process info: $process")
 
    
     } catch (e: Exception) {
-//      Log.e(AppConfig.TAG, "Failed to start $TUN2SOCKS process", e)
+      println("XXX: Failed to start $TUN2SOCKS process due to $e")
     }
   }
  
  fun stopV2Ray() {
     try {
-//      Log.i(AppConfig.TAG, "$TUN2SOCKS destroy")
+      println("XXX: $TUN2SOCKS destroy")
       if (::process.isInitialized) {
         process.destroy()
       }
     } catch (e: Exception) {
-//      Log.e(AppConfig.TAG, "Failed to destroy $TUN2SOCKS process", e)
+      println("XXX: Failed to destroy $TUN2SOCKS process due to $e")
     }
   }
 }

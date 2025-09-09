@@ -19,7 +19,7 @@ android {
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
         applicationId = "com.cloudv2ray.app"
-        minSdk = 30
+        minSdk = 34
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
@@ -50,6 +50,11 @@ android {
     }
     buildFeatures {
         buildConfig = true
+    }
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("libs")
+        }
     }
 }
 
