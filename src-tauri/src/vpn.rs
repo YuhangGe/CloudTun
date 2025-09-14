@@ -1,5 +1,8 @@
+use std::os::fd::RawFd;
+
 use anyhow_tauri::TAResult;
 use serde::{Deserialize, Serialize};
+use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::plugin::{Builder, PluginHandle, TauriPlugin};
 use tauri::{AppHandle, Manager, Runtime, State};
 
@@ -45,12 +48,42 @@ impl<R: Runtime> Vpn<R> {
   }
 }
 
+// #[derive(Serialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct EventHandler {
+//   pub handler: Channel,
+// }
+// #[derive(serde::Deserialize)]
+// struct Event {
+//   config_str: String,
+//   tun_fd: RawFd,
+// }
+
 pub fn init_tauri_vpn<R: Runtime>() -> TauriPlugin<R> {
   Builder::<R>::new("vpn")
     .setup(|app, api| {
       let handle = api
         .register_android_plugin("com.cloudv2ray.app", "CloudV2RayPlugin")
         .unwrap();
+
+      // handle.run_mobile_plugin(
+      //   "setEventHandler",
+      //   imp::EventHandler {
+      //     handler: Channel::new(move |event| match event {
+      //       InvokeResponseBody::Json(payload) => {
+      //         use tun2socks::{main_from_str, quit};
+      //         serde_json::from_str::<Event>(&payload).ok().map(|payload| {
+      //           if payload.config_str.is_empty() {
+      //             quit();
+      //           } else {
+      //             main_from_str(&payload.config_str, payload.tun_fd);
+      //           }
+      //         })
+      //       }
+      //       _ => (),
+      //     }),
+      //   },
+      // );
 
       let vpn = Vpn(handle);
       app.manage(vpn);

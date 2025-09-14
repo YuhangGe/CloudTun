@@ -1,6 +1,7 @@
 import java.util.Properties
 
 plugins {
+//    id("org.mozilla.rust-android-gradle.rust-android")
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("rust")
@@ -13,16 +14,34 @@ val tauriProperties = Properties().apply {
     }
 }
 
+//cargo {
+//  module  = "./src/main/rust/libvpn"       // Cargo.toml路径
+//  libname = "libvpn"          // Cargo.toml 中 [package] 中 name
+//  targets = listOf("arm64","arm","x86","x86_64")
+//}
+
 android {
     compileSdk = 36
     namespace = "com.cloudv2ray.app"
+    ndkVersion = "28.2.13676358"
+
     defaultConfig {
-        manifestPlaceholders["usesCleartextTraffic"] = "false"
+        manifestPlaceholders["usesCleartextTraffic"] = "true"
         applicationId = "com.cloudv2ray.app"
         minSdk = 34
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+
+        ndk {
+          abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86","x86_64")
+        }
+        externalNativeBuild {
+          ndkBuild {
+            arguments("APP_CFLAGS+=-DPKGNAME=hev/sockstun -ffile-prefix-map=${rootDir}=.")
+            arguments("APP_LDFLAGS+=-Wl,--build-id=none")
+          }
+        }
     }
     buildTypes {
         getByName("debug") {
@@ -51,10 +70,11 @@ android {
     buildFeatures {
         buildConfig = true
     }
-    sourceSets {
-        getByName("main") {
-            jniLibs.srcDirs("libs")
-        }
+
+    externalNativeBuild {
+      ndkBuild {
+        path = file("src/main/jni/Android.mk")
+      }
     }
 }
 
