@@ -1,0 +1,21 @@
+[package]
+name = "cloudtun-proxy"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "client"
+path = "src/bin/client.rs"
+
+[dependencies]
+axum = { version = "0.8.4", features = ["ws"] }
+axum-extra = { version = "0.10.1", features = ["typed-header"] }
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.27.0"
+tokio-util = { version = "0.7.16" }
+tower = "0.5.2"
+hyper = { version = "1", features = ["full"] }
+hyper-util = "0.1.1"
+geosite-rs = "0.1.6"
+lazy_static = "1.5.0"
+clash_rules = "0.1.19"

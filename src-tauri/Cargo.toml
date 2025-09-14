@@ -32,13 +32,13 @@ uuid = { version = "1.17", features = ["v4"] }
 tauri-plugin-http = { version = "2.5", features = ["unsafe-headers"] }
 tauri-plugin-store = "2.4"
 tauri-plugin-os = "2.3"
-tokio = { version = "*", features = ["process", "macros"] }
+tokio = { version = "1", features = ["macros"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2.5"
 tauri-plugin-single-instance = "2.3"
 tauri-plugin-clipboard-manager = "2.3"
-zip = "5.0.0"
+zip = "5.1.1"
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 #tauri-plugin-vpn = { path = "../tauri-plugin-vpn" }
