@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 use std::thread;
 
 use cloudtun_proxy::{start_proxy, stop_proxy};
@@ -22,3 +23,10 @@ google.com:proxy"
 
   println!("Bye!");
 }
+=======
+use cloudtun_proxy::start_proxy;
+
+pub fn main() {
+  start_proxy();
+}
+>>>>>>> 7547186d5be86f5d2962cb402568e9698d424cf5
