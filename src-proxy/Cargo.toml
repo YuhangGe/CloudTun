@@ -8,13 +8,16 @@ name = "client"
 path = "src/bin/client.rs"
 
 [dependencies]
+cloudtun-common = { path = "../src-common" }
 axum = { version = "0.8.4", features = ["ws"] }
 axum-extra = { version = "0.10.1", features = ["typed-header"] }
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = "0.27.0"
-tokio-util = { version = "0.7.16" }
+tokio-util = { version = "0.7.16", features = ["compat"] }
+futures-util = "0.3.31"
 tower = "0.5.2"
 hyper = { version = "1", features = ["full"] }
-hyper-util = "0.1.1"
+hyper-util = "0.1.17"
 lazy_static = "1.5.0"
 ctrlc = "3.5.0"
+rand = "0.9.2"

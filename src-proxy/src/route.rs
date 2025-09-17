@@ -40,7 +40,6 @@ impl Trie {
           .entry(*data)
           .and_modify(|_| {
             panic!("duplicated rule domain: {}", url);
-            // x.match_type.replace(match_type);
           })
           .or_insert(TrieNode {
             match_type: Some(match_type),

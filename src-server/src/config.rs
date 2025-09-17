@@ -1,1 +1,0 @@
-pub const TOKEN: &'static str = "O2WC32M7F1";

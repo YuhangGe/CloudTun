@@ -1,35 +1,39 @@
 use std::net::SocketAddr;
 
-use axum::{body::Body, extract::Request, routing::get};
+use axum::{body::Body, extract::Request, response::IntoResponse};
+use cloudtun_common::LOCAL_HTTP_PROXY_PORT;
 use hyper::{Method, body::Incoming, server::conn::http1};
 use hyper_util::rt::TokioIo;
 use tokio::{net::TcpListener, runtime::Runtime};
 use tokio_util::sync::CancellationToken;
-use tower::{Service, ServiceExt};
+use tower::Service;
 
 use crate::{proxy::proxy_request, route::RouteMatcher};
 
 async fn start_proxy(cancel_token: CancellationToken, router: RouteMatcher) {
-  let router_svc = axum::Router::new().route("/", get(|| async { "Ok2!" }));
+  // let router_svc = axum::Router::new().route("/", get(|| async { "Ok2!" }));
   let tower_service = tower::service_fn(move |req: Request<_>| {
-    let router_svc = router_svc.clone();
     let router_matcher = router.clone();
     let req = req.map(Body::new);
     async move {
       if req.method() == Method::CONNECT {
         proxy_request(req, router_matcher).await
       } else {
-        router_svc.oneshot(req).await.map_err(|err| match err {})
+        Ok("to be implemented".into_response())
       }
     }
   });
-
+  //  let router_svc = router_svc.clone();
+  //   //
+  //    println!("XXX {}", req.uri().ho);
+  //         router_svc.oneshot(req).await.map_err(|err| match err {})
+  //
   let hyper_service = hyper::service::service_fn(move |request: Request<Incoming>| {
     tower_service.clone().call(request)
   });
 
-  let addr = SocketAddr::from(([127, 0, 0, 1], 7891));
-  println!("listening on {}", addr);
+  let addr = SocketAddr::from(([0, 0, 0, 0], LOCAL_HTTP_PROXY_PORT));
+  println!("cloudtun client listening at 0.0.0.0:{LOCAL_HTTP_PROXY_PORT}");
 
   let listener = TcpListener::bind(addr).await.unwrap();
 

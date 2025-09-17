@@ -1,6 +1,7 @@
 mod handler;
 mod proxy;
 mod route;
+mod tunnel;
 
 use std::{
   sync::{Arc, RwLock},
