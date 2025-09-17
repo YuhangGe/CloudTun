@@ -3,4 +3,21 @@ name = "cloudtun-vpn"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "cloudtun-vpn"
+path = "src/bin/test.rs"
+
 [dependencies]
+tun = { version = "0.8.4", features = ["async"] }
+tokio = { version = "1", features = ["full"] }
+ipstack = { version = "0.4.0" }
+hashlink = "0.10.0"
+thiserror = "2.0.16"
+tproxy-config = "7.0.4"
+hickory-proto = "0.25.2"
+tokio-util = "0.7.16"
+async-trait = "0.1.89"
+udp-stream = { version = "0.0.12", default-features = false }
+
+[target.'cfg(target_os="android")'.dependencies]
+jni = { version = "0.21.1", default-features = false }
