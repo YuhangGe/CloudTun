@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
   body::Body,
   extract::Request,
@@ -12,7 +14,12 @@ use crate::{
   tunnel::proxy_tunnel,
 };
 
-pub async fn proxy_request(req: Request, router: RouteMatcher) -> Result<Response, hyper::Error> {
+pub async fn proxy_request(
+  req: Request,
+  server: Arc<(String, u16)>,
+  default_rule: MatchType,
+  router: RouteMatcher,
+) -> Result<Response, hyper::Error> {
   let Some(remote_auth) = req.uri().authority() else {
     eprintln!("CONNECT host is not socket addr: {:?}", req.uri());
     return Ok(
@@ -28,20 +35,21 @@ pub async fn proxy_request(req: Request, router: RouteMatcher) -> Result<Respons
 
   tokio::task::spawn(async move {
     match hyper::upgrade::on(req).await {
-      Ok(upgraded) => match router.match_domain(&remote_host).await {
-        Some(MatchType::Deny) => {
-          // println!("Deny ==> {}", host);
+      Ok(upgraded) => match router
+        .match_domain(&remote_host)
+        .await
+        .unwrap_or(default_rule)
+      {
+        MatchType::Deny => {
           drop(upgraded);
         }
-        Some(MatchType::Proxy) => {
-          match proxy_tunnel(upgraded, "127.0.0.1", remote_host, remote_port).await {
-            Ok(_) => (),
-            Err(err) => {
-              println!("proxy tunnel error: {}", err);
-            }
+        MatchType::Proxy => match proxy_tunnel(upgraded, &server, remote_host, remote_port).await {
+          Ok(_) => (),
+          Err(err) => {
+            println!("proxy tunnel error: {}", err);
           }
-        }
-        _ => match proxy_direct(upgraded, remote_host, remote_port).await {
+        },
+        MatchType::Direct => match proxy_direct(upgraded, remote_host, remote_port).await {
           Ok(_) => (),
           Err(err) => {
             println!("proxy direct error: {}", err);

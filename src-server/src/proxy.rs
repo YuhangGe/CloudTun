@@ -5,7 +5,7 @@ use axum::{
   response::IntoResponse,
 };
 use cloudtun_common::{
-  X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_SECRET_KEY, X_TOKEN_KEY, X_TOKEN_VALUE, hex2str,
+  X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_SECRET_KEY, X_TOKEN_KEY, X_TOKEN_VALUE, 
   xor_inplace_simd,
 };
 use futures_util::{SinkExt, StreamExt};
@@ -28,17 +28,13 @@ pub async fn proxy_handler(ws: WebSocketUpgrade, headers: HeaderMap) -> impl Int
       if s.len() != 32 {
         None
       } else {
-        // println!("XXS {}", s);
         let mut bytes = Vec::with_capacity(16);
         for i in (0..32).step_by(2) {
           let byte_str = &s[i..i + 2];
-          // println!("XXSSSS {}", byte_str);
-
           let Ok(byte) = u8::from_str_radix(byte_str, 16) else {
             return None;
           };
 
-          // println!("XXSSSS2 {}", byte);
           bytes.push(byte);
         }
         Some(bytes)

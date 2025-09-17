@@ -10,14 +10,25 @@ use std::{
 
 use crate::handler::ProxyHandler;
 
+pub use route::MatchType;
+
 lazy_static::lazy_static! {
-    static ref PROXY_HANDLER: Arc<RwLock<ProxyHandler>> = Arc::new(RwLock::new(ProxyHandler::new()));
+  static ref PROXY_HANDLER: Arc<RwLock<ProxyHandler>> = Arc::new(RwLock::new(ProxyHandler::new()));
 }
 
-pub fn start_proxy(rules: Option<String>) {
+pub struct StartProxyArgs {
+  pub server_ip: String,
+  pub server_port: u16,
+  pub local_ip: String,
+  pub local_port: u16,
+  pub default_rule: MatchType,
+  pub rules_config_file: Option<String>,
+}
+
+pub fn start_proxy(args: StartProxyArgs) {
   let handle = thread::spawn(move || {
     {
-      PROXY_HANDLER.write().unwrap().init_rt(rules);
+      PROXY_HANDLER.write().unwrap().init_rt(args);
     }
     PROXY_HANDLER.read().unwrap().start_loop();
   });

@@ -1,7 +1,7 @@
 use axum::{body::Bytes, http::HeaderValue};
 use cloudtun_common::{
-  REMOTE_PROXY_PORT, X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_SECRET_KEY, X_TOKEN_KEY,
-  X_TOKEN_VALUE, xor_inplace_simd,
+  X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_SECRET_KEY, X_TOKEN_KEY, X_TOKEN_VALUE,
+  xor_inplace_simd,
 };
 use futures_util::{SinkExt, StreamExt};
 use hyper::upgrade::Upgraded;
@@ -32,12 +32,11 @@ lazy_static! {
 
 pub async fn proxy_tunnel(
   upgraded: Upgraded,
-  proxy_host: &str,
+  server: &(String, u16),
   target_host: String,
   target_port: u16,
 ) -> std::io::Result<()> {
-  // 建立 websocket 连接
-  let url = format!("ws://{proxy_host}:{REMOTE_PROXY_PORT}/ws");
+  let url = format!("ws://{}:{}/ws", server.0, server.1);
   let mut request = url
     .into_client_request()
     .map_err(|e| Error::new(ErrorKind::Other, e))?;
@@ -61,13 +60,16 @@ pub async fn proxy_tunnel(
   let upgraded = TokioIo::new(upgraded);
   let (mut upgraded_reader, mut upgraded_writer) = tokio::io::split(upgraded);
 
+  println!("CONNECT ==> {}:{}", target_host, target_port);
+
   // 任务1: 从 Upgraded -> WebSocket
   let read_handle = tokio::spawn(async move {
     let mut buf = [0u8; 1024];
     loop {
       match upgraded_reader.read(&mut buf).await {
         Ok(0) => {
-          let _ = ws_sink.send(Message::Close(None)).await;
+          // let _ = ws_sink.send(Message::Close(None)).await;
+          // eprintln!("read upgraded zero.");
           break;
         }
         Ok(n) => {
@@ -98,14 +100,15 @@ pub async fn proxy_tunnel(
     while let Some(msg) = ws_stream.next().await {
       match msg {
         Ok(Message::Binary(data)) => {
+          let l = data.len();
           if let Err(e) = upgraded_writer.write_all(&data).await {
-            eprintln!("write to upgraded error: {e}");
+            eprintln!("write {l} bytes to upgraded error: {e}");
             break;
           }
         }
         Ok(Message::Close(_)) => {
-          // println!("got close");
-          let _ = upgraded_writer.shutdown().await;
+          // eprintln!("got close");
+          let _ = upgraded_writer.flush().await;
           break;
         }
         _ => {}

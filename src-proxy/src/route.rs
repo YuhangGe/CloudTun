@@ -1,15 +1,25 @@
 // static GEOSITE_DATA: &[u8] = include_bytes!("data/geosite.dat");
 // static GEOIP_DATA: &[u8] = include_bytes!("data/geoip.dat");
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt::Display, sync::Arc};
 
-use tokio::sync::RwLock;
+use tokio::{fs::File, io::AsyncReadExt, sync::RwLock};
 
 #[derive(Debug, Clone, Copy)]
 pub enum MatchType {
   Direct,
   Proxy,
   Deny,
+}
+
+impl Display for MatchType {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str(match self {
+      Self::Deny => "deny",
+      Self::Direct => "direct",
+      Self::Proxy => "proxy",
+    })
+  }
 }
 
 #[derive(Debug, Default)]
@@ -45,7 +55,7 @@ impl Trie {
             match_type: Some(match_type),
             next: HashMap::new(),
           });
-        println!("insert new rule: {}, {:?}", url, match_type);
+        // println!("insert new rule: {}, {:?}", url, match_type);
       } else {
         let x = cnext.entry(*data).or_default();
         cnext = &mut x.next;
@@ -76,36 +86,52 @@ impl Trie {
 #[derive(Debug, Clone)]
 pub struct RouteMatcher {
   trie: Trie,
+  pub config_file: Option<String>,
 }
 
 impl RouteMatcher {
   pub fn new() -> Self {
-    RouteMatcher { trie: Trie::new() }
+    RouteMatcher {
+      trie: Trie::new(),
+      config_file: None,
+    }
   }
 
-  pub async fn config_rules(&mut self, rules: Option<String>) {
+  pub async fn config_rules(&mut self, rules_config_file: Option<String>) -> std::io::Result<()> {
     self.trie = Trie::new();
-
-    let Some(rules) = rules else {
-      return;
+    let Some(rules_config_file) = rules_config_file else {
+      self.config_file.take();
+      return Ok(());
     };
+
+    let mut f = File::open(&rules_config_file).await?;
+    let mut rules = String::new();
+    f.read_to_string(&mut rules).await?;
 
     for (line_number, line_content) in rules.split('\n').enumerate() {
       let line_cnt = line_content.trim_ascii();
       if line_cnt.is_empty() || line_cnt.starts_with('#') {
-        return;
+        continue;
       }
       let mut line_it = line_content.splitn(2, ':');
-      let Some(domain) = line_it.next() else {
+      let Some(domain) = line_it
+        .next()
+        .map(|v| v.trim_ascii())
+        .filter(|v| !v.is_empty())
+      else {
         println!("bad rule config at line {}: missing domain", line_number);
-        return;
+        continue;
       };
-      let Some(match_type) = line_it.next() else {
+      let Some(match_type) = line_it
+        .next()
+        .map(|v| v.trim_ascii())
+        .filter(|v| !v.is_empty())
+      else {
         println!(
           "bad rule config at line {}: missing match type",
           line_number
         );
-        return;
+        continue;
       };
       let match_type = match match_type {
         "deny" => MatchType::Deny,
@@ -116,11 +142,13 @@ impl RouteMatcher {
             "bad rule config at line {}: invalid match type",
             line_number
           );
-          return;
+          continue;
         }
       };
       self.trie.insert(domain, match_type).await;
     }
+    self.config_file.replace(rules_config_file);
+    Ok(())
   }
   pub async fn match_domain(&self, domain: &str) -> Option<MatchType> {
     self.trie.search(domain).await

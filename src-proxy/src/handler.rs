@@ -1,23 +1,35 @@
-use std::net::SocketAddr;
+use std::sync::Arc;
 
 use axum::{body::Body, extract::Request, response::IntoResponse};
-use cloudtun_common::LOCAL_HTTP_PROXY_PORT;
 use hyper::{Method, body::Incoming, server::conn::http1};
 use hyper_util::rt::TokioIo;
 use tokio::{net::TcpListener, runtime::Runtime};
 use tokio_util::sync::CancellationToken;
 use tower::Service;
 
-use crate::{proxy::proxy_request, route::RouteMatcher};
+use crate::{
+  StartProxyArgs,
+  proxy::proxy_request,
+  route::{MatchType, RouteMatcher},
+};
 
-async fn start_proxy(cancel_token: CancellationToken, router: RouteMatcher) {
+async fn start_proxy(
+  cancel_token: CancellationToken,
+  server: Arc<(String, u16)>,
+  local: Arc<(String, u16)>,
+  default_rule: MatchType,
+  router: RouteMatcher,
+) {
   // let router_svc = axum::Router::new().route("/", get(|| async { "Ok2!" }));
+  let server2 = server.clone();
+  let router2 = router.clone();
   let tower_service = tower::service_fn(move |req: Request<_>| {
-    let router_matcher = router.clone();
+    let router_matcher = router2.clone();
+    let server = server2.clone();
     let req = req.map(Body::new);
     async move {
       if req.method() == Method::CONNECT {
-        proxy_request(req, router_matcher).await
+        proxy_request(req, server, default_rule, router_matcher).await
       } else {
         Ok("to be implemented".into_response())
       }
@@ -32,10 +44,15 @@ async fn start_proxy(cancel_token: CancellationToken, router: RouteMatcher) {
     tower_service.clone().call(request)
   });
 
-  let addr = SocketAddr::from(([0, 0, 0, 0], LOCAL_HTTP_PROXY_PORT));
-  println!("cloudtun client listening at 0.0.0.0:{LOCAL_HTTP_PROXY_PORT}");
+  let listener = TcpListener::bind((local.0.clone(), local.1)).await.unwrap();
 
-  let listener = TcpListener::bind(addr).await.unwrap();
+  println!(
+    "CloudTun Client Listening at {}:{}\n  Proxy to ==> {}:{}\n  Default Rule: {}",
+    local.0, local.1, server.0, server.1, default_rule
+  );
+  router.config_file.map(|f| {
+    println!("  Rules File: {f}");
+  });
 
   loop {
     let accept_future = listener.accept();
@@ -76,23 +93,36 @@ async fn start_proxy(cancel_token: CancellationToken, router: RouteMatcher) {
 
 pub struct ProxyHandler {
   router: RouteMatcher,
+  default_rule: MatchType,
   shutdown_token: CancellationToken,
   rt: Option<Runtime>,
+  server: Arc<(String, u16)>,
+  local: Arc<(String, u16)>,
 }
 
 impl ProxyHandler {
   pub fn new() -> Self {
     ProxyHandler {
       router: RouteMatcher::new(),
+      default_rule: MatchType::Direct,
       shutdown_token: CancellationToken::new(),
       rt: None,
+      server: Arc::new(("".to_string(), 0)),
+      local: Arc::new(("".to_string(), 0)),
     }
   }
 
-  pub fn init_rt(&mut self, rules: Option<String>) {
+  pub fn init_rt(&mut self, args: StartProxyArgs) {
     let rt = Runtime::new().unwrap();
-    rt.block_on(self.router.config_rules(rules));
+    rt.block_on(async {
+      if let Err(e) = self.router.config_rules(args.rules_config_file).await {
+        eprintln!("Failed load rules config file: {e}")
+      }
+    });
     self.rt = Some(rt);
+    self.server = Arc::new((args.server_ip, args.server_port));
+    self.local = Arc::new((args.local_ip, args.local_port));
+    self.default_rule = args.default_rule;
   }
 
   pub fn deinit_rt(&mut self) {
@@ -103,8 +133,11 @@ impl ProxyHandler {
   pub fn start_loop(&self) {
     let cancel_token = self.shutdown_token.clone();
     let router = self.router.clone();
+    let server = self.server.clone();
+    let local = self.local.clone();
+    let default_rule = self.default_rule;
     self.rt.as_ref().unwrap().block_on(async move {
-      start_proxy(cancel_token, router).await;
+      start_proxy(cancel_token, server, local, default_rule, router).await;
     });
   }
 
