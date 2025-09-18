@@ -5,7 +5,7 @@ use axum::{
   Router,
   routing::{any, get},
 };
-use cloudtun_common::REMOTE_PROXY_PORT;
+use cloudtun_common::constant::REMOTE_PROXY_PORT;
 
 //allows to split the websocket stream into separate TX and RX branches
 

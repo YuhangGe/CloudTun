@@ -40,7 +40,7 @@ export function InstanceConfigForm() {
       imageId: z.string(),
       loginPwd: z.string(),
       resourceName: z.string(),
-      bandWidth: z.number().min(1).max(100),
+      bandWidth: z.number().min(1).max(200),
     }),
     {
       defaultValues: globalSettings,
@@ -69,10 +69,7 @@ export function InstanceConfigForm() {
       ],
     });
     if (!err) {
-      const arr = res.InstanceTypeConfigSet.sort((a, b) => {
-        if (a.CPU === b.CPU) return a.Memory - b.Memory;
-        return a.CPU - b.CPU;
-      });
+      const arr = res.InstanceTypeConfigSet.filter((t) => t.CPU === 2 && t.Memory === 2);
       state.instTypeOpts = arr.map((instType) => ({
         label: `${instType.InstanceType}(${instType.CPU} CPU, ${instType.Memory} GB)`,
         value: instType.InstanceType,
@@ -93,6 +90,9 @@ export function InstanceConfigForm() {
             label: zone.ZoneName,
             value: zone.Zone,
           }));
+          if (res.TotalCount > 0) {
+            formState.zone = res.ZoneSet[0].Zone;
+          }
         }
       });
       void updateInstanceTypes(v, formState.zone);
@@ -125,14 +125,19 @@ export function InstanceConfigForm() {
         label: image.ImageName,
         value: image.ImageId,
       }));
-      if (formState.imageType === 'PRIVATE_IMAGE' && globalSettings.token) {
+      if (formState.imageType === 'PRIVATE_IMAGE') {
         // 私有镜像约定使用 vmess uuid 作为镜像名。如果找到了，则填充 image id。
-        const img = res.ImageSet.find((ii) => ii.ImageName == globalSettings.token);
+        const img = res.ImageSet.find((ii) => ii.ImageName == globalSettings.resourceName);
         if (img && globalSettings.imageId !== img.ImageId) {
           formState.imageId = img.ImageId;
+        } else {
+          formState.imageId = undefined;
         }
+      } else {
+        formState.imageId = res.ImageSet[0].ImageId;
       }
     } else {
+      formState.imageId = undefined;
       state.imageOpts = [];
     }
   }
@@ -158,7 +163,15 @@ export function InstanceConfigForm() {
       <FormItem label='区域：' required error={formErrors.region}>
         <Controller control={control} name='region'>
           {(field) => (
-            <Select options={RegionOptions} value={field.value} on:change={field['on:change']} />
+            <Select
+              options={RegionOptions}
+              value={field.value}
+              on:change={(v) => {
+                formState.zone = undefined;
+                formState.imageId = undefined;
+                field['on:change'](v);
+              }}
+            />
           )}
         </Controller>
       </FormItem>
@@ -232,24 +245,31 @@ export function InstanceConfigForm() {
       <FormItem label='镜像类型：' required>
         <Controller control={control} name='imageType'>
           {(field) => (
-            <Select options={ImageTypeOpts} value={field.value} on:change={field['on:change']} />
+            <Select
+              options={ImageTypeOpts}
+              value={field.value}
+              on:change={(v) => {
+                field['on:change'](v);
+                void loadImages(formState.region, v);
+              }}
+            />
           )}
         </Controller>
       </FormItem>
-      <FormItem label='镜像：' required>
+      <FormItem label='镜像：' required error={formErrors.imageId}>
         <Controller control={control} name='imageId'>
           {(field) => (
             <Select options={state.imageOpts} value={field.value} on:change={field['on:change']} />
           )}
         </Controller>
       </FormItem>
-      <FormItem label='带宽' required>
+      <FormItem label='带宽' required error={formErrors.bandWidth}>
         <Controller control={control} name='bandWidth'>
           {(field) => (
             <InputWrapper>
               <InputNumber
                 min={1}
-                max={100}
+                max={200}
                 noRoundedR
                 value={field.value}
                 on:change={field['on:change']}

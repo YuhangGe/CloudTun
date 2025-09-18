@@ -1,4 +1,4 @@
-package com.cloudv2ray.app
+package com.cloudtun.app
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -15,9 +15,8 @@ import java.io.IOException
 
 const val CHANNEL_ID: String = "vpn_service_channel"
 const val NOTIFICATION_ID = 1;
-class CloudV2RayVpnService : VpnService() {
+class CloudTunVpnService : VpnService() {
   private var vpnInterface: ParcelFileDescriptor? = null
-  private var v2rayService: V2RayService? = null
   private var isRunning = false
   
   private external fun TProxyStartService(config_path: String, fd: Int)
@@ -35,15 +34,15 @@ class CloudV2RayVpnService : VpnService() {
 //    val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT)
     val channel = NotificationChannel(
       CHANNEL_ID,
-      "CloudV2Ray Notification",
+      "CloudTun Notification",
       NotificationManager.IMPORTANCE_DEFAULT
     )
-    channel.setDescription("CloudV2Ray Notification")
+    channel.setDescription("CloudTun Notification")
     val manager = getSystemService<NotificationManager?>(NotificationManager::class.java)
     manager.createNotificationChannel(channel)
     
     val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-      .setContentTitle("CloudV2Ray")
+      .setContentTitle("CloudTun")
 //      .setSmallIcon(R.drawable.ic_vpn)
       //      .setContentIntent(pendingIntent)
       .setContentText("VPN Service Running")
@@ -56,11 +55,9 @@ class CloudV2RayVpnService : VpnService() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     
- 
-
     // 初始化 VPN 配置
     val builder = Builder()
-    builder.setSession("CloudV2Ray VPN Service")  // 设置 VPN 会话名称
+    builder.setSession("CloudTun VPN Service")  // 设置 VPN 会话名称
       .addAddress("198.18.0.1", 32)  // 为虚拟网络接口分配 IP 地址
       .addRoute("0.0.0.0", 0)  // 默认路由转发所有流量
       .addAddress("fc00::1", 128)
@@ -70,8 +67,7 @@ class CloudV2RayVpnService : VpnService() {
       .addDnsServer("8.8.8.8")
       .addDnsServer("2001:4860:4860::8888")
       .addDnsServer("198.18.0.2")
-//      .setHttpProxy()
-
+ 
       try {
         val selfName = applicationContext.packageName;
         builder.addDisallowedApplication(selfName)
@@ -79,9 +75,8 @@ class CloudV2RayVpnService : VpnService() {
         //
       }
 
-      builder.setSession("CloudV2Ray: IPv4 + IPv6 / Global")
-
-//      .setHttpProxy(ProxyInfo.buildDirectProxy("127.0.0.1", 7891))
+      builder.setSession("CloudTun: IPv4 + IPv6 / Global")
+ 
     println("XXX: builder2")
     try {
       println("XXX: builder3")
@@ -91,56 +86,27 @@ class CloudV2RayVpnService : VpnService() {
       } else {
         println("XXX: builder4")
         isRunning = true
-        runV2Ray(vpnInterface!!.fd)
-
+        startProxyLoop(vpnInterface!!.fd)
         startForeground()
       }
 
     } catch (e: IOException) {
       println("XXX: builder err $e")
       e.printStackTrace()
-      stopV2Ray()
+      stopProxyLoop()
     }
 //    
     return START_STICKY  // 启动服务
   }
  
  
-  private fun runV2Ray(fd: Int) {
-// 
-//    v2rayService = V2RayService(
-//      context = applicationContext,
-//      isRunningProvider = { isRunning },
-//      restartCallback = { runV2Ray() }
-//    )
-//
-//    v2rayService?.startRunV2Ray()
+  private fun startProxyLoop(fd: Int) {
 
-    val config = """
-misc:
-  task-stack-size: 81920
-tunnel:
-  mtu: 8500
-socks5:
-  port: 7890
-  address: 10.0.2.2
-  udp: 'udp'
-mapdns:
-  address: 198.18.0.2
-  port: 53
-  network: 240.0.0.0
-  netmask: 240.0.0.0
-  cache-size: 10000
-"""
-    val x = start(config, fd)
-    println("XXX from rust: $x")
-//    TProxyStartService(tproxy_file.getAbsolutePath(), tunFd.getFd())
   }
   
-  private fun stopV2Ray() {
+  private fun stopProxyLoop() {
     isRunning = false;
-    v2rayService?.stopV2Ray();
-    v2rayService = null;
+     
 
     try {
       vpnInterface?.close()
@@ -151,6 +117,6 @@ mapdns:
  
   override fun onDestroy() {
     super.onDestroy()
-    stopV2Ray();
+    stopProxyLoop();
   }
 }

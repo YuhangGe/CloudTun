@@ -1,7 +1,7 @@
 import { loadInstanceDependentResources } from '@/service/instance';
 import { type CVMInstance, CreateInstance } from '@/service/tencent';
 import { IS_MOBILE, IS_REOPEN } from '@/service/util';
-import { loadInstance, pingV2RayOnce, startV2RayCore } from '@/views/proxy/helper';
+import { loadInstance, pingServerOnce, startProxyClient } from '@/views/proxy/helper';
 import { vm } from 'jinge';
 import { type MessageInstance, message } from 'jinge-antd';
 // import { appendLog } from './log';
@@ -16,9 +16,9 @@ export interface InstanceState {
   /**
    * 0: 实例未创建
    * 1: 实例已创建
-   * 2: v2ray 安装中...
-   * 3: v2ray 已连接
-   * 4: 本地 v2ray 已启动
+   * 2: 远程代理服务启动中...
+   * 3: 远程代理服务已连接
+   * 4: 本地代理客户端已启动
    */
   state: number;
 }
@@ -61,7 +61,7 @@ export async function loadGlobalInst(id?: string) {
 
 const S1 = '正在创建主机...';
 const E1 = '创建失败！';
-const S2 = '安装远程 V2Ray 服务...';
+const S2 = '启动远程代理服务...';
 
 export async function createGlobalInst() {
   if (globalInst.data) {
@@ -133,7 +133,7 @@ async function updateInst(inst?: CVMInstance) {
 
 async function updateConnect() {
   globalInst.state = 2;
-  const ret = await pingV2RayOnce(globalInst.ip!);
+  const ret = await pingServerOnce(globalInst.ip!);
   if (ret) {
     globalInst.state = 3;
     if (!IS_REOPEN) {
@@ -156,12 +156,12 @@ async function updateConnect() {
 }
 
 async function enableProxy() {
-  const r = await startV2RayCore(globalInst.ip!);
+  const r = await startProxyClient(globalInst.ip!);
   if (!r) {
     if (IS_MOBILE) {
       // message.error('启动本地 v2ray core 失败，请尝试退出后重启 CloudV2Ray。');
     } else {
-      await showNotifyWindow({ notifyType: 'error', notifyMessage: '启动 V2Ray 失败！' });
+      await showNotifyWindow({ notifyType: 'error', notifyMessage: '启动 CloudTun 代理失败！' });
     }
   } else {
     globalInst.state = 4;
@@ -170,7 +170,7 @@ async function enableProxy() {
     } else {
       await showNotifyWindow({
         notifyType: 'success',
-        notifyMessage: 'V2Ray 代理启动成功！',
+        notifyMessage: 'CloudTun 代理启动成功！',
       });
       // setTimeout(() => {
       //   void hideNotifyWindow();

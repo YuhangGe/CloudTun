@@ -22,12 +22,12 @@ val tauriProperties = Properties().apply {
 
 android {
     compileSdk = 36
-    namespace = "com.cloudv2ray.app"
+    namespace = "com.cloudtun.app"
     ndkVersion = "28.2.13676358"
 
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "true"
-        applicationId = "com.cloudv2ray.app"
+        applicationId = "com.cloudtun.app"
         minSdk = 34
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()

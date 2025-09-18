@@ -1,11 +1,11 @@
 [package]
-name = "cloudv2ray"
+name = "cloudtun"
 version = "0.1.0"
-description = "Cloud-based V2Ray GUI Client"
+description = "Cloud-based Proxy Solution"
 authors = ["abeyuhang@gmail.com"]
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/YuhangGe/CloudV2Ray"
+repository = "https://github.com/YuhangGe/CloudTun"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,7 +13,7 @@ repository = "https://github.com/YuhangGe/CloudV2Ray"
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "cloudv2ray_lib"
+name = "cloudtun_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -33,12 +33,14 @@ tauri-plugin-http = { version = "2.5", features = ["unsafe-headers"] }
 tauri-plugin-store = "2.4"
 tauri-plugin-os = "2.3"
 tokio = { version = "1", features = ["macros"] }
+tokio-util = { version = "0.7.16" }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2.5"
 tauri-plugin-single-instance = "2.3"
 tauri-plugin-clipboard-manager = "2.3"
 zip = "5.1.1"
+cloudtun-proxy = { path = "../src-proxy" }
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 #tauri-plugin-vpn = { path = "../tauri-plugin-vpn" }

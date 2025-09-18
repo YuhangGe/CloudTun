@@ -1,6 +1,6 @@
-/src/main/java/com/cloudv2ray/app/generated
-/src/main/jniLibs/arm64-v8a/libcloudv2ray_lib.so
-/src/main/jniLibs/x86_64/libcloudv2ray_lib.so
+/src/main/java/com/cloudtun/app/generated
+/src/main/jniLibs/arm64-v8a/libcloudtun_lib.so
+/src/main/jniLibs/x86_64/libcloudtun_lib.so
 /src/main/assets/tauri.conf.json
 /tauri.build.gradle.kts
 /proguard-tauri.pro

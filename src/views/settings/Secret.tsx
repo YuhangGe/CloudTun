@@ -72,7 +72,7 @@ export function SecretTokenForm() {
           </Controller>
         </FormItem>
 
-        <FormItem label='VMess Id：' required>
+        <FormItem label='Token：' required>
           <Controller control={control} name='token'>
             {(field) => (
               <InputWrapper>

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "CloudV2Ray",
+  "productName": "CloudTun",
   "version": "0.1.0",
-  "identifier": "com.cloudv2ray.app",
+  "identifier": "com.cloudtun.app",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "CloudV2Ray - 基于云计算的 V2Ray 客户端",
-        "width": 800,
-        "height": 600,
+        "title": "CloudTun - 基于云的网络代理方案",
+        "width": 640,
+        "height": 640,
         "center": true
       }
     ],

@@ -66,7 +66,7 @@ export async function loadInstanceDependentResources(): Promise<InstanceDeps | u
   if (!sg) {
     const [err, res] = await CreateSecurityGroupWithPolicies({
       GroupName: resourceName,
-      GroupDescription: 'v2ray',
+      GroupDescription: 'cloudtun',
       SecurityGroupPolicySet: {
         Egress: [
           {
@@ -86,10 +86,10 @@ export async function loadInstanceDependentResources(): Promise<InstanceDeps | u
           },
           {
             Protocol: 'TCP',
-            Port: '2080,2081,2082',
+            Port: '24816',
             Action: 'ACCEPT',
             CidrBlock: '0.0.0.0/0',
-            PolicyDescription: 'v2ray',
+            PolicyDescription: 'cloudtun',
           },
         ],
       },

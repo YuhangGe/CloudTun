@@ -1,6 +1,5 @@
 import { platform } from '@tauri-apps/plugin-os';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-import { sendNotification } from '@tauri-apps/plugin-notification';
 import { message } from 'jinge-antd';
 
 export const currentPlatform = platform();
@@ -50,7 +49,6 @@ export function loadingMessage(title: string): LoadingMessage {
     content: title,
   });
 
-  sendNotification({ title });
   return {
     update(title: string) {
       msg.update({

@@ -1,12 +1,16 @@
 use axum::{body::Bytes, http::HeaderValue};
+
 use cloudtun_common::{
-  X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_SECRET_KEY, X_TOKEN_KEY, X_TOKEN_VALUE,
-  xor_inplace_simd,
+  constant::{X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_SECRET_KEY, X_TOKEN_KEY, X_TOKEN_VALUE},
+  encode::xor_inplace_simd,
 };
 use futures_util::{SinkExt, StreamExt};
 use hyper::upgrade::Upgraded;
 use hyper_util::rt::TokioIo;
-use std::io::{Error, ErrorKind};
+use std::{
+  io::{Error, ErrorKind},
+  sync::Arc,
+};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use tokio_tungstenite::{
@@ -32,7 +36,7 @@ lazy_static! {
 
 pub async fn proxy_tunnel(
   upgraded: Upgraded,
-  server: &(String, u16),
+  server: Arc<(String, u16)>,
   target_host: String,
   target_port: u16,
 ) -> std::io::Result<()> {
@@ -60,11 +64,11 @@ pub async fn proxy_tunnel(
   let upgraded = TokioIo::new(upgraded);
   let (mut upgraded_reader, mut upgraded_writer) = tokio::io::split(upgraded);
 
-  println!("CONNECT ==> {}:{}", target_host, target_port);
+  println!("Proxy ==> {}:{}", target_host, target_port);
 
   // 任务1: 从 Upgraded -> WebSocket
   let read_handle = tokio::spawn(async move {
-    let mut buf = [0u8; 1024];
+    let mut buf = [0u8; 8192];
     loop {
       match upgraded_reader.read(&mut buf).await {
         Ok(0) => {

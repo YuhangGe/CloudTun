@@ -1,7 +1,8 @@
 #[cfg(desktop)]
 mod notify;
+
 #[cfg(desktop)]
-mod v2ray;
+mod proxy;
 #[cfg(mobile)]
 mod vpn;
 
@@ -9,8 +10,11 @@ mod ping;
 mod tencent;
 mod util;
 
-use tauri::{async_runtime::block_on, Manager, WebviewWindowBuilder};
+#[cfg(desktop)]
+use proxy::{tauri_start_proxy_client, tauri_stop_proxy_client};
+
 use tauri::{AppHandle, Runtime, Wry};
+use tauri::{Manager, WebviewWindowBuilder};
 
 #[cfg(desktop)]
 use tauri::{
@@ -20,8 +24,8 @@ use tauri::{
 
 #[cfg(desktop)]
 use notify::*;
-#[cfg(desktop)]
-use v2ray::*;
+// #[cfg(desktop)]
+// use v2ray::*;
 
 #[cfg(mobile)]
 use vpn::tauri_start_vpn;
@@ -74,9 +78,11 @@ pub fn run() {
         tauri_exit_process,
         tauri_open_devtools,
         tauri_calc_tencent_cloud_api_signature,
-        tauri_start_v2ray_server,
-        tauri_stop_v2ray_server,
-        tauri_kill_progress_by_pid,
+        // tauri_start_v2ray_server,
+        // tauri_stop_v2ray_server,
+        // tauri_kill_progress_by_pid,
+        tauri_start_proxy_client,
+        tauri_stop_proxy_client,
         tauri_show_notify_window,
         tauri_close_notify_window,
         tauri_interval_ping_start,
@@ -103,14 +109,16 @@ pub fn run() {
     .setup(|_app| {
       #[cfg(desktop)]
       {
-        _app.manage(V2RayProc::new());
+        use crate::proxy::ProxyLoop;
 
-        let quit_i = MenuItem::with_id(_app, "quit", "退出CloudV2Ray", true, None::<&str>).unwrap();
+        _app.manage(ProxyLoop::new());
+
+        let quit_i = MenuItem::with_id(_app, "quit", "退出CloudTun", true, None::<&str>).unwrap();
         let menu = Menu::with_items(_app, &[&quit_i]).unwrap();
         let _ = TrayIconBuilder::new()
           .icon(_app.default_window_icon().unwrap().clone())
           .menu(&menu)
-          .tooltip("CloudV2Ray - 基于云计算的 V2Ray 客户端")
+          .tooltip("CloudTun - 基于云计算的网络代理方案")
           .show_menu_on_left_click(false)
           .on_tray_icon_event(|ic, event| {
             use tauri::tray::TrayIconEvent;
@@ -125,7 +133,9 @@ pub fn run() {
           })
           .on_menu_event(|app, event| match event.id.as_ref() {
             "quit" => {
-              block_on(stop_v2ray_server(app.state()));
+              use crate::proxy::stop_proxy_client;
+              use tauri::async_runtime::block_on;
+              block_on(stop_proxy_client(app.state()));
               app.exit(0);
             }
             _ => {

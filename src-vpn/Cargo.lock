@@ -184,14 +184,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "cloudtun-common"
+version = "0.1.0"
+
+[[package]]
 name = "cloudtun-vpn"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "cloudtun-common",
+ "ctrlc2",
  "hashlink",
  "hickory-proto",
  "ipstack",
  "jni",
+ "libc",
+ "socket2",
  "thiserror 2.0.16",
  "tokio",
  "tokio-util",
@@ -246,6 +254,17 @@ name = "crossbeam-utils"
 version = "0.8.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
+
+[[package]]
+name = "ctrlc2"
+version = "3.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c336ff0159b4b18f0414b51060ee7a41ef7f93703da0862b5a655490be02aab4"
+dependencies = [
+ "log",
+ "nix 0.30.1",
+ "windows-sys 0.60.2",
+]
 
 [[package]]
 name = "data-encoding"

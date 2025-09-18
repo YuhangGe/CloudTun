@@ -55,7 +55,7 @@ impl Trie {
             match_type: Some(match_type),
             next: HashMap::new(),
           });
-        // println!("insert new rule: {}, {:?}", url, match_type);
+        // println!("insert new rule: {}, {}", url, match_type);
       } else {
         let x = cnext.entry(*data).or_default();
         cnext = &mut x.next;
@@ -86,71 +86,70 @@ impl Trie {
 #[derive(Debug, Clone)]
 pub struct RouteMatcher {
   trie: Trie,
-  pub config_file: Option<String>,
+  pub default_rule: MatchType,
+  // pub rules_config_file: Option<String>,
 }
 
-impl RouteMatcher {
-  pub fn new() -> Self {
-    RouteMatcher {
-      trie: Trie::new(),
-      config_file: None,
+async fn load_rules(rules_config_file: &str, trie: &mut Trie) -> std::io::Result<()> {
+  let mut f = File::open(rules_config_file).await?;
+  let mut rules = String::new();
+  f.read_to_string(&mut rules).await?;
+
+  for (line_number, line_content) in rules.split('\n').enumerate() {
+    let line_cnt = line_content.trim_ascii();
+    if line_cnt.is_empty() || line_cnt.starts_with('#') {
+      continue;
     }
-  }
-
-  pub async fn config_rules(&mut self, rules_config_file: Option<String>) -> std::io::Result<()> {
-    self.trie = Trie::new();
-    let Some(rules_config_file) = rules_config_file else {
-      self.config_file.take();
-      return Ok(());
+    let mut line_it = line_content.splitn(2, ':');
+    let Some(domain) = line_it
+      .next()
+      .map(|v| v.trim_ascii())
+      .filter(|v| !v.is_empty())
+    else {
+      println!("bad rule config at line {}: missing domain", line_number);
+      continue;
     };
-
-    let mut f = File::open(&rules_config_file).await?;
-    let mut rules = String::new();
-    f.read_to_string(&mut rules).await?;
-
-    for (line_number, line_content) in rules.split('\n').enumerate() {
-      let line_cnt = line_content.trim_ascii();
-      if line_cnt.is_empty() || line_cnt.starts_with('#') {
-        continue;
-      }
-      let mut line_it = line_content.splitn(2, ':');
-      let Some(domain) = line_it
-        .next()
-        .map(|v| v.trim_ascii())
-        .filter(|v| !v.is_empty())
-      else {
-        println!("bad rule config at line {}: missing domain", line_number);
-        continue;
-      };
-      let Some(match_type) = line_it
-        .next()
-        .map(|v| v.trim_ascii())
-        .filter(|v| !v.is_empty())
-      else {
+    let Some(match_type) = line_it
+      .next()
+      .map(|v| v.trim_ascii())
+      .filter(|v| !v.is_empty())
+    else {
+      println!(
+        "bad rule config at line {}: missing match type",
+        line_number
+      );
+      continue;
+    };
+    let match_type = match match_type {
+      "deny" => MatchType::Deny,
+      "direct" => MatchType::Direct,
+      "proxy" => MatchType::Proxy,
+      _ => {
         println!(
-          "bad rule config at line {}: missing match type",
+          "bad rule config at line {}: invalid match type",
           line_number
         );
         continue;
-      };
-      let match_type = match match_type {
-        "deny" => MatchType::Deny,
-        "direct" => MatchType::Direct,
-        "proxy" => MatchType::Proxy,
-        _ => {
-          println!(
-            "bad rule config at line {}: invalid match type",
-            line_number
-          );
-          continue;
-        }
-      };
-      self.trie.insert(domain, match_type).await;
-    }
-    self.config_file.replace(rules_config_file);
-    Ok(())
+      }
+    };
+    trie.insert(domain, match_type).await;
   }
-  pub async fn match_domain(&self, domain: &str) -> Option<MatchType> {
-    self.trie.search(domain).await
+  Ok(())
+}
+
+impl RouteMatcher {
+  pub async fn load(
+    default_rule: MatchType,
+    rules_config_file: Option<String>,
+  ) -> std::io::Result<Self> {
+    let mut trie = Trie::new();
+    if let Some(rules_config_file) = &rules_config_file {
+      load_rules(rules_config_file, &mut trie).await?;
+    }
+    Ok(RouteMatcher { trie, default_rule })
+  }
+
+  pub async fn match_domain(&self, domain: &str) -> MatchType {
+    self.trie.search(domain).await.unwrap_or(self.default_rule)
   }
 }

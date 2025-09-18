@@ -1,6 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
-import configTpl from '@/assets/v2ray.conf.template.json?raw';
 import {
   type CVMInstance,
   CreateCommand,
@@ -9,10 +8,8 @@ import {
   DescribeInstances,
   ModifyCommand,
 } from '@/service/tencent';
-import { renderTpl } from '@/service/util';
 import { appendLog } from '@/store/log';
 import { globalSettings } from '@/store/settings';
-import { savePid } from '@/store/pid';
 
 export async function loadInstance(id?: string) {
   return await DescribeInstances({
@@ -117,16 +114,16 @@ export async function createOrUpdateCommand(shellContent: string) {
 //   return false; // timeout
 // }
 
-export async function pingV2RayOnce(ip: string) {
+export async function pingServerOnce(ip: string) {
   if (!globalSettings.token) return false;
   try {
-    const url = `http://${ip}:2081/ping?token=${globalSettings.token}`;
+    const url = `http://${ip}:24816/ping?token=${globalSettings.token}`;
     appendLog(`[ping] ==> ${url}`);
     const res = await fetch(url, { connectTimeout: 5000 });
     if (res.status !== 200) throw new Error(`bad response status: ${res.status}`);
     const txt = await res.text();
     if (txt === 'pong!') {
-      appendLog('[ping] ==> 远程 V2Ray 运行中，服务器正常响应！');
+      appendLog('[ping] ==> 远程代理服务服务器正常响应！');
       return true;
     } else {
       return false;
@@ -137,20 +134,11 @@ export async function pingV2RayOnce(ip: string) {
   }
 }
 
-export function getV2RayCoreConf(ip: string) {
-  return renderTpl(configTpl, {
-    REMOTE_IP: ip,
-    TOKEN: globalSettings.token,
-  });
-}
-export async function startV2RayCore(ip: string) {
-  const conf = getV2RayCoreConf(ip);
-  if (!conf) return false;
+export async function startProxyClient(ip: string) {
   try {
-    const pid = await invoke<{ pid: string }>('tauri_start_v2ray_server', {
-      config: conf,
+    await invoke('tauri_start_proxy_client', {
+      serverIp: ip,
     });
-    void savePid(pid.pid);
     return true;
   } catch (ex) {
     console.error(ex);

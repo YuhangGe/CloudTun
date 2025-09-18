@@ -36,7 +36,7 @@ function App() {
     <div className='bg-background flex size-full flex-col overflow-hidden px-4 py-3 backdrop-blur-2xl select-none'>
       <div className='flex items-center gap-2'>
         <img src={imgLogo} className='size-[18px]' />
-        <span className='text-sm'>CloudV2Ray</span>
+        <span className='text-sm'>CloudTun</span>
         <span className='flex-1'></span>
         <span className='icon-[gravity-ui--broadcast-signal] text-primary text-base'></span>
       </div>

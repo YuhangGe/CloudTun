@@ -5,8 +5,8 @@ use axum::{
   response::IntoResponse,
 };
 use cloudtun_common::{
-  X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_SECRET_KEY, X_TOKEN_KEY, X_TOKEN_VALUE, 
-  xor_inplace_simd,
+  constant::{X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_SECRET_KEY, X_TOKEN_KEY, X_TOKEN_VALUE},
+  encode::xor_inplace_simd,
 };
 use futures_util::{SinkExt, StreamExt};
 use tokio::{
@@ -87,7 +87,7 @@ async fn handle_socket(socket: WebSocket, remote_host: String, remote_port: u16,
   });
 
   let mut read_remote_handle = tokio::spawn(async move {
-    let mut buf = [0u8; 1024];
+    let mut buf = [0u8; 8192];
     loop {
       match remote_reader.read(&mut buf).await {
         Ok(0) => {

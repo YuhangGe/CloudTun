@@ -1,4 +1,4 @@
-package com.cloudv2ray.app
+package com.cloudtun.app
 
 import android.content.Intent
 import android.os.Bundle
@@ -13,7 +13,7 @@ class MainActivity : TauriActivity() {
   override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
     super.onActivityResult(requestCode, resultCode, data)
     if (requestCode == 0x9999 && resultCode == RESULT_OK) {
-      val intent = Intent(this, CloudV2RayVpnService::class.java)
+      val intent = Intent(this, CloudTunVpnService::class.java)
       startForegroundService(intent)
     }
   }

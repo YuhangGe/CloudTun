@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-  cloudv2ray_lib::run()
+  cloudtun_lib::run()
 }

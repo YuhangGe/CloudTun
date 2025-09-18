@@ -1,22 +1,18 @@
 export const RegionOptions = [
   {
-    label: '新加坡',
-    value: 'ap-singapore',
+    value: 'na-siliconvalley',
+    label: '美国硅谷',
   },
   {
     label: '中国香港',
     value: 'ap-hongkong',
   },
   {
-    value: 'na-siliconvalley',
-    label: '美国硅谷',
+    value: 'ap-tokyo',
+    label: '日本东京',
   },
   {
-    value: 'eu-frankfurt',
-    label: '法兰克福',
-  },
-  {
-    value: 'na-ashburn',
-    label: '弗吉尼亚',
+    value: 'ap-bangkok',
+    label: '泰国曼谷',
   },
 ];

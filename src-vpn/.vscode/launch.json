@@ -1,0 +1,65 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+  
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'cloudtun_vpn'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=cloudtun-vpn"
+        ],
+        "filter": {
+          "name": "cloudtun_vpn",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'cloudtun-vpn'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=cloudtun-vpn",
+          "--package=cloudtun-vpn"
+        ],
+        "filter": {
+          "name": "cloudtun-vpn",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'cloudtun-vpn'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=cloudtun-vpn",
+          "--package=cloudtun-vpn"
+        ],
+        "filter": {
+          "name": "cloudtun-vpn",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

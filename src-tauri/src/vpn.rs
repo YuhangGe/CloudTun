@@ -63,7 +63,7 @@ pub fn init_tauri_vpn<R: Runtime>() -> TauriPlugin<R> {
   Builder::<R>::new("vpn")
     .setup(|app, api| {
       let handle = api
-        .register_android_plugin("com.cloudv2ray.app", "CloudV2RayPlugin")
+        .register_android_plugin("com.cloudtun.app", "CloudTunPlugin")
         .unwrap();
 
       // handle.run_mobile_plugin(

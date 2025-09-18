@@ -47,7 +47,7 @@ export function ContextMenu() {
         on:change={async (v) => {
           if (v === 'reload') {
             if (!IS_MOBILE) {
-              await invoke('tauri_stop_v2ray_server');
+              await invoke('tauri_stop_proxy_client');
               await invoke('tauri_close_notify_window');
             }
 

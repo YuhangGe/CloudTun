@@ -2,10 +2,9 @@ use std::sync::Arc;
 
 use axum::{
   body::Body,
-  extract::Request,
   response::{IntoResponse, Response},
 };
-use hyper::{StatusCode, upgrade::Upgraded};
+use hyper::{Request, StatusCode, body::Incoming, upgrade::Upgraded};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpStream;
 
@@ -15,9 +14,8 @@ use crate::{
 };
 
 pub async fn proxy_request(
-  req: Request,
-  server: Arc<(String, u16)>,
-  default_rule: MatchType,
+  req: Request<Incoming>,
+  server_addr: Arc<(String, u16)>,
   router: RouteMatcher,
 ) -> Result<Response, hyper::Error> {
   let Some(remote_auth) = req.uri().authority() else {
@@ -33,22 +31,20 @@ pub async fn proxy_request(
   let remote_host = remote_auth.host().to_owned();
   let remote_port = remote_auth.port_u16().unwrap_or(80);
 
-  tokio::task::spawn(async move {
+  tokio::spawn(async move {
     match hyper::upgrade::on(req).await {
-      Ok(upgraded) => match router
-        .match_domain(&remote_host)
-        .await
-        .unwrap_or(default_rule)
-      {
+      Ok(upgraded) => match router.match_domain(&remote_host).await {
         MatchType::Deny => {
           drop(upgraded);
         }
-        MatchType::Proxy => match proxy_tunnel(upgraded, &server, remote_host, remote_port).await {
-          Ok(_) => (),
-          Err(err) => {
-            println!("proxy tunnel error: {}", err);
+        MatchType::Proxy => {
+          match proxy_tunnel(upgraded, server_addr, remote_host, remote_port).await {
+            Ok(_) => (),
+            Err(err) => {
+              println!("proxy tunnel error: {}", err);
+            }
           }
-        },
+        }
         MatchType::Direct => match proxy_direct(upgraded, remote_host, remote_port).await {
           Ok(_) => (),
           Err(err) => {
@@ -59,7 +55,6 @@ pub async fn proxy_request(
       Err(e) => eprintln!("upgrade error: {}", e),
     }
   });
-
   Ok(Response::new(Body::empty()))
 }
 
@@ -68,7 +63,7 @@ async fn proxy_direct(
   remote_host: String,
   remote_port: u16,
 ) -> std::io::Result<()> {
-  // println!("Direct ==> {}", host);
+  println!("Direct ==> {}", remote_host);
   let mut remote_server = TcpStream::connect((remote_host, remote_port)).await?;
   let mut upgraded = TokioIo::new(upgraded);
 

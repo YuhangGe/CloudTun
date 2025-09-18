@@ -1,11 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow_tauri::TAResult;
-use hmac::digest::KeyInit;
 use serde::Serialize;
 use tauri::{
-  AppHandle, Emitter, EventTarget, Listener, LogicalPosition, Manager, Position, Runtime, State,
-  Webview, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Window, Wry,
+  AppHandle, Emitter, EventTarget, LogicalPosition, Position, Runtime, State, WebviewUrl,
+  WebviewWindow, WebviewWindowBuilder,
 };
 use tokio::{sync::Mutex, task, time::interval};
 

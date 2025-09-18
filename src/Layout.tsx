@@ -69,10 +69,10 @@ export function Layout() {
           </div>
         ))}
         <div className='flex-1'></div>
-        <Tooltip content='退出 CloudV2Ray，结束本地代理' placement='top-start'>
+        <Tooltip content='退出CloudTun，结束本地代理' placement='top-start'>
           <Button
             on:click={async () => {
-              await invoke('tauri_stop_v2ray_server');
+              await invoke('tauri_stop_proxy_client');
               await invoke('tauri_exit_process');
             }}
             className='flex w-full items-center justify-center pt-2 pb-4'
@@ -85,7 +85,7 @@ export function Layout() {
         <div className='mb-4 flex items-center sm:mb-5'>
           <div className='flex items-center text-2xl sm:hidden'>
             <img src={imgLogo} className='block size-10' />
-            <span className='ml-2 font-medium'>CloudV2Ray</span>
+            <span className='ml-2 font-medium'>CloudTun</span>
             <span className='mx-2'>-</span>
           </div>
           <div className='max-sm:text-secondary-text text-2xl whitespace-nowrap'>{state.title}</div>

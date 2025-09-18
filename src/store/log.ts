@@ -24,7 +24,7 @@ export function appendLog(log: string) {
   }
 }
 
-void listen('log::v2ray', (ev) => appendLog(`[v2ray] ==> ${ev.payload}`));
+void listen('log::proxy', (ev) => appendLog(`[proxy] ==> ${ev.payload}`));
 void listen('log::ping', (ev) => appendLog(`[ping] ==> ${ev.payload}`));
 void listen('log::disconnected', (ev) => {
   appendLog(`[server] ==> ${ev.payload}`);

@@ -43,7 +43,7 @@ export function Control(
         <Popconfirm
           title='确认销毁主机？'
           placement='top-start'
-          content='销毁后 v2ray 服务不可用，请重新创建主机'
+          content='销毁后代理服务不可用，请重新创建主机'
           on:confirm={() => {
             void destroy();
           }}
