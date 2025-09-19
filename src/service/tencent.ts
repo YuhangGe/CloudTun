@@ -25,14 +25,15 @@ async function callTencentApi<T>({
 }): Promise<ApiResult<T>> {
   const timestamp = Math.floor(Date.now() / 1000);
   const body = data ? JSON.stringify(data) : '{}';
+  const host = `${service}.tencentcloudapi.com`;
   const sign = await invoke<string>('tauri_calc_tencent_cloud_api_signature', {
     secretId: globalSettings.secretId,
     secretKey: globalSettings.secretKey,
-    service,
+    service_host: host,
+    service_name: service,
     timestamp,
     body,
   });
-  const host = `${service}.tencentcloudapi.com`;
   const headers = {
     authorization: sign,
     ['content-type']: 'application/json',

@@ -1,11 +1,16 @@
+use std::sync::Arc;
+
 use axum::{
   body::Bytes,
-  extract::ws::{Message, WebSocket, WebSocketUpgrade},
+  extract::{
+    State,
+    ws::{Message, WebSocket, WebSocketUpgrade},
+  },
   http::{HeaderMap, StatusCode},
   response::IntoResponse,
 };
 use cloudtun_common::{
-  constant::{X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_SECRET_KEY, X_TOKEN_KEY, X_TOKEN_VALUE},
+  constant::{X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_SECRET_KEY, X_TOKEN_KEY},
   encode::xor_inplace_simd,
 };
 use futures_util::{SinkExt, StreamExt};
@@ -14,10 +19,16 @@ use tokio::{
   net::TcpStream,
 };
 
-pub async fn proxy_handler(ws: WebSocketUpgrade, headers: HeaderMap) -> impl IntoResponse {
+use crate::Context;
+
+pub async fn proxy_handler(
+  ws: WebSocketUpgrade,
+  headers: HeaderMap,
+  State(context): State<Arc<Context>>,
+) -> impl IntoResponse {
   if !headers
     .get(X_TOKEN_KEY)
-    .map(|tk| tk.eq(X_TOKEN_VALUE))
+    .map(|tk| tk.eq(&context.token))
     .unwrap_or(false)
   {
     return Err(StatusCode::UNAUTHORIZED);

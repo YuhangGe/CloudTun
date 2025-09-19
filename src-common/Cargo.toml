@@ -3,4 +3,15 @@ name = "cloudtun-common"
 version = "0.1.0"
 edition = "2024"
 
+# [features]
+# tencent = ["serde", "reqwest"]
+
 [dependencies]
+chrono = "0.4.42"
+hmac = "0.12.1"
+sha2 = "0.10.9"
+
+# [target.'cfg(feature = "tencent")'.dependencies]
+reqwest = { version = "0.12.23", features = ["json"] }
+serde = { version = "1.0.225", features = ["derive"] }
+anyhow = "1.0.99"
