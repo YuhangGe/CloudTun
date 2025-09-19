@@ -1,19 +1,22 @@
 mod context;
 mod proxy;
 mod routes;
-mod tencent;
 
-use std::{process, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use axum::{
   Router,
   routing::{any, get},
 };
-use cloudtun_common::constant::REMOTE_PROXY_PORT;
+use cloudtun_common::{constant::REMOTE_PROXY_PORT, tencent::TencentCloudClient};
 
 //allows to split the websocket stream into separate TX and RX branches
 
-use crate::{context::Context, proxy::proxy_handler, routes::ping_handler, tencent::TencentSDK};
+use crate::{
+  context::Context,
+  proxy::proxy_handler,
+  routes::{ping_handler, test_handler},
+};
 
 use clap::Parser;
 
@@ -32,6 +35,22 @@ struct Args {
   /// 客户端连接时的鉴权 Token
   #[arg(short, long)]
   token: String,
+
+  /// 腾讯云 SecretId
+  #[arg(long)]
+  secret_id: String,
+
+  /// 腾讯云 SecretKey
+  #[arg(long)]
+  secret_key: String,
+
+  /// 腾讯云 Region
+  #[arg(short, long)]
+  region: String,
+
+  /// 代理服务主机的名称
+  #[arg(long)]
+  cvm_name: String,
 }
 
 #[tokio::main]
@@ -40,6 +59,7 @@ async fn main() {
 
   let app = Router::new()
     .route("/ping", get(ping_handler))
+    .route("/test", get(test_handler))
     .route("/ws", any(proxy_handler));
 
   let ip = args.ip.unwrap_or("0.0.0.0".to_string());
@@ -54,22 +74,41 @@ async fn main() {
     args.token
   );
 
-  let context = Arc::new(Context::new(args.token));
-  let context2 = context.clone();
-  let serve_handle = axum::serve(listener, app.with_state(context).into_make_service());
+  let tencent_client = TencentCloudClient::new(args.secret_id, args.secret_key, args.region);
+  let context = Arc::new(Context::new(args.token, args.cvm_name, tencent_client));
 
-  let tencent_client = TencentSDK::new("".into(), "".into());
+  let serve_handle = axum::serve(
+    listener,
+    app.with_state(context.clone()).into_make_service(),
+  );
+
   let timer_handle = tokio::spawn(async move {
     let mut int = tokio::time::interval(Duration::from_secs(60));
     int.tick().await;
     loop {
       int.tick().await;
-      if context2.is_ping_expired().await {
-        let _ = tencent_client.describe_instances("ap-chengdu").await;
+      if context.is_ping_expired().await {
         println!("ping expired, bye!");
-        process::exit(0);
+        destroy_cvm(&context).await;
       }
     }
   });
   let _ = tokio::join!(serve_handle, timer_handle);
+}
+
+async fn destroy_cvm(ctx: &Context) {
+  let ret = match ctx.tx.describe_instances().await {
+    Err(e) => {
+      eprintln!("failed call describe_instances: {e}");
+      return;
+    }
+    Ok(ret) => ret,
+  };
+  let Some(inst) = ret.iter().find(|inst| inst.name.eq(&ctx.cvm_name)) else {
+    eprintln!("{} not found.", &ctx.cvm_name);
+    return;
+  };
+  if let Err(e) = ctx.tx.desroy_instance(&inst.id).await {
+    eprintln!("failed call destroy_instance: {e}");
+  }
 }

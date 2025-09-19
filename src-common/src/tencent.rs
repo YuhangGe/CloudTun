@@ -188,7 +188,7 @@ async fn tx_call_api<T: for<'a> Deserialize<'a>>(
   }
 
   let res: ApiResponse<T> = res.json().await?;
-
+  // println!("XXX {:#?}", res);
   if let Some(err) = res.response.error {
     bail!("{}", err.message);
   }
@@ -202,26 +202,28 @@ async fn tx_call_api<T: for<'a> Deserialize<'a>>(
 #[derive(Debug, Deserialize)]
 pub struct CvmInstance {
   #[serde(rename = "InstanceId")]
-  id: String,
+  pub id: String,
   #[serde(rename = "InstanceName")]
-  name: String,
+  pub name: String,
 }
 
 #[derive(Debug)]
 pub struct TencentCloudClient {
   secret_id: String,
   secret_key: String,
+  region: String,
 }
 
 impl TencentCloudClient {
-  pub fn new(secret_id: String, secret_key: String) -> Self {
+  pub fn new(secret_id: String, secret_key: String, region: String) -> Self {
     Self {
       secret_id,
       secret_key,
+      region,
     }
   }
 
-  pub async fn describe_instances(&self, region: &str) -> anyhow::Result<Vec<CvmInstance>> {
+  pub async fn describe_instances(&self) -> anyhow::Result<Vec<CvmInstance>> {
     #[derive(Debug, Deserialize)]
     struct X {
       #[serde(rename = "InstanceSet")]
@@ -232,12 +234,29 @@ impl TencentCloudClient {
       &self.secret_id,
       &self.secret_key,
       TencentService::Cvm,
-      region,
+      &self.region,
       "DescribeInstances",
       "{}".to_string(),
     )
     .await?;
 
     Ok(res.instances)
+  }
+
+  pub async fn desroy_instance(&self, instance_id: &str) -> anyhow::Result<bool> {
+    #[derive(Debug, Deserialize)]
+    struct X {}
+
+    let _ = tx_call_api::<X>(
+      &self.secret_id,
+      &self.secret_key,
+      TencentService::Cvm,
+      &self.region,
+      "TerminateInstances",
+      format!("{{\"InstanceIds\":[\"{}\"]}}", instance_id),
+    )
+    .await?;
+
+    Ok(true)
   }
 }
