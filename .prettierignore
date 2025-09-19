@@ -7,3 +7,7 @@ pnpm-lock.yaml
 README.md
 src-tauri/
 tauri-plugin-cloudv2ray/
+src-server/
+src-common/
+src-proxy/
+src-vpn/

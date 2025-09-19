@@ -76,36 +76,44 @@ export function InstanceConfigForm() {
       }));
     }
   }
-  watch(
-    formState,
-    'region',
-    (v) => {
-      if (!v) return;
-      state.zoneOpts = [];
-      void DescribeZones({
-        region: v,
-      }).then(([err, res]) => {
-        if (!err) {
-          state.zoneOpts = res.ZoneSet.map((zone) => ({
-            label: zone.ZoneName,
-            value: zone.Zone,
-          }));
-          if (res.TotalCount > 0) {
-            formState.zone = res.ZoneSet[0].Zone;
-          }
-        }
-      });
-      void updateInstanceTypes(v, formState.zone);
-    },
-    { immediate: true },
-  );
+
+  async function onRegionChange() {
+    if (!formState.region) return;
+    const [err, res] = await DescribeZones({
+      region: formState.region,
+    });
+    if (err) return;
+    state.zoneOpts = res.ZoneSet.map((zone) => ({
+      label: zone.ZoneName,
+      value: zone.Zone,
+    }));
+    if (res.TotalCount == 0) return;
+    formState.zone ??= res.ZoneSet[0].Zone;
+    await updateInstanceTypes(formState.region, formState.zone);
+  }
+
+  watch(formState, 'region', (v) => {
+    if (!v) return;
+    state.zoneOpts = [];
+    formState.zone = undefined;
+    void onRegionChange();
+  });
+
+  onMount(() => {
+    void onRegionChange();
+  });
 
   watch(formState, 'zone', (v) => {
     void updateInstanceTypes(formState.region, v);
   });
 
-  // const [imageOptions, setImageOptions] = useState<DefaultOptionType[]>([]);
-  async function loadImages(region: string, imageType: string, instanceType: string) {
+  async function loadImages() {
+    const imageType = formState.imageType;
+    const instanceType = formState.instanceType;
+    const region = formState.region;
+    if (!(region && imageType && instanceType)) {
+      return;
+    }
     const Filters = [{ Name: 'image-type', Values: [imageType] }];
     if (imageType === 'PUBLIC_IMAGE') {
       Filters.push({
@@ -140,6 +148,15 @@ export function InstanceConfigForm() {
       state.imageOpts = [];
     }
   }
+  watch(formState, 'imageType', loadImages);
+  watch(
+    formState,
+    'instanceType',
+    () => {
+      void loadImages();
+    },
+    { immediate: true },
+  );
 
   function resetPwd() {
     formState.loginPwd = generateStrongPassword();
@@ -188,10 +205,7 @@ export function InstanceConfigForm() {
               className='max-h-[200px] overflow-y-auto'
               options={state.instTypeOpts}
               value={field.value}
-              on:change={(v) => {
-                field['on:change'](v);
-                void loadImages(formState.region!, formState.imageType!, formState.instanceType!);
-              }}
+              on:change={field['on:change']}
             />
           )}
         </Controller>
@@ -247,14 +261,7 @@ export function InstanceConfigForm() {
       <FormItem label='镜像类型：' required>
         <Controller control={control} name='imageType'>
           {(field) => (
-            <Select
-              options={ImageTypeOpts}
-              value={field.value}
-              on:change={(v) => {
-                field['on:change'](v);
-                void loadImages(formState.region!, v, formState.instanceType!);
-              }}
-            />
+            <Select options={ImageTypeOpts} value={field.value} on:change={field['on:change']} />
           )}
         </Controller>
       </FormItem>

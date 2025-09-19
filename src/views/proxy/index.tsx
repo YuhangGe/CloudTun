@@ -1,7 +1,7 @@
 import { validateSettings } from '@/service/settings';
 import { type CVMPrice, InquiryPriceRunInstances } from '@/service/tencent';
 import { onMount, ref, vm, watch } from 'jinge';
-import { Button, Spin, Tag, message } from 'jinge-antd';
+import { Spin, Tag, message } from 'jinge-antd';
 import { Bandwidth } from './Bandwind';
 import { Balance } from './Balance';
 import { Instance } from './Instance';
@@ -9,7 +9,6 @@ import { Control } from './Control';
 import { globalSettings } from '@/store/settings';
 import { globalInst, loadGlobalInst } from '@/store/instance';
 import { IS_RELOAD, IS_REOPEN } from '@/service/util';
-import { invoke } from '@tauri-apps/api/core';
 
 export function ProxyView() {
   const state = vm<{
@@ -79,7 +78,7 @@ export function ProxyView() {
       <Spin size='sm' />
     </div>
   ) : (
-    <div className='mt-2'>
+    <div className='mt-3'>
       <div className='flex flex-col gap-4'>
         <div className='text-lg font-medium'>代理信息</div>
         <Instance />
@@ -99,7 +98,7 @@ export function ProxyView() {
         <Bandwidth price={state.price} />
       </div>
       <Control ref={ctrl} />
-      <div>
+      {/* <div>
         <Button
           on:click={async () => {
             const x = await invoke('tauri_start_vpn', { config: 'testconfig' });
@@ -109,7 +108,7 @@ export function ProxyView() {
         >
           TEST
         </Button>
-      </div>
+      </div> */}
     </div>
   );
 }
