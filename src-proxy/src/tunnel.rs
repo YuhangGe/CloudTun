@@ -1,7 +1,7 @@
 use axum::{body::Bytes, http::HeaderValue};
 
 use cloudtun_common::{
-  constant::{X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_SECRET_KEY, X_TOKEN_KEY, X_TOKEN_VALUE},
+  constant::{X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_SECRET_KEY, X_TOKEN_KEY},
   encode::xor_inplace_simd,
 };
 use futures_util::{SinkExt, StreamExt};
@@ -34,11 +34,12 @@ lazy_static! {
     .join("");
 }
 
-pub async fn proxy_tunnel(
+pub async fn proxy_tunnel<F: Fn(&str, &str) + Send + Sync + 'static>(
   upgraded: Upgraded,
-  server: Arc<(String, u16)>,
+  server: Arc<(String, u16, String)>,
   target_host: String,
   target_port: u16,
+  log_fn: Arc<F>,
 ) -> std::io::Result<()> {
   let url = format!("ws://{}:{}/ws", server.0, server.1);
   let mut request = url
@@ -46,7 +47,7 @@ pub async fn proxy_tunnel(
     .map_err(|e| Error::new(ErrorKind::Other, e))?;
 
   let headers = request.headers_mut();
-  headers.append(X_TOKEN_KEY, HeaderValue::from_static(X_TOKEN_VALUE));
+  headers.append(X_TOKEN_KEY, HeaderValue::from_str(&server.2).unwrap());
   headers.append(
     X_CONNECT_HOST_KEY,
     HeaderValue::from_str(&target_host).unwrap(),
@@ -64,8 +65,12 @@ pub async fn proxy_tunnel(
   let upgraded = TokioIo::new(upgraded);
   let (mut upgraded_reader, mut upgraded_writer) = tokio::io::split(upgraded);
 
-  println!("Proxy ==> {}:{}", target_host, target_port);
+  log_fn(
+    "proxy::info",
+    &format!("Proxy ==> {}:{}", target_host, target_port),
+  );
 
+  let read_log_fn = log_fn.clone();
   // 任务1: 从 Upgraded -> WebSocket
   let read_handle = tokio::spawn(async move {
     let mut buf = [0u8; 8192];
@@ -87,12 +92,12 @@ pub async fn proxy_tunnel(
             .send(Message::Binary(Bytes::copy_from_slice(data)))
             .await
           {
-            eprintln!("ws send error: {e}");
+            read_log_fn("proxy::error", &format!("ws send error: {e}"));
             break;
           }
         }
         Err(e) => {
-          eprintln!("read upgraded error: {e}");
+          read_log_fn("proxy::error", &format!("read upgraded error: {e}"));
           break;
         }
       }
@@ -106,7 +111,10 @@ pub async fn proxy_tunnel(
         Ok(Message::Binary(data)) => {
           let l = data.len();
           if let Err(e) = upgraded_writer.write_all(&data).await {
-            eprintln!("write {l} bytes to upgraded error: {e}");
+            log_fn(
+              "proxy::error",
+              &format!("write {l} bytes to upgraded error: {e}"),
+            );
             break;
           }
         }

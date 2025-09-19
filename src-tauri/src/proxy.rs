@@ -48,6 +48,8 @@ pub async fn stop_proxy_client(state: State<'_, ProxyLoop>) {
 async fn start_proxy_client<R: Runtime>(
   h: AppHandle<R>,
   state: State<'_, ProxyLoop>,
+  server_ip: &str,
+  token: &str,
 ) -> anyhow::Result<()> {
   emit_log(&h, "log::proxy", "starting proxy client...");
   let proxy_loop = state.0.clone();
@@ -56,13 +58,17 @@ async fn start_proxy_client<R: Runtime>(
   }
 
   let proxy_args = ProxyArgs {
-    server_addr: ("127.0.0.1".to_string(), 24816),
-    local_addr: ("127.0.0.1".to_string(), 7891),
+    server_addr: (server_ip.to_string(), 24816, token.to_string()),
+    local_addr: ("0.0.0.0".to_string(), 7892),
     default_rule: cloudtun_proxy::MatchType::Proxy,
     rules_config_file: None,
   };
   let shutdown_token = CancellationToken::new();
-  tokio::task::spawn(async move {
+  let h2 = h.clone();
+  let log_fn = move |log_type: &str, log_message: &str| {
+    emit_log(&h2, log_type, log_message);
+  };
+  tokio::spawn(async move {
     {
       proxy_loop
         .clone()
@@ -70,8 +76,9 @@ async fn start_proxy_client<R: Runtime>(
         .await
         .replace(shutdown_token.clone());
     }
-
-    run_proxy_loop(proxy_args, shutdown_token)
+    if let Err(e) = run_proxy_loop(proxy_args, shutdown_token, log_fn).await {
+      eprintln!("failed run_proxy_loop: {e}");
+    }
   });
 
   Ok(())
@@ -81,8 +88,12 @@ async fn start_proxy_client<R: Runtime>(
 pub async fn tauri_start_proxy_client<R: Runtime>(
   handle: AppHandle<R>,
   state: State<'_, ProxyLoop>,
+  server_ip: &str,
+  token: &str,
 ) -> TAResult<()> {
-  start_proxy_client(handle, state).await.into_ta_result()
+  start_proxy_client(handle, state, server_ip, token)
+    .await
+    .into_ta_result()
 }
 
 #[tauri::command]

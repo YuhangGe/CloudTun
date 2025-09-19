@@ -11,6 +11,7 @@ import {
 import { renderTpl } from './util';
 import shellTpl from '@/assets/shell-template/agent.sh?raw';
 import { message } from 'jinge-antd';
+import { invoke } from '@tauri-apps/api/core';
 
 export interface InstanceDeps {
   vpcId: string;
@@ -57,7 +58,7 @@ export async function loadInstanceDependentResources(): Promise<InstanceDeps | u
       VpcId: vpc.VpcId,
       SubnetName: resourceName,
       Zone: globalSettings.zone,
-      CidrBlock: '10.8.0.0/16',
+      CidrBlock: '10.9.0.0/16',
     });
     if (err || !res.Subnet) return;
     subnet = res.Subnet;
@@ -104,12 +105,14 @@ export async function loadInstanceDependentResources(): Promise<InstanceDeps | u
   };
 }
 
-export function getInstanceAgentShell() {
-  return renderTpl(shellTpl, {
-    secretKey: globalSettings.secretKey,
-    secretId: globalSettings.secretId,
-    resourceName: globalSettings.resourceName,
-    token: globalSettings.token,
-    region: globalSettings.region,
+export async function getInstanceAgentShell() {
+  const tpl = renderTpl(shellTpl, {
+    SECRET_KEY: globalSettings.secretKey,
+    SECRET_ID: globalSettings.secretId,
+    CVM_NAME: globalSettings.resourceName,
+    TOKEN: globalSettings.token,
+    REGION: globalSettings.region,
   });
+  const x = await invoke<string>('tauri_base64_covert', { content: tpl });
+  return x;
 }

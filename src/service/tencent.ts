@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
-import type { InstanceDeps } from './instance';
+import { type InstanceDeps, getInstanceAgentShell } from './instance';
 import { message } from 'jinge-antd';
 import { globalSettings } from '@/store/settings';
 
@@ -29,8 +29,8 @@ async function callTencentApi<T>({
   const sign = await invoke<string>('tauri_calc_tencent_cloud_api_signature', {
     secretId: globalSettings.secretId,
     secretKey: globalSettings.secretKey,
-    service_host: host,
-    service_name: service,
+    serviceHost: host,
+    serviceName: service,
     timestamp,
     body,
   });
@@ -151,7 +151,7 @@ function getInstanceApiParams() {
     },
     ImageId: globalSettings.imageId,
     InstanceName: globalSettings.resourceName,
-    HostName: 'vray',
+    HostName: 'cloudtun',
     EnhancedService: {
       AutomationService: { Enabled: true },
       MonitorService: { Enabled: true },
@@ -172,8 +172,10 @@ function getInstanceApiParams() {
 }
 
 export async function CreateInstance(deps: InstanceDeps) {
+  const userData = await getInstanceAgentShell();
   const data = {
     ...getInstanceApiParams(),
+    UserData: userData,
     SecurityGroupIds: [deps.sgId],
     VirtualPrivateCloud: {
       AsVpcGateway: false,
@@ -370,7 +372,12 @@ export interface CVMImage {
   ImageId: string;
   ImageName: string;
 }
-export function DescribeImages({ region, ...data }: DescribeParams) {
+export function DescribeImages({
+  region,
+  ...data
+}: DescribeParams & {
+  InstanceType?: string;
+}) {
   return callTencentApi<{
     TotalCount: number;
     ImageSet: CVMImage[];

@@ -13,7 +13,7 @@
       "identifier": "http:default",
       "allow": [
         "https://*.tencentcloudapi.com",
-        "http://*:2081"
+        "http://*:24816"
       ]
     },
     "os:default"

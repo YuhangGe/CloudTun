@@ -13,13 +13,17 @@ use crate::{
   tunnel::proxy_tunnel,
 };
 
-pub async fn proxy_request(
+pub async fn proxy_request<F: Fn(&str, &str) + Send + Sync + 'static>(
   req: Request<Incoming>,
-  server_addr: Arc<(String, u16)>,
+  server_addr: Arc<(String, u16, String)>,
   router: RouteMatcher,
+  log_fn: Arc<F>,
 ) -> Result<Response, hyper::Error> {
   let Some(remote_auth) = req.uri().authority() else {
-    eprintln!("CONNECT host is not socket addr: {:?}", req.uri());
+    log_fn(
+      "proxy::error",
+      &format!("CONNECT host is not socket addr: {:?}", req.uri()),
+    );
     return Ok(
       (
         StatusCode::BAD_REQUEST,
@@ -38,32 +42,43 @@ pub async fn proxy_request(
           drop(upgraded);
         }
         MatchType::Proxy => {
-          match proxy_tunnel(upgraded, server_addr, remote_host, remote_port).await {
+          match proxy_tunnel(
+            upgraded,
+            server_addr,
+            remote_host,
+            remote_port,
+            log_fn.clone(),
+          )
+          .await
+          {
             Ok(_) => (),
             Err(err) => {
-              println!("proxy tunnel error: {}", err);
+              log_fn("proxy::error", &format!("proxy tunnel error: {}", err));
             }
           }
         }
-        MatchType::Direct => match proxy_direct(upgraded, remote_host, remote_port).await {
-          Ok(_) => (),
-          Err(err) => {
-            println!("proxy direct error: {}", err);
+        MatchType::Direct => {
+          match proxy_direct(upgraded, remote_host, remote_port, log_fn.clone()).await {
+            Ok(_) => (),
+            Err(err) => {
+              log_fn("proxy::error", &format!("proxy direct error: {}", err));
+            }
           }
-        },
+        }
       },
-      Err(e) => eprintln!("upgrade error: {}", e),
+      Err(e) => log_fn("proxy::error", &format!("upgrade error: {}", e)),
     }
   });
   Ok(Response::new(Body::empty()))
 }
 
-async fn proxy_direct(
+async fn proxy_direct<F: Fn(&str, &str) + Send + Sync + 'static>(
   upgraded: Upgraded,
   remote_host: String,
   remote_port: u16,
+  log_fn: Arc<F>,
 ) -> std::io::Result<()> {
-  println!("Direct ==> {}", remote_host);
+  log_fn("proxy::info", &format!("Direct ==> {remote_host}"));
   let mut remote_server = TcpStream::connect((remote_host, remote_port)).await?;
   let mut upgraded = TokioIo::new(upgraded);
 

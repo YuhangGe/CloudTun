@@ -24,10 +24,13 @@ export function appendLog(log: string) {
   }
 }
 
-void listen('log::proxy', (ev) => appendLog(`[proxy] ==> ${ev.payload}`));
-void listen('log::ping', (ev) => appendLog(`[ping] ==> ${ev.payload}`));
+void listen('proxy::error', (ev) => appendLog(`[proxy::error] ${ev.payload}`));
+void listen('proxy::info', (ev) => appendLog(`[proxy::info] ${ev.payload}`));
+void listen('log::info', (ev) => appendLog(`[log::info] ${ev.payload}`));
+void listen('log::proxy', (ev) => appendLog(`[log::proxy] ${ev.payload}`));
+void listen('log::ping', (ev) => appendLog(`[log::ping] ${ev.payload}`));
 void listen('log::disconnected', (ev) => {
-  appendLog(`[server] ==> ${ev.payload}`);
+  appendLog(`[log::ping] ${ev.payload}`);
   message.error({
     content: ev.payload as string,
     duration: 0,

@@ -1,8 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow_tauri::TAResult;
-use tauri::{http::StatusCode, AppHandle, Manager, Runtime, State};
-use tauri_plugin_http::reqwest::get;
+use tauri::{
+  http::{HeaderMap, HeaderValue, StatusCode},
+  AppHandle, Manager, Runtime, State,
+};
 use tokio::{sync::Mutex, task::JoinHandle, time::interval};
 
 use crate::util::emit_log;
@@ -19,7 +21,16 @@ impl Ping {
 }
 
 async fn ping(ip: &str, token: &str) -> bool {
-  let x = get(format!("http://{}:2081/ping?token={}", ip, token)).await;
+  let req = tauri_plugin_http::reqwest::Client::new();
+  let mut headers = HeaderMap::new();
+  headers.insert("x-token", HeaderValue::from_str(token).unwrap());
+
+  let x = req
+    .get(format!("http://{}:24816/ping", ip))
+    .headers(headers)
+    .send()
+    .await;
+  // let x = get(format!("http://{}:2081/ping", ip, token)).await;
   let Ok(resp) = x else {
     return false;
   };
@@ -47,7 +58,7 @@ pub async fn tauri_interval_ping_start<R: Runtime>(
   let a_token = token.to_string();
   let loc2 = loc.clone();
   let handle = tokio::spawn(async move {
-    let mut interval = interval(Duration::from_secs(120));
+    let mut interval = interval(Duration::from_secs(60));
     loop {
       interval.tick().await;
       if !ping(&a_ip, &a_token).await {

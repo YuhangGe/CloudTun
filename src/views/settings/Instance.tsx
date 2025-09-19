@@ -96,7 +96,6 @@ export function InstanceConfigForm() {
         }
       });
       void updateInstanceTypes(v, formState.zone);
-      void loadImages(v, formState.imageType);
     },
     { immediate: true },
   );
@@ -106,8 +105,7 @@ export function InstanceConfigForm() {
   });
 
   // const [imageOptions, setImageOptions] = useState<DefaultOptionType[]>([]);
-  async function loadImages(region?: string, imageType?: string) {
-    if (!region || !imageType) return;
+  async function loadImages(region: string, imageType: string, instanceType: string) {
     const Filters = [{ Name: 'image-type', Values: [imageType] }];
     if (imageType === 'PUBLIC_IMAGE') {
       Filters.push({
@@ -118,6 +116,7 @@ export function InstanceConfigForm() {
     const [err, res] = await DescribeImages({
       region,
       Filters,
+      InstanceType: instanceType,
     });
     if (err) return;
     if (res.TotalCount > 0) {
@@ -189,7 +188,10 @@ export function InstanceConfigForm() {
               className='max-h-[200px] overflow-y-auto'
               options={state.instTypeOpts}
               value={field.value}
-              on:change={field['on:change']}
+              on:change={(v) => {
+                field['on:change'](v);
+                void loadImages(formState.region!, formState.imageType!, formState.instanceType!);
+              }}
             />
           )}
         </Controller>
@@ -250,7 +252,7 @@ export function InstanceConfigForm() {
               value={field.value}
               on:change={(v) => {
                 field['on:change'](v);
-                void loadImages(formState.region, v);
+                void loadImages(formState.region!, v, formState.instanceType!);
               }}
             />
           )}

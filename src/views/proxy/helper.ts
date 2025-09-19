@@ -117,13 +117,18 @@ export async function createOrUpdateCommand(shellContent: string) {
 export async function pingServerOnce(ip: string) {
   if (!globalSettings.token) return false;
   try {
-    const url = `http://${ip}:24816/ping?token=${globalSettings.token}`;
-    appendLog(`[ping] ==> ${url}`);
-    const res = await fetch(url, { connectTimeout: 5000 });
+    const url = `http://${ip}:24816/ping`;
+    appendLog(`[log::info] Ping ${url}`);
+    const res = await fetch(url, {
+      connectTimeout: 5000,
+      headers: {
+        'x-token': globalSettings.token,
+      },
+    });
     if (res.status !== 200) throw new Error(`bad response status: ${res.status}`);
     const txt = await res.text();
     if (txt === 'pong!') {
-      appendLog('[ping] ==> 远程代理服务服务器正常响应！');
+      appendLog('[log::info] 远程代理服务服务器正常响应！');
       return true;
     } else {
       return false;
@@ -134,10 +139,11 @@ export async function pingServerOnce(ip: string) {
   }
 }
 
-export async function startProxyClient(ip: string) {
+export async function startProxyClient(ip: string, token: string) {
   try {
     await invoke('tauri_start_proxy_client', {
       serverIp: ip,
+      token,
     });
     return true;
   } catch (ex) {

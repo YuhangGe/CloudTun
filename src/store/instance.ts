@@ -156,7 +156,7 @@ async function updateConnect() {
 }
 
 async function enableProxy() {
-  const r = await startProxyClient(globalInst.ip!);
+  const r = await startProxyClient(globalInst.ip!, globalSettings.token);
   if (!r) {
     if (IS_MOBILE) {
       // message.error('启动本地 v2ray core 失败，请尝试退出后重启 CloudV2Ray。');

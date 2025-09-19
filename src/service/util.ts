@@ -33,7 +33,7 @@ export function uid() {
 
 export function renderTpl(tpl: string, ctx: Record<string, unknown>) {
   Object.entries(ctx).forEach(([k, v]) => {
-    const r = new RegExp(`\\$${k}\\$`, 'g');
+    const r = new RegExp(`\\$${k}`, 'g');
     tpl = tpl.replace(r, v as string);
   });
   return tpl;

@@ -12,25 +12,29 @@ use crate::{
 };
 
 pub struct ProxyArgs {
-  pub server_addr: (String, u16),
+  pub server_addr: (String, u16, String),
   pub local_addr: (String, u16),
   pub default_rule: MatchType,
   pub rules_config_file: Option<String>,
 }
 
-pub async fn run_proxy_loop(
+pub async fn run_proxy_loop<F: Fn(&str, &str) + Send + Sync + 'static>(
   args: ProxyArgs,
   shutdown_token: CancellationToken,
+  log_fn: F,
 ) -> Result<(), Box<dyn std::error::Error>> {
-  let router = RouteMatcher::load(args.default_rule, args.rules_config_file.clone()).await?;
-
+  let router: RouteMatcher =
+    RouteMatcher::load(args.default_rule, args.rules_config_file.clone()).await?;
+  let log_fn = Arc::new(log_fn);
+  let log_fn2 = log_fn.clone();
   let server_addr = Arc::new(args.server_addr.clone());
   let hyper_service = hyper::service::service_fn(move |req: Request<Incoming>| {
     let server_addr = server_addr.clone();
     let router = router.clone();
+    let log_fn = log_fn2.clone();
     async move {
       if req.method() == Method::CONNECT {
-        proxy_request(req, server_addr, router).await
+        proxy_request(req, server_addr, router, log_fn).await
       } else {
         Ok("to be implemented".into_response())
       }
@@ -39,12 +43,23 @@ pub async fn run_proxy_loop(
 
   let listener = TcpListener::bind(&args.local_addr).await?;
 
-  println!(
-    "CloudTun Client Listening at {}:{}\n  Proxy to ==> {}:{}\n  Default Rule: {}",
-    args.local_addr.0, args.local_addr.1, args.server_addr.0, args.server_addr.1, args.default_rule
+  log_fn(
+    "proxy::info",
+    &format!(
+      "CloudTun Client Listening at {}:{}",
+      args.local_addr.0, args.local_addr.1,
+    ),
+  );
+  log_fn(
+    "proxy::info",
+    &format!("Proxy to ==> {}:{}", args.server_addr.0, args.server_addr.1,),
+  );
+  log_fn(
+    "proxy::info",
+    &format!("Default Rule: {}", args.default_rule),
   );
   args.rules_config_file.map(|f| {
-    println!("  Rules File: {f}");
+    log_fn("proxy::info", &format!("Rules File: {f}"));
   });
 
   loop {
@@ -57,6 +72,7 @@ pub async fn run_proxy_loop(
           Ok((stream, _)) => {
             let io = TokioIo::new(stream);
             let hyper_service = hyper_service.clone();
+            let log_fn = log_fn.clone();
             tokio::task::spawn(async move {
               if let Err(err) = http1::Builder::new()
                 .preserve_header_case(true)
@@ -65,13 +81,13 @@ pub async fn run_proxy_loop(
                 .with_upgrades()
                 .await
               {
-                println!("Failed to serve connection: {err:?}");
+                log_fn("proxy::error", &format!("Failed to serve connection: {err:?}"));
               }
             });
 
           },
           Err(err) => {
-            eprintln!("failed accept tcp: {}", err);
+            log_fn("proxy::error", &format!("failed accept tcp: {err}"));
           }
         };
       },

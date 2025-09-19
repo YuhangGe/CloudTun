@@ -26,13 +26,17 @@ struct Args {
   /// 代理规则文件路径
   #[arg(short, long)]
   config: Option<String>,
+
+  /// 和服务端通信的鉴权 Token
+  #[arg(short, long)]
+  token: String,
 }
 
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
   let args = Args::parse();
   let proxy_args = ProxyArgs {
-    server_addr: (args.server_ip, args.server_port),
+    server_addr: (args.server_ip, args.server_port, args.token),
     local_addr: (
       args.local_ip.unwrap_or("0.0.0.0".to_string()),
       args.local_port,
@@ -43,8 +47,11 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
   let shutdown_token = CancellationToken::new();
   let shutdown_token2 = shutdown_token.clone();
+  let log_fn = |log_type: &str, log_message: &str| {
+    println!("{log_type} ==> {log_message}");
+  };
   let proxy_handle = tokio::spawn(async move {
-    if let Err(e) = run_proxy_loop(proxy_args, shutdown_token2).await {
+    if let Err(e) = run_proxy_loop(proxy_args, shutdown_token2, log_fn).await {
       eprintln!("error occur: {e}");
     }
   });
