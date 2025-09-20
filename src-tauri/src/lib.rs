@@ -3,7 +3,7 @@ mod notify;
 
 #[cfg(desktop)]
 mod proxy;
-#[cfg(mobile)]
+#[cfg(target_os = "android")]
 mod vpn;
 
 mod ping;
@@ -24,10 +24,8 @@ use tauri::{
 
 #[cfg(desktop)]
 use notify::*;
-// #[cfg(desktop)]
-// use v2ray::*;
 
-#[cfg(mobile)]
+#[cfg(target_os = "android")]
 use vpn::tauri_start_vpn;
 
 use ping::*;
@@ -91,7 +89,7 @@ pub fn run() {
       ]);
   }
 
-  #[cfg(mobile)]
+  #[cfg(target_os = "android")]
   {
     use crate::vpn::init_tauri_vpn;
 
@@ -103,6 +101,18 @@ pub fn run() {
         tauri_interval_ping_start,
         tauri_interval_ping_stop,
         tauri_start_vpn
+      ]);
+  }
+
+  #[cfg(target_os = "ios")]
+  {
+    builder = builder
+      // .plugin(init_tauri_vpn())
+      .invoke_handler(tauri::generate_handler![
+        tauri_generate_uuid,
+        tauri_calc_tencent_cloud_api_signature,
+        tauri_interval_ping_start,
+        tauri_interval_ping_stop,
       ]);
   }
 
