@@ -46,8 +46,8 @@ export function Instance() {
         <div className='flex items-center'>
           <span className='mr-1 whitespace-nowrap'>本地代理：</span>
           <div className='flex items-center'>
-            <Tag className='mr-2 overflow-x-auto font-mono'>http://127.0.0.1:7891</Tag>
-            <CopyButton text='http://127.0.0.1:7891' />
+            <Tag className='mr-2 overflow-x-auto font-mono'>http://127.0.0.1:7892</Tag>
+            <CopyButton text='http://127.0.0.1:7892' />
           </div>
         </div>
       )}

@@ -1,0 +1,3 @@
+[default]
+description = "Default permissions for the plugin"
+permissions = ["allow-tauri-stop-ios-proxy", "allow-tauri-start-ios-proxy"]

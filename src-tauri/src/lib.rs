@@ -1,6 +1,5 @@
 #[cfg(desktop)]
 mod notify;
-
 #[cfg(desktop)]
 mod proxy;
 #[cfg(target_os = "android")]
@@ -9,7 +8,7 @@ mod vpn;
 mod ping;
 mod tencent;
 mod util;
-
+use log::info;
 #[cfg(desktop)]
 use proxy::{tauri_start_proxy_client, tauri_stop_proxy_client};
 
@@ -24,9 +23,6 @@ use tauri::{
 
 #[cfg(desktop)]
 use notify::*;
-
-#[cfg(target_os = "android")]
-use vpn::tauri_start_vpn;
 
 use ping::*;
 use tencent::*;
@@ -53,10 +49,33 @@ fn open_main_window<R: Runtime>(app: &AppHandle<R>) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+  #[cfg(desktop)]
+  {
+    use env_logger::init;
+    use std::env::set_var;
+    set_var("RUST_LOG", "debug");
+    init();
+  }
+
+  #[cfg(target_os = "ios")]
+  {
+    use log::LevelFilter;
+    use oslog::OsLogger;
+
+    OsLogger::new("com.cloudtun.app")
+      .level_filter(LevelFilter::Info)
+      // .category_level_filter("Settings", LevelFilter::Trace)
+      .init()
+      .unwrap();
+  }
+
   let mut builder = tauri::Builder::default()
     .plugin(tauri_plugin_os::init())
     .plugin(tauri_plugin_store::Builder::new().build())
     .plugin(tauri_plugin_http::init());
+
+  println!("xxx cloudtun startup 111");
+  info!("xxx cloudtun startup 222");
 
   #[cfg(desktop)]
   {
@@ -92,27 +111,27 @@ pub fn run() {
   #[cfg(target_os = "android")]
   {
     use crate::vpn::init_tauri_vpn;
+    use crate::vpn::tauri_start_vpn;
 
     builder = builder
       .plugin(init_tauri_vpn())
       .invoke_handler(tauri::generate_handler![
         tauri_generate_uuid,
         tauri_calc_tencent_cloud_api_signature,
-        tauri_interval_ping_start,
-        tauri_interval_ping_stop,
         tauri_start_vpn
       ]);
   }
 
   #[cfg(target_os = "ios")]
   {
+    use tauri_plugin_ios::init;
+
+    println!("xxx ios 1111111");
     builder = builder
-      // .plugin(init_tauri_vpn())
+      .plugin(init())
       .invoke_handler(tauri::generate_handler![
         tauri_generate_uuid,
         tauri_calc_tencent_cloud_api_signature,
-        tauri_interval_ping_start,
-        tauri_interval_ping_stop,
       ]);
   }
 
