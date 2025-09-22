@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail};
 use hickory_proto::{
-  op::{Message, MessageType, ResponseCode},
+  op::{Message, MessageType},
   rr::{
     Name, RData, Record,
     rdata::{A, AAAA},
@@ -27,36 +27,36 @@ pub fn build_dns_response(
   Ok(request)
 }
 
-pub fn remove_ipv6_entries(message: &mut Message) {
-  message
-    .answers_mut()
-    .retain(|answer| !matches!(answer.data(), RData::AAAA(_)));
-}
+// pub fn remove_ipv6_entries(message: &mut Message) {
+//   message
+//     .answers_mut()
+//     .retain(|answer| !matches!(answer.data(), RData::AAAA(_)));
+// }
 
-pub fn extract_ipaddr_from_dns_message(message: &Message) -> anyhow::Result<IpAddr> {
-  if message.response_code() != ResponseCode::NoError {
-    bail!("{:?}", message.response_code());
-  }
-  let mut cname = None;
-  for answer in message.answers() {
-    match answer.data() {
-      RData::A(addr) => {
-        return Ok(IpAddr::V4((*addr).into()));
-      }
-      RData::AAAA(addr) => {
-        return Ok(IpAddr::V6((*addr).into()));
-      }
-      RData::CNAME(name) => {
-        cname = Some(name.to_utf8());
-      }
-      _ => {}
-    }
-  }
-  if let Some(cname) = cname {
-    bail!(cname)
-  }
-  bail!("{:?}", message.answers())
-}
+// pub fn extract_ipaddr_from_dns_message(message: &Message) -> anyhow::Result<IpAddr> {
+//   if message.response_code() != ResponseCode::NoError {
+//     bail!("{:?}", message.response_code());
+//   }
+//   let mut cname = None;
+//   for answer in message.answers() {
+//     match answer.data() {
+//       RData::A(addr) => {
+//         return Ok(IpAddr::V4((*addr).into()));
+//       }
+//       RData::AAAA(addr) => {
+//         return Ok(IpAddr::V6((*addr).into()));
+//       }
+//       RData::CNAME(name) => {
+//         cname = Some(name.to_utf8());
+//       }
+//       _ => {}
+//     }
+//   }
+//   if let Some(cname) = cname {
+//     bail!(cname)
+//   }
+//   bail!("{:?}", message.answers())
+// }
 
 pub fn extract_domain_from_dns_message(message: &Message) -> anyhow::Result<String> {
   let query = message

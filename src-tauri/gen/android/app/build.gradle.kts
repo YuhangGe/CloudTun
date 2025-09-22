@@ -1,7 +1,7 @@
 import java.util.Properties
 
 plugins {
-//    id("org.mozilla.rust-android-gradle.rust-android")
+    id("org.mozilla.rust-android-gradle.rust-android")
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("rust")
@@ -14,11 +14,11 @@ val tauriProperties = Properties().apply {
     }
 }
 
-//cargo {
-//  module  = "./src/main/rust/libvpn"       // Cargo.toml路径
-//  libname = "libvpn"          // Cargo.toml 中 [package] 中 name
-//  targets = listOf("arm64","arm","x86","x86_64")
-//}
+cargo {
+  module  = "../../../../src-vpn"       // Cargo.toml路径
+  libname = "cloudtunvpn"          // Cargo.toml 中 [package] 中 name
+  targets = listOf("arm64","x86_64")
+}
 
 android {
     compileSdk = 36

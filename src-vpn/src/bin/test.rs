@@ -27,9 +27,11 @@ pub async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
   println!("after create");
 
   let server_addr = (
-    "43.152.227.239".to_string(),
+    // "127.0.0.1".to_string(),
+    "43.128.208.38".to_string(),
     24816,
     "8542623f-450a-40f5-93f2-5e40843b6f30".to_string(),
+    // "666".to_string(),
   );
 
   let log_fn = |log_type: &str, log_message: &str| {
