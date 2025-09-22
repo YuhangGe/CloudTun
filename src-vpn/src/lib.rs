@@ -1,8 +1,12 @@
 use std::{
-  collections::VecDeque, io::ErrorKind, net::{IpAddr, SocketAddr}, os::fd::AsRawFd, process, sync::Arc
+  collections::VecDeque,
+  io::ErrorKind,
+  net::{IpAddr, SocketAddr},
+  os::fd::AsRawFd,
+  process,
+  sync::Arc,
 };
 
- 
 use ipstack::{IpStackStream, IpStackTcpStream, IpStackUdpStream};
 use tokio::{
   io::{AsyncRead, AsyncWrite},
@@ -15,7 +19,6 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 
- 
 use libc;
 use socket2::{Domain, Protocol, Socket, Type};
 
@@ -29,8 +32,8 @@ mod proxy_manager;
 mod session_info;
 mod virtual_dns;
 
-pub use error::Result;
 pub use args::Args;
+pub use error::Result;
 use tproxy_config::is_private_ip;
 use udp_stream::UdpStream;
 
@@ -107,60 +110,61 @@ impl SocketQueue {
   }
 }
 
+#[inline]
 async fn create_tcp_stream(
-  socket_queue: &Option<Arc<SocketQueue>>,
+  // socket_queue: &Option<Arc<SocketQueue>>,
   peer: SocketAddr,
 ) -> std::io::Result<TcpStream> {
-  match &socket_queue {
-    None => TcpStream::connect(peer).await,
-    Some(queue) => queue.recv_tcp(peer.ip().into()).await?.connect(peer).await,
-  }
+  // match &socket_queue {
+  //   None => TcpStream::connect(peer).await,
+  //   Some(queue) => queue.recv_tcp(peer.ip().into()).await?.connect(peer).await,
+  // }
+  TcpStream::connect(peer).await
 }
 
 async fn create_udp_stream(
-  socket_queue: &Option<Arc<SocketQueue>>,
+  // socket_queue: &Option<Arc<SocketQueue>>,
   peer: SocketAddr,
 ) -> std::io::Result<UdpStream> {
-  match &socket_queue {
-    None => UdpStream::connect(peer).await,
-    Some(queue) => {
-      let socket = queue.recv_udp(peer.ip().into()).await?;
-      socket.connect(peer).await?;
-      UdpStream::from_tokio(socket, peer).await
-    }
-  }
+  // match &socket_queue {
+  //   None => UdpStream::connect(peer).await,
+  //   Some(queue) => {
+  //     let socket = queue.recv_udp(peer.ip().into()).await?;
+  //     socket.connect(peer).await?;
+  //     UdpStream::from_tokio(socket, peer).await
+  //   }
+  // }
+  UdpStream::connect(peer).await
 }
 
+// fn bind_to_iface(sock: &Socket, iface_name: &str) -> std::io::Result<()> {
+//     // 获取接口索引
+//     let ifindex = unsafe { libc::if_nametoindex(iface_name.as_ptr() as *const i8) };
+//     if ifindex == 0 {
+//         return Err(std::io::Error::last_os_error());
+//     }
 
+//     // 设置 socket 选项 IP_BOUND_IF
+//     let ret = unsafe {
+//         libc::setsockopt(
+//             sock.as_raw_fd(),
+//             libc::IPPROTO_IP,
+//             libc::IP_BOUND_IF,
+//             &ifindex as *const _ as *const libc::c_void,
+//             std::mem::size_of_val(&ifindex) as libc::socklen_t,
+//         )
+//     };
+//     if ret != 0 {
+//         return Err(std::io::Error::last_os_error());
+//     }
 
-fn bind_to_iface(sock: &Socket, iface_name: &str) -> std::io::Result<()> {
-    // 获取接口索引
-    let ifindex = unsafe { libc::if_nametoindex(iface_name.as_ptr() as *const i8) };
-    if ifindex == 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-
-    // 设置 socket 选项 IP_BOUND_IF
-    let ret = unsafe {
-        libc::setsockopt(
-            sock.as_raw_fd(),
-            libc::IPPROTO_IP,
-            libc::IP_BOUND_IF,
-            &ifindex as *const _ as *const libc::c_void,
-            std::mem::size_of_val(&ifindex) as libc::socklen_t,
-        )
-    };
-    if ret != 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-
-    Ok(())
-}
+//     Ok(())
+// }
 
 async fn handle_tcp_session(
   mut tcp_stack: IpStackTcpStream,
   proxy_handler: Arc<Mutex<dyn ProxyHandler>>,
-  socket_queue: Option<Arc<SocketQueue>>,
+  // socket_queue: Option<Arc<SocketQueue>>,
 ) -> crate::Result<()> {
   let (session_info, server_addr) = {
     let handler = proxy_handler.lock().await;
@@ -168,17 +172,17 @@ async fn handle_tcp_session(
     (handler.get_session_info(), handler.get_server_addr())
   };
 
-  // let mut server = create_tcp_stream(&socket_queue, server_addr).await?;
+  let mut server = create_tcp_stream(server_addr).await?;
 
-// 创建原始 socket
-    let sock = Socket::new(Domain::IPV4, Type::STREAM, Some(Protocol::TCP))?;
+  // // 创建原始 socket
+  //   let sock = Socket::new(Domain::IPV4, Type::STREAM, Some(Protocol::TCP))?;
 
-    // ⚠️ 把接口名字传进来，例如 "en0"
-    bind_to_iface(&sock, "en0\0")?; // 注意这里要带一个 '\0'，C 风格字符串
+  //   // ⚠️ 把接口名字传进来，例如 "en0"
+  //   bind_to_iface(&sock, "en0\0")?; // 注意这里要带一个 '\0'，C 风格字符串
 
-    sock.set_nonblocking(true)?;
-    let std_stream: std::net::TcpStream = sock.into();
-    let mut server = TcpStream::from_std(std_stream)?;
+  //   sock.set_nonblocking(true)?;
+  //   let std_stream: std::net::TcpStream = sock.into();
+  //   let mut server = TcpStream::from_std(std_stream)?;
 
   // println!("Beginning 111 {session_info}");
 
@@ -271,7 +275,7 @@ async fn handle_proxy_session(
 async fn handle_udp_associate_session(
   mut udp_stack: IpStackUdpStream,
   proxy_handler: Arc<Mutex<dyn ProxyHandler>>,
-  socket_queue: Option<Arc<SocketQueue>>,
+  // socket_queue: Option<Arc<SocketQueue>>,
 ) -> crate::Result<()> {
   let (session_info, server_addr, domain_name, udp_addr) = {
     let handler = proxy_handler.lock().await;
@@ -290,13 +294,13 @@ async fn handle_udp_associate_session(
   let (_server, udp_addr) = match udp_addr {
     Some(udp_addr) => (None, udp_addr),
     None => {
-      let mut server = create_tcp_stream(&socket_queue, server_addr).await?;
+      let mut server = create_tcp_stream(server_addr).await?;
       let udp_addr = handle_proxy_session(&mut server, proxy_handler).await?;
       (Some(server), udp_addr.ok_or("udp associate failed")?)
     }
   };
 
-  let mut udp_server = create_udp_stream(&socket_queue, udp_addr).await?;
+  let mut udp_server = create_udp_stream(udp_addr).await?;
 
   let mut buf1 = [0_u8; 4096];
   let mut buf2 = [0_u8; 4096];
@@ -368,17 +372,17 @@ where
   loop {
     let x = reader.read(&mut buf).await;
     let xx = match x {
-        Ok(xx) => xx,
-        Err(e) => {
-          println!("{is_tx}: XEEEE {e}");
-          return Err(e);
-        }
+      Ok(xx) => xx,
+      Err(e) => {
+        println!("{is_tx}: XEEEE {e}");
+        return Err(e);
+      }
     };
     // let xxx = buf[..xx].to_vec();
     // unsafe {
     //   println!("XXPPPPP {xx}, {}|{}|{}, {}", buf[0], buf[1], buf[2], String::from_utf8_unchecked(xxx));
     // }
-    match  xx {
+    match xx {
       0 => break, // EOF
       n => {
         total += n as u64;
@@ -389,9 +393,9 @@ where
         match writer.write_all(&buf[..n]).await {
           Ok(()) => {
             println!("{is_tx}: XEEE 1 ok {n}");
-          },
+          }
           Err(e) => {
-          println!("{is_tx}: XEEEE 2 {e}");
+            println!("{is_tx}: XEEEE 2 {e}");
             return Err(e);
           }
         }
@@ -421,12 +425,12 @@ where
 {
   // let server_addr = args.proxy.addr;
   // let key = args.proxy.credentials.clone();
-//   let dns_addr = args.dns_addr;
-//   let ipv6_enabled = args.ipv6_enabled;
+  //   let dns_addr = args.dns_addr;
+  //   let ipv6_enabled = args.ipv6_enabled;
   let virtual_dns = Arc::new(Mutex::new(VirtualDns::new(args.virtual_dns_pool)));
 
-  #[cfg(not(target_os = "linux"))]
-  let socket_queue = None;
+  // #[cfg(not(target_os = "linux"))]
+  // let socket_queue = None;
 
   // use socks5_impl::protocol::Version::{V4, V5};
   // let mgr: Arc<dyn ProxyHandlerManager> = match args.proxy.proxy_type {
@@ -464,14 +468,17 @@ where
     match ip_stack_stream {
       IpStackStream::Tcp(tcp) => {
         if task_count.load(Relaxed) >= max_sessions {
-        //   if args.exit_on_fatal_error {
-            println!("Too many sessions that over {max_sessions}, exiting...");
-        //     break;
-        //   }
+          //   if args.exit_on_fatal_error {
+          println!("Too many sessions that over {max_sessions}, exiting...");
+          //     break;
+          //   }
           // println!("Too many sessions that over {max_sessions}, dropping new session");
           break;
         }
-       println!("Session count {}", task_count.fetch_add(1, Relaxed).saturating_add(1));
+        println!(
+          "Session count {}",
+          task_count.fetch_add(1, Relaxed).saturating_add(1)
+        );
         let info = SessionInfo::new(tcp.local_addr(), tcp.peer_addr(), IpProtocol::Tcp);
         let domain_name = {
           let mut virtual_dns = virtual_dns.lock().await;
@@ -480,9 +487,9 @@ where
         };
         // println!("DDDomain {:#?}", domain_name);
         let proxy_handler = mgr.new_proxy_handler(info, domain_name, false).await?;
-        let socket_queue = socket_queue.clone();
+        // let socket_queue = socket_queue.clone();
         tokio::spawn(async move {
-          if let Err(err) = handle_tcp_session(tcp, proxy_handler, socket_queue).await {
+          if let Err(err) = handle_tcp_session(tcp, proxy_handler).await {
             eprintln!("{info} error \"{err}\"");
           }
           println!(
@@ -493,10 +500,10 @@ where
       }
       IpStackStream::Udp(udp) => {
         if task_count.load(Relaxed) >= max_sessions {
-        //   if args.exit_on_fatal_error {
-        //     println!("Too many sessions that over {max_sessions}, exiting...");
-        //     break;
-        //   }
+          //   if args.exit_on_fatal_error {
+          //     println!("Too many sessions that over {max_sessions}, exiting...");
+          //     break;
+          //   }
           println!("Too many sessions that over {max_sessions}, dropping new session");
           continue;
         }
@@ -504,11 +511,11 @@ where
           "Session count {}",
           task_count.fetch_add(1, Relaxed).saturating_add(1)
         );
-        let  info = SessionInfo::new(udp.local_addr(), udp.peer_addr(), IpProtocol::Udp);
+        let info = SessionInfo::new(udp.local_addr(), udp.peer_addr(), IpProtocol::Udp);
         if info.dst.port() == DNS_PORT {
-        //   if is_private_ip(info.dst.ip()) {
-        //     info.dst.set_ip(dns_addr); // !!! Here we change the destination address to remote DNS server!!!
-        //   }
+          //   if is_private_ip(info.dst.ip()) {
+          //     info.dst.set_ip(dns_addr); // !!! Here we change the destination address to remote DNS server!!!
+          //   }
 
           tokio::spawn(async move {
             if let Err(err) = handle_virtual_dns_session(udp, virtual_dns).await {
@@ -529,11 +536,10 @@ where
 
         match mgr.new_proxy_handler(info, domain_name, true).await {
           Ok(proxy_handler) => {
-            let socket_queue = socket_queue.clone();
+            // let socket_queue = socket_queue.clone();
             tokio::spawn(async move {
               // let ty = args.proxy.proxy_type;
-              if let Err(err) = handle_udp_associate_session(udp, proxy_handler, socket_queue).await
-              {
+              if let Err(err) = handle_udp_associate_session(udp, proxy_handler).await {
                 eprintln!("Ending {info} with \"{err}\"");
               }
               println!(

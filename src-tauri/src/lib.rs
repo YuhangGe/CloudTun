@@ -96,9 +96,6 @@ pub fn run() {
         tauri_open_devtools,
         tauri_calc_tencent_cloud_api_signature,
         tauri_base64_covert,
-        // tauri_start_v2ray_server,
-        // tauri_stop_v2ray_server,
-        // tauri_kill_progress_by_pid,
         tauri_start_proxy_client,
         tauri_stop_proxy_client,
         tauri_show_notify_window,
@@ -126,7 +123,6 @@ pub fn run() {
   {
     use tauri_plugin_ios::init;
 
-    println!("xxx ios 1111111");
     builder = builder
       .plugin(init())
       .invoke_handler(tauri::generate_handler![

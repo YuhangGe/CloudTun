@@ -5,4 +5,5 @@ pub mod encode;
 pub mod stream;
 pub mod util;
 
+#[cfg(feature = "tencent")]
 pub mod tencent;
