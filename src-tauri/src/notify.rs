@@ -25,7 +25,7 @@ struct NotifyPayload {
   notify_message: String,
 }
 
-const WINDOW_WIDTH: f64 = 240.0;
+const WINDOW_WIDTH: f64 = 246.0;
 const WINDOW_HEIGHT: f64 = 80.0;
 const POSITION_Y: f64 = 90.0;
 
