@@ -74,7 +74,11 @@ export default defineConfig(
       '.idea/',
       '.vscode/',
       'src-tauri/',
-      'tauri-plugin-cloudv2ray/',
+      'src-proxy/',
+      'src-server/',
+      'src-common/',
+      'src-vpn/',
+      'tauri-plugin-ios/',
     ],
   },
 );

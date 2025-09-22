@@ -6,7 +6,7 @@ env
 pnpm-lock.yaml
 README.md
 src-tauri/
-tauri-plugin-cloudv2ray/
+tauri-plugin-ios/
 src-server/
 src-common/
 src-proxy/

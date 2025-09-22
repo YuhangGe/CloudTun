@@ -1,15 +1,15 @@
 import { validateSettings } from '@/service/settings';
 import { type CVMPrice, InquiryPriceRunInstances } from '@/service/tencent';
 import { onMount, ref, vm, watch } from 'jinge';
-import { Button, Spin, Tag, message } from 'jinge-antd';
+import { Spin, Tag, message } from 'jinge-antd';
 import { Bandwidth } from './Bandwind';
 import { Balance } from './Balance';
 import { Instance } from './Instance';
 import { Control } from './Control';
 import { globalSettings } from '@/store/settings';
 import { globalInst, loadGlobalInst } from '@/store/instance';
-import { IS_IOS, IS_RELOAD, IS_REOPEN } from '@/service/util';
-import { invoke } from '@tauri-apps/api/core';
+import { IS_RELOAD, IS_REOPEN } from '@/service/util';
+// import { invoke } from '@tauri-apps/api/core';
 
 export function ProxyView() {
   const state = vm<{
@@ -86,7 +86,7 @@ export function ProxyView() {
         <Balance />
       </div>
       <div className='mt-6 flex flex-col gap-4'>
-        <div>
+        {/* <div>
           <Button
             on:click={async () => {
               if (IS_IOS) {
@@ -99,7 +99,7 @@ export function ProxyView() {
           >
             TEST
           </Button>
-        </div>
+        </div> */}
         <div className='text-lg font-medium'>主机配置</div>
         <div className='flex items-center'>
           <span className='mr-1 whitespace-nowrap'>实例规格：</span>
