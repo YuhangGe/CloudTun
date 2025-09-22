@@ -20,7 +20,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-cloudtun-common = { path = "../src-common" }
+cloudtun-common = { path = "../src-common", features = ["tencent"] }
 log = "0.4.28"
 tauri = { version = "2", features = ["tray-icon", "devtools", "image-png"] }
 serde = { version = "1", features = ["derive"] }

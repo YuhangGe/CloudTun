@@ -16,7 +16,6 @@ use tokio_util::bytes::Bytes;
 use crate::{
   constant::{X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_SECRET_KEY, X_TOKEN_KEY},
   encode::xor_inplace_simd,
-  util::hex2str,
 };
 
 pub async fn proxy_to_cloudtun_server<
@@ -127,12 +126,12 @@ pub async fn proxy_to_cloudtun_server<
 pub fn generate_proxy_secret() -> (Vec<u8>, String) {
   let rng = rand::rng();
   let secret: Vec<_> = rng.random_iter::<u8>().take(16).collect();
-  let secret: Vec<_> = (0..16).map(|_| 0).collect();
+  // let secret: Vec<_> = (0..16).map(|_| 0).collect();
   let secret_hex = secret
     .iter()
     .map(|n| format!("{:02x}", n))
     .collect::<Vec<_>>()
     .join("");
-  println!("xxx len {}, {}", secret.len(), secret_hex);
+  // println!("xxx len {}, {}", secret.len(), secret_hex);
   (secret, secret_hex)
 }
