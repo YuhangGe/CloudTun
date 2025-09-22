@@ -28,8 +28,8 @@
     "editor.defaultFormatter": "tamasfe.even-better-toml"
   },
   "eslint.useFlatConfig": true,
-  "rust-analyzer.cargo.target": "x86_64-linux-android"
+  // "rust-analyzer.cargo.target": "x86_64-linux-android"
   // "rust-analyzer.cargo.target": "aarch64-apple-ios"
-  // "rust-analyzer.cargo.target": "aarch64-linux-android"
+  "rust-analyzer.cargo.target": "aarch64-linux-android"
   // "rust-analyzer.cargo.target": "x86_64-pc-windows-msvc"
 }

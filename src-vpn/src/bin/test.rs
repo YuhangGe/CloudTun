@@ -1,6 +1,4 @@
-use std::process::{self, Command};
-
-use cloudtun_vpn::{Args, run};
+use cloudtun_vpn::start_run_vpn;
 use tokio::spawn;
 use tokio_util::sync::CancellationToken;
 use tun::AbstractDevice;
@@ -28,10 +26,20 @@ pub async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
   let device = tun::create_as_async(&config)?;
   println!("after create");
 
-  let args = Args::default();
+  let server_addr = (
+    "43.152.227.239".to_string(),
+    24816,
+    "8542623f-450a-40f5-93f2-5e40843b6f30".to_string(),
+  );
+
+  let log_fn = |log_type: &str, log_message: &str| {
+    println!("{log_type} ==> {log_message}");
+  };
+
   let shutdown_token = CancellationToken::new();
   let shutdown_token2 = shutdown_token.clone();
-  let run_handle = spawn(async move { run(device, MTU, args, shutdown_token2).await });
+  let run_handle =
+    spawn(async move { start_run_vpn(device, MTU, server_addr, shutdown_token2, log_fn).await });
   let ctrlc_handle = ctrlc2::AsyncCtrlC::new(move || {
     shutdown_token.cancel();
     true
@@ -39,7 +47,6 @@ pub async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
   let _ = tokio::join!(run_handle, ctrlc_handle);
   println!("Bye!");
-  
-  process::exit(0);
+
   Ok(())
 }

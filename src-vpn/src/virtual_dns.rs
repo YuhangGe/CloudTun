@@ -1,3 +1,4 @@
+use anyhow::bail;
 use hashlink::{LruCache, linked_hash_map::RawEntryMut};
 use std::{
   collections::HashMap,
@@ -6,8 +7,6 @@ use std::{
   time::{Duration, Instant},
 };
 use tproxy_config::IpCidr;
-
-use crate::error::Result;
 
 const MAPPING_TIMEOUT: u64 = 60; // Mapping timeout in seconds
 
@@ -41,7 +40,7 @@ impl VirtualDns {
   }
 
   /// Returns the DNS response to send back to the client.
-  pub fn generate_query(&mut self, data: &[u8]) -> Result<(Vec<u8>, String, IpAddr)> {
+  pub fn generate_query(&mut self, data: &[u8]) -> anyhow::Result<(Vec<u8>, String, IpAddr)> {
     use crate::dns;
     let message = dns::parse_data_to_dns_message(data, false)?;
     let qname = dns::extract_domain_from_dns_message(&message)?;
@@ -50,7 +49,7 @@ impl VirtualDns {
     Ok((message.to_vec()?, qname, ip))
   }
 
-  fn increment_ip(addr: IpAddr) -> Result<IpAddr> {
+  fn increment_ip(addr: IpAddr) -> anyhow::Result<IpAddr> {
     let mut ip_bytes = match addr as IpAddr {
       IpAddr::V4(ip) => Vec::<u8>::from(ip.octets()),
       IpAddr::V6(ip) => Vec::<u8>::from(ip.octets()),
@@ -91,7 +90,7 @@ impl VirtualDns {
     self.lru_cache.get(addr).map(|entry| &entry.name)
   }
 
-  fn find_or_allocate_ip(&mut self, name: String) -> Result<IpAddr> {
+  fn find_or_allocate_ip(&mut self, name: String) -> anyhow::Result<IpAddr> {
     // This function is a search and creation function.
     // Thus, it is sufficient to canonicalize the name here.
     let insert_name = if name.ends_with('.') && !self.trailing_dot {
@@ -151,7 +150,7 @@ impl VirtualDns {
         self.next_addr = self.network_addr;
       }
       if self.next_addr == started_at {
-        return Err("Virtual IP space for DNS exhausted".into());
+        bail!("Virtual IP space for DNS exhausted");
       }
     }
   }

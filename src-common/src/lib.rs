@@ -7,3 +7,6 @@ pub mod util;
 
 #[cfg(feature = "tencent")]
 pub mod tencent;
+
+#[cfg(feature = "proxy")]
+pub mod proxy;
