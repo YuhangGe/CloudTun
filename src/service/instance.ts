@@ -87,7 +87,7 @@ export async function loadInstanceDependentResources(): Promise<InstanceDeps | u
           },
           {
             Protocol: 'TCP',
-            Port: '24816',
+            Port: '24816,24817',
             Action: 'ACCEPT',
             CidrBlock: '0.0.0.0/0',
             PolicyDescription: 'cloudtun',

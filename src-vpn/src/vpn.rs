@@ -1,4 +1,4 @@
-use std::{os::fd::AsRawFd, sync::Arc};
+use std::sync::Arc;
 
 use cloudtun_common::proxy::{generate_proxy_secret, proxy_to_cloudtun_server};
 use ipstack::{IpStackStream, IpStackUdpStream};
@@ -28,7 +28,7 @@ async fn handle_virtual_dns_session(
     let len = match udp.read(&mut buf).await {
       Err(e) => {
         // indicate UDP read fails not an error.
-        println!("Virtual DNS session error: {e}");
+        log::error!("Virtual DNS session error: {e}");
         break;
       }
       Ok(len) => len,
@@ -86,12 +86,21 @@ where
             ip_stack_stream?
         }
     };
-    println!("got ip stack");
+    println!(
+      "got ip stack {} {}",
+      match ip_stack_stream {
+        IpStackStream::Tcp(_) => "<tcp>",
+        IpStackStream::Udp(_) => "<udp>",
+        IpStackStream::UnknownNetwork(_) => "<unknown net>",
+        IpStackStream::UnknownTransport(_) => "<unknown tran>",
+      },
+      ip_stack_stream.peer_addr()
+    );
     match ip_stack_stream {
       IpStackStream::Tcp(tcp) => {
         if task_count.load(Relaxed) >= 200 {
-          println!("Too many sessions, exiting...");
-          break;
+          log::error!("Too many sessions, ignore...");
+          continue;
         }
         println!(
           "Session count {}",
@@ -127,8 +136,8 @@ where
       }
       IpStackStream::Udp(udp) => {
         if task_count.load(Relaxed) >= 200 {
-          println!("Too many udp sessions");
-          break;
+          log::error!("Too many udp sessions");
+          continue;
         }
         println!(
           "Session count {}",

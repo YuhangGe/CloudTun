@@ -11,7 +11,8 @@ use crate::util::emit_log;
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartVpnArgs {
-  pub config: String,
+  pub server_ip: String,
+  pub token: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -22,20 +23,21 @@ pub struct StartVpnResponse {
 
 #[tauri::command]
 pub async fn tauri_start_vpn<R: Runtime>(
-  config: &str,
+  server_ip: &str,
+  token: &str,
   h: AppHandle<R>,
   state: State<'_, Vpn<R>>,
 ) -> TAResult<bool> {
-  state.start_vpn(h, config.into())
+  state.start_vpn(h, server_ip.into(), token.into())
 }
 
 pub struct Vpn<R: Runtime>(PluginHandle<R>);
 
 impl<R: Runtime> Vpn<R> {
-  pub fn start_vpn(&self, h: AppHandle<R>, config: String) -> TAResult<bool> {
+  pub fn start_vpn(&self, h: AppHandle<R>, server_ip: String, token: String) -> TAResult<bool> {
     let ret = self
       .0
-      .run_mobile_plugin::<StartVpnResponse>("startVpn", StartVpnArgs { config: config });
+      .run_mobile_plugin::<StartVpnResponse>("startVpn", StartVpnArgs { server_ip, token });
 
     match ret {
       Ok(x) => Ok(x.success),

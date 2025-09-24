@@ -14,7 +14,11 @@ class MainActivity : TauriActivity() {
     super.onActivityResult(requestCode, resultCode, data)
     if (requestCode == 0x9999 && resultCode == RESULT_OK) {
       val intent = Intent(this, CloudTunVpnService::class.java)
-      startForegroundService(intent)
+      if (data != null) {
+        intent.putExtra("serverIp", data.getStringExtra("serverIp"))
+        intent.putExtra("token", data.getStringExtra("token"))
+      }
+      startService(intent)
     }
   }
 }

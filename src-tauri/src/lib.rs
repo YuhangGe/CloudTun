@@ -53,7 +53,7 @@ pub fn run() {
   {
     use env_logger::init;
     use std::env::set_var;
-    set_var("RUST_LOG", "debug");
+    set_var("RUST_LOG", "info");
     init();
   }
 

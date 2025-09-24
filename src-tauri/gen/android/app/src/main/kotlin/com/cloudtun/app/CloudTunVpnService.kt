@@ -8,8 +8,6 @@ import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 
 
@@ -19,16 +17,8 @@ class CloudTunVpnService : VpnService() {
   private var vpnInterface: ParcelFileDescriptor? = null
   private var isRunning = false
   
-  private external fun TProxyStartService(config_path: String, fd: Int)
-  private external fun TProxyStopService()
-  private external fun TProxyGetStats(): LongArray
+  private val vpn = CloudTunVpn()
   
-  companion object {
-    init {
-      System.loadLibrary("hev-socks5-tunnel")
-    }
-  }
- 
   private fun startForeground() {
 //    val intent = Intent(this, MainActivity::class.java) // 点击通知时跳转的界面
 //    val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT)
@@ -36,8 +26,10 @@ class CloudTunVpnService : VpnService() {
       CHANNEL_ID,
       "CloudTun Notification",
       NotificationManager.IMPORTANCE_DEFAULT
-    )
-    channel.setDescription("CloudTun Notification")
+    ).apply {
+      description = "CloudTun Notification"
+      setShowBadge(false)   
+    }
     val manager = getSystemService<NotificationManager?>(NotificationManager::class.java)
     manager.createNotificationChannel(channel)
     
@@ -54,30 +46,38 @@ class CloudTunVpnService : VpnService() {
 
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+
+    startForeground()
     
     // 初始化 VPN 配置
     val builder = Builder()
     builder.setSession("CloudTun VPN Service")  // 设置 VPN 会话名称
-      .addAddress("198.18.0.1", 32)  // 为虚拟网络接口分配 IP 地址
-      .addRoute("0.0.0.0", 0)  // 默认路由转发所有流量
-      .addAddress("fc00::1", 128)
-      .addRoute("::", 0)
-      .setBlocking(false)
-      .setMtu(8500)
-      .addDnsServer("8.8.8.8")
-      .addDnsServer("2001:4860:4860::8888")
+      .addAddress("10.0.0.2", 24)  // 为虚拟网络接口分配 IP 地址
+      .addRoute("0.0.0.0", 0)
+       .setMtu(1500)
+//      .addDnsServer("8.8.8.8")
       .addDnsServer("198.18.0.2")
  
-      try {
-        val selfName = applicationContext.packageName;
-        builder.addDisallowedApplication(selfName)
-      } catch (e: Exception) {
-        //
-      }
+    try {
+      val selfName = applicationContext.packageName;
+      builder.addDisallowedApplication(selfName)
+      println("addDisallowedApplication $selfName")
+      builder.addAllowedApplication(
+        "com.android.chrome"
+      )
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
 
-      builder.setSession("CloudTun: IPv4 + IPv6 / Global")
- 
-    println("XXX: builder2")
+    builder.setSession("CloudTun: IPv4 + IPv6 / Global")
+
+    val serverIp = intent?.getStringExtra("serverIp")
+    val token = intent?.getStringExtra("token")
+    if (serverIp == null || token == null) {
+      return START_STICKY
+    }
+    
+    println("XXX: builder2 $serverIp $token")
     try {
       println("XXX: builder3")
       vpnInterface = builder.establish()
@@ -86,8 +86,7 @@ class CloudTunVpnService : VpnService() {
       } else {
         println("XXX: builder4")
         isRunning = true
-        startProxyLoop(vpnInterface!!.fd)
-        startForeground()
+        startProxyLoop(vpnInterface!!.fd, serverIp, token)
       }
 
     } catch (e: IOException) {
@@ -100,13 +99,52 @@ class CloudTunVpnService : VpnService() {
   }
  
  
-  private fun startProxyLoop(fd: Int) {
-
+  private fun startProxyLoop(fd: Int, serverIp: String, token: String) {
+      Thread {
+         try {
+           vpn.startVpn(
+             fd,
+             1500,
+             serverIp,
+             token
+           )
+         } catch (ex: Exception) {
+           println("failed vpn thread: $ex")
+         }
+        println("vpn thread exited")
+      }.start()
+//    Thread(Runnable {
+//      val buffer = ByteArray(4096)
+//      try {
+//        ParcelFileDescriptor.AutoCloseInputStream(vpnInterface!!).use { inputStream ->
+//          while (true) {
+//            val len = inputStream.read(buffer)
+//            if (len > 0) {
+//              println("读取到数据包：$len, $buffer")
+//              // TODO: 处理 buffer[0..len)
+//            } else if (len < 0) {
+//              println("TUN 接口已关闭")
+//              break
+//            } else {
+//              // len == 0，没有数据包，继续循环
+//              continue
+//            }
+//          }
+//        }
+//      } catch (e: IOException) {
+//        e.printStackTrace()
+//      }
+//    }).start()
   }
   
   private fun stopProxyLoop() {
-    isRunning = false;
-     
+    isRunning = false
+
+    try {
+      vpn.stopVpn()
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
 
     try {
       vpnInterface?.close()

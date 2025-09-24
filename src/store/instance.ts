@@ -137,11 +137,11 @@ async function updateConnect() {
   if (ret) {
     globalInst.state = 3;
     if (!IS_REOPEN) {
-      await invoke('tauri_interval_ping_start', {
-        ip: globalInst.ip!,
-        token: globalSettings.token,
-      });
       if (!IS_MOBILE) {
+        await invoke('tauri_interval_ping_start', {
+          ip: globalInst.ip!,
+          token: globalSettings.token,
+        });
         await enableProxy();
       }
     } else {

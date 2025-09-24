@@ -1,10 +1,14 @@
 #![cfg(target_os = "android")]
 
+use std::{mem::ManuallyDrop, os::fd::FromRawFd};
+
+use cloudtun_common::util::hex2str;
 use jni::{
   JNIEnv,
   objects::{JClass, JString},
-  sys::{jboolean, jchar, jint},
+  sys::{jchar, jint},
 };
+use tokio::{fs::File, io::AsyncReadExt};
 
 use crate::start_run_vpn;
 
@@ -33,21 +37,15 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
       .with_max_level(log::LevelFilter::Trace), // .with_filter(filter),
   );
 
-  let Some(server_ip) = get_java_string(&mut env, &server_ip) else {
+  let Ok(server_ip) = get_java_string(&mut env, &server_ip) else {
     log::error!("failed get jstring");
     return -1;
   };
-  let Some(token) = get_java_string(&mut env, &token) else {
+  let Ok(token) = get_java_string(&mut env, &token) else {
     log::error!("failed get jstring");
     return -1;
   };
 
-  let mut config = tun::Configuration::default();
-  config.raw_fd(tun_fd);
-  let Some(device) = tun::create_as_async(&config) else {
-    log::error!("failed create tun device");
-    return -1;
-  };
   let shutdown_token = tokio_util::sync::CancellationToken::new();
   if let Ok(mut lock) = TUN_QUIT.lock() {
     if lock.is_some() {
@@ -60,23 +58,55 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
     return -2;
   }
 
-  let Ok(rt) = tokio::runtime::Builder::new_multi_thread()
-    .enable_all()
-    .build()
-  else {
+  let Ok(rt) = tokio::runtime::Runtime::new() else {
     log::error!("failed to create tokio runtime with");
     return -3;
   };
+
+  log::info!("XXX will start tokio vpn");
   let res = rt.block_on(async move {
+    let mut config = tun::Configuration::default();
+
+    config.raw_fd(tun_fd);
+
+    println!("XXX mtu {mtu} {tun_fd}");
+    // let f = unsafe { File::from_raw_fd(tun_fd) };
+    // let f = ManuallyDrop::new(f);
+    // let mut buf = [0; 1024];
+    // loop {
+    //   match f.read(&mut buf).await {
+    //     Ok(0) => {
+    //       println!("XXX end");
+    //       break;
+    //     }
+    //     Ok(size) => {
+    //       println!("XXX size {size} {}", hex2str(&buf[..size]));
+    //     }
+    //     Err(e) => {
+    //       println!("XXX error {e}");
+    //       break;
+    //     }
+    //   }
+    // }
+    // 0
+    let Ok(device) = tun::create_as_async(&config) else {
+      log::error!("failed create tun device");
+      return -1;
+    };
     let server_addr = (server_ip, 24816, token);
     let log_fn = |log_type: &str, log_message: &str| {
       log::info!("[{log_type}] {log_message}");
     };
 
-    let ret = start_run_vpn(device, mtu, server_addr, shutdown_token, log_fn).await;
-
-    ret
+    match start_run_vpn(device, mtu, server_addr, shutdown_token, log_fn).await {
+      Ok(_) => 0,
+      Err(e) => {
+        log::error!("failed start_run_vpn: {e}");
+        -1
+      }
+    }
   });
+  res
 }
 
 /// Shutdown cloudtun
