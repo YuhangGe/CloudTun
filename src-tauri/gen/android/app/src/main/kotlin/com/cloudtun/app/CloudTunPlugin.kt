@@ -104,6 +104,7 @@ class CloudTunPlugin(private val activity: Activity): Plugin(activity) {
       invoke.resolve(ret)
     } else {
       val intent = Intent(activity, CloudTunVpnService::class.java).apply {
+        action = "START"
         putExtra("serverIp", args.serverIp)
         putExtra("token", args.token)
         putExtra("proxyApps", args.proxyApps)
@@ -116,7 +117,12 @@ class CloudTunPlugin(private val activity: Activity): Plugin(activity) {
     }
   } 
   
+  @Command
   fun stopVpn(invoke: Invoke) {
+    val intent = Intent(activity, CloudTunVpnService::class.java).apply {
+       action = "STOP"
+    }
+    activity.startService(intent)
     invoke.resolve()
   }
   

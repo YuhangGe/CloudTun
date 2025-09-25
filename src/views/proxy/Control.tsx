@@ -46,7 +46,7 @@ export function Control(
   }
   async function toggleVpn() {
     if (state.vpnConnected) {
-      //
+      await invoke('tauri_android_stop_vpn');
     } else {
       await invoke('tauri_android_start_vpn', {
         serverIp: globalInst.ip,
@@ -90,8 +90,9 @@ export function Control(
           创建主机
         </Button>
       )}
-      {IS_MOBILE && (
+      {IS_MOBILE && globalInst.state >= 3 && (
         <Button
+          size='sm'
           on:click={() => {
             void toggleVpn();
           }}

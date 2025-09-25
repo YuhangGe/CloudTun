@@ -2,6 +2,7 @@ package com.cloudtun.app
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.VpnService
@@ -22,7 +23,27 @@ class CloudTunVpnService : VpnService() {
   private var isRunning = false
   
   private val vpn = CloudTunVpn()
-  
+
+  private fun createStopAction(): NotificationCompat.Action {
+    // 创建停止 VPN 的 Intent
+    val stopIntent = Intent(this, CloudTunVpnService::class.java).apply {
+      action = "STOP"
+    }
+
+    val stopPendingIntent = PendingIntent.getService(
+      this,
+      0,
+      stopIntent,
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+
+    return NotificationCompat.Action(
+      R.drawable.ic_launcher_foreground, // 停止图标
+      "关闭VPN", // Action 文字
+      stopPendingIntent
+    )
+  }
+
   private fun startForeground() {
 //    val intent = Intent(this, MainActivity::class.java) // 点击通知时跳转的界面
 //    val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT)
@@ -35,7 +56,7 @@ class CloudTunVpnService : VpnService() {
       setShowBadge(false)   
     }
     val manager = getSystemService<NotificationManager?>(NotificationManager::class.java)
-    manager.createNotificationChannel(channel)
+    manager?.createNotificationChannel(channel)
     
     val notification = NotificationCompat.Builder(this, CHANNEL_ID)
       .setContentTitle("CloudTun")
@@ -43,6 +64,7 @@ class CloudTunVpnService : VpnService() {
       //      .setContentIntent(pendingIntent)
       .setContentText("VPN Service Running")
       .setOngoing(true)
+      .addAction(createStopAction())
       .setPriority(NotificationCompat.PRIORITY_HIGH)
       .build()
     ServiceCompat.startForeground(this, NOTIFICATION_ID, notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
@@ -50,7 +72,14 @@ class CloudTunVpnService : VpnService() {
 
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-
+  
+    if (intent != null && intent.action == "STOP") {
+      stopForeground(STOP_FOREGROUND_REMOVE)
+      stopProxyLoop()
+      stopSelf()
+      return START_STICKY;
+    }
+    
     startForeground()
     
     // 初始化 VPN 配置
@@ -148,6 +177,7 @@ class CloudTunVpnService : VpnService() {
  
   override fun onDestroy() {
     super.onDestroy()
-    stopProxyLoop();
+    stopForeground(STOP_FOREGROUND_REMOVE)
+    stopProxyLoop()
   }
 }
