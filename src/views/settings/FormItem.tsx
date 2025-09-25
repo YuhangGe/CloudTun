@@ -9,8 +9,8 @@ export function FormItem(
   } & WithChildren<JNode>,
 ) {
   return (
-    <div className={cx('flex items-center gap-1', props.className)}>
-      <label className='flex w-[96px] items-center whitespace-nowrap'>
+    <div className={cx('flex items-start gap-1', props.className)}>
+      <label className='flex w-[96px] items-center pt-1 whitespace-nowrap'>
         {props.required !== false && (
           <span className='mt-[3px] mr-1 text-base text-red-500'>*</span>
         )}

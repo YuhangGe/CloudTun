@@ -14,6 +14,10 @@ import java.io.IOException
 const val CHANNEL_ID: String = "vpn_service_channel"
 const val NOTIFICATION_ID = 1;
 class CloudTunVpnService : VpnService() {
+  companion object {
+    var isVpnConnected = false
+  }
+  
   private var vpnInterface: ParcelFileDescriptor? = null
   private var isRunning = false
   
@@ -57,19 +61,28 @@ class CloudTunVpnService : VpnService() {
        .setMtu(1500)
 //      .addDnsServer("8.8.8.8")
       .addDnsServer("198.18.0.2")
- 
-    try {
-      val selfName = applicationContext.packageName;
-      builder.addDisallowedApplication(selfName)
-      println("addDisallowedApplication $selfName")
-      builder.addAllowedApplication(
-        "com.android.chrome"
-      )
-    } catch (e: Exception) {
-      e.printStackTrace()
+    
+    val proxyApps = intent?.getStringExtra("proxyApps")
+    if (proxyApps != null && proxyApps.isNotEmpty()) {
+      try {
+        proxyApps.split("\n").forEach { pkg ->
+          builder.addAllowedApplication(pkg)
+          println("XXX add allowed app: $pkg")
+        }
+      } catch (e: Exception) {
+        e.printStackTrace()
+      }
+    } else {
+      try {
+        val selfName = applicationContext.packageName;
+        builder.addDisallowedApplication(selfName)
+        println("addDisallowedApplication $selfName")
+      } catch (e: Exception) {
+        e.printStackTrace()
+      }
     }
-
-    builder.setSession("CloudTun: IPv4 + IPv6 / Global")
+   
+    builder.setSession("CloudTun: IPv4 / Global")
 
     val serverIp = intent?.getStringExtra("serverIp")
     val token = intent?.getStringExtra("token")
@@ -77,20 +90,21 @@ class CloudTunVpnService : VpnService() {
       return START_STICKY
     }
     
-    println("XXX: builder2 $serverIp $token")
+//    println("XXX: builder2 $serverIp $token")
     try {
-      println("XXX: builder3")
+//      println("XXX: builder3")
       vpnInterface = builder.establish()
       if (vpnInterface == null) {
         stopSelf()
       } else {
-        println("XXX: builder4")
+//        println("XXX: builder4")
         isRunning = true
+        isVpnConnected = true
         startProxyLoop(vpnInterface!!.fd, serverIp, token)
       }
 
     } catch (e: IOException) {
-      println("XXX: builder err $e")
+//      println("XXX: builder err $e")
       e.printStackTrace()
       stopProxyLoop()
     }
@@ -113,33 +127,12 @@ class CloudTunVpnService : VpnService() {
          }
         println("vpn thread exited")
       }.start()
-//    Thread(Runnable {
-//      val buffer = ByteArray(4096)
-//      try {
-//        ParcelFileDescriptor.AutoCloseInputStream(vpnInterface!!).use { inputStream ->
-//          while (true) {
-//            val len = inputStream.read(buffer)
-//            if (len > 0) {
-//              println("读取到数据包：$len, $buffer")
-//              // TODO: 处理 buffer[0..len)
-//            } else if (len < 0) {
-//              println("TUN 接口已关闭")
-//              break
-//            } else {
-//              // len == 0，没有数据包，继续循环
-//              continue
-//            }
-//          }
-//        }
-//      } catch (e: IOException) {
-//        e.printStackTrace()
-//      }
-//    }).start()
+ 
   }
   
   private fun stopProxyLoop() {
     isRunning = false
-
+    isVpnConnected = false
     try {
       vpn.stopVpn()
     } catch (e: Exception) {

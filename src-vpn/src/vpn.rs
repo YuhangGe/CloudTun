@@ -86,26 +86,26 @@ where
             ip_stack_stream?
         }
     };
-    println!(
-      "got ip stack {} {}",
-      match ip_stack_stream {
-        IpStackStream::Tcp(_) => "<tcp>",
-        IpStackStream::Udp(_) => "<udp>",
-        IpStackStream::UnknownNetwork(_) => "<unknown net>",
-        IpStackStream::UnknownTransport(_) => "<unknown tran>",
-      },
-      ip_stack_stream.peer_addr()
-    );
+    // println!(
+    //   "got ip stack {} {}",
+    //   match ip_stack_stream {
+    //     IpStackStream::Tcp(_) => "<tcp>",
+    //     IpStackStream::Udp(_) => "<udp>",
+    //     IpStackStream::UnknownNetwork(_) => "<unknown net>",
+    //     IpStackStream::UnknownTransport(_) => "<unknown tran>",
+    //   },
+    //   ip_stack_stream.peer_addr()
+    // );
     match ip_stack_stream {
       IpStackStream::Tcp(tcp) => {
         if task_count.load(Relaxed) >= 200 {
           log::error!("Too many sessions, ignore...");
           continue;
         }
-        println!(
-          "Session count {}",
-          task_count.fetch_add(1, Relaxed).saturating_add(1)
-        );
+        // println!(
+        //   "Session count {}",
+        //   task_count.fetch_add(1, Relaxed).saturating_add(1)
+        // );
         // let info = SessionInfo::new(tcp.local_addr(), tcp.peer_addr(), IpProtocol::Tcp);
         let target_ip = tcp.peer_addr().ip();
         let target_port = tcp.peer_addr().port();
@@ -128,10 +128,10 @@ where
           {
             eprintln!("failed proxy: \"{err}\"");
           }
-          println!(
-            "Session count {}",
-            task_count.fetch_sub(1, Relaxed).saturating_sub(1)
-          );
+          // println!(
+          //   "Session count {}",
+          //   task_count.fetch_sub(1, Relaxed).saturating_sub(1)
+          // );
         });
       }
       IpStackStream::Udp(udp) => {
@@ -153,10 +153,10 @@ where
             if let Err(err) = handle_virtual_dns_session(udp, virtual_dns).await {
               eprintln!("failed handler virtual dns: \"{err}\"");
             }
-            println!(
-              "Session count {}",
-              task_count.fetch_sub(1, Relaxed).saturating_sub(1)
-            );
+            // println!(
+            //   "Session count {}",
+            //   task_count.fetch_sub(1, Relaxed).saturating_sub(1)
+            // );
           });
           continue;
         }

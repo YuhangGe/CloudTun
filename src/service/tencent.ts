@@ -118,10 +118,11 @@ export function DescribeInstances({
 
 export interface CVMInstanceType {
   InstanceType: string;
-  CPU: number;
+  Cpu: number;
   Memory: number;
+  Status: 'SELL' | 'SOLD_OUT';
 }
-export function DescribeInstanceTypeConfigs({
+export function DescribeInstanceTypes({
   region,
   ...data
 }: {
@@ -129,11 +130,11 @@ export function DescribeInstanceTypeConfigs({
   Filters?: ApiFilter[];
 }) {
   return callTencentApi<{
-    InstanceTypeConfigSet: CVMInstanceType[];
+    InstanceTypeQuotaSet: CVMInstanceType[];
   }>({
     service: 'cvm',
     region,
-    action: 'DescribeInstanceTypeConfigs',
+    action: 'DescribeZoneInstanceConfigInfos',
     data,
   });
 }

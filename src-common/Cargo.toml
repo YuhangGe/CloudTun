@@ -13,6 +13,7 @@ proxy = [
   "http",
   "rand",
 ]
+ping = ["tokio", "reqwest", "http"]
 
 [dependencies]
 chrono = "0.4.42"
@@ -22,7 +23,9 @@ sha2 = "0.10.9"
 # for tencent feature
 reqwest = { version = "0.12.23", default-features = false, features = [
   "json",
+  "rustls-tls",
 ], optional = true }
+
 serde = { version = "1.0.226", features = ["derive"], optional = true }
 anyhow = { version = "1.0.100", optional = true }
 

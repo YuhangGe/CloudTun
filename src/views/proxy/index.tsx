@@ -1,20 +1,22 @@
 import { validateSettings } from '@/service/settings';
 import { type CVMPrice, InquiryPriceRunInstances } from '@/service/tencent';
 import { onMount, ref, vm, watch } from 'jinge';
-import { Button, Spin, Tag, message } from 'jinge-antd';
+import { Spin, Tag, message } from 'jinge-antd';
 import { Bandwidth } from './Bandwind';
 import { Balance } from './Balance';
 import { Instance } from './Instance';
 import { Control } from './Control';
 import { globalSettings } from '@/store/settings';
 import { globalInst, loadGlobalInst } from '@/store/instance';
-import { IS_RELOAD, IS_REOPEN } from '@/service/util';
+import { IS_ANDROID, IS_MOBILE, IS_RELOAD, IS_REOPEN } from '@/service/util';
 import { invoke } from '@tauri-apps/api/core';
+import { Vpn } from './Vpn';
 
 export function ProxyView() {
   const state = vm<{
     loading?: boolean;
     price?: CVMPrice;
+    vpnConnected?: boolean;
   }>({
     loading: true,
   });
@@ -46,6 +48,16 @@ export function ProxyView() {
   );
 
   onMount(() => {
+    if (IS_ANDROID) {
+      invoke<boolean>('tauri_android_get_vpn_connected').then(
+        (v) => {
+          state.vpnConnected = v;
+        },
+        (err) => {
+          console.error(err);
+        },
+      );
+    }
     if (globalInst.state == 0) {
       loadGlobalInst().then(
         () => {
@@ -83,6 +95,7 @@ export function ProxyView() {
       <div className='flex flex-col gap-4'>
         <div className='text-lg font-medium'>代理信息</div>
         <Instance />
+        {IS_MOBILE && <Vpn connected={state.vpnConnected} />}
         <Balance />
       </div>
       <div className='mt-6 flex flex-col gap-4'>
@@ -98,31 +111,13 @@ export function ProxyView() {
         </div>
         <Bandwidth price={state.price} />
       </div>
-      <Control ref={ctrl} />
-      <div>
-        <Button
-          on:click={async () => {
-            const x = await invoke('tauri_start_vpn', {
-              serverIp: globalInst.ip,
-              token: globalSettings.token,
-            });
-            console.info(x);
-          }}
-        >
-          TEST
-        </Button>
-      </div>
-      {/* <div>
-        <Button
-          on:click={async () => {
-            const x = await invoke('tauri_start_vpn', { config: 'testconfig' });
-            console.info(x);
-            message.info(`${x}`);
-          }}
-        >
-          TEST
-        </Button>
-      </div> */}
+      <Control
+        ref={ctrl}
+        vpnConnected={state.vpnConnected}
+        on:vpnConnectChanged={(v) => {
+          state.vpnConnected = v;
+        }}
+      />
     </div>
   );
 }

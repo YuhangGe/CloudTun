@@ -1,9 +1,9 @@
+#[cfg(target_os = "android")]
+mod android;
 #[cfg(desktop)]
 mod notify;
 #[cfg(desktop)]
 mod proxy;
-#[cfg(target_os = "android")]
-mod vpn;
 
 mod ping;
 mod tencent;
@@ -107,15 +107,19 @@ pub fn run() {
 
   #[cfg(target_os = "android")]
   {
-    use crate::vpn::init_tauri_vpn;
-    use crate::vpn::tauri_start_vpn;
+    use crate::android::{
+      tauri_android_get_vpn_connected, tauri_android_init_plugin, tauri_android_list_all_apps,
+      tauri_android_start_vpn,
+    };
 
     builder = builder
-      .plugin(init_tauri_vpn())
+      .plugin(tauri_android_init_plugin())
       .invoke_handler(tauri::generate_handler![
         tauri_generate_uuid,
         tauri_calc_tencent_cloud_api_signature,
-        tauri_start_vpn
+        tauri_android_start_vpn,
+        tauri_android_list_all_apps,
+        tauri_android_get_vpn_connected,
       ]);
   }
 

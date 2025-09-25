@@ -1,16 +1,12 @@
 #![cfg(target_os = "android")]
 
-use std::{mem::ManuallyDrop, os::fd::FromRawFd};
-
-use cloudtun_common::util::hex2str;
 use jni::{
   JNIEnv,
   objects::{JClass, JString},
   sys::{jchar, jint},
 };
-use tokio::{fs::File, io::AsyncReadExt};
 
-use crate::start_run_vpn;
+use crate::{start_ping_interval, start_run_vpn};
 
 static TUN_QUIT: std::sync::Mutex<Option<tokio_util::sync::CancellationToken>> =
   std::sync::Mutex::new(None);
@@ -25,12 +21,6 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
   server_ip: JString,
   token: JString,
 ) -> jint {
-  // let dns = dns_strategy.try_into().unwrap();
-  // let verbosity = verbosity.try_into().unwrap();
-  // let filter_str = &format!("off,tun2proxy={verbosity}");
-  // let filter = android_logger::FilterBuilder::new()
-  //   .parse(filter_str)
-  //   .build();
   android_logger::init_once(
     android_logger::Config::default()
       .with_tag("cloudtun")
@@ -65,44 +55,45 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
 
   log::info!("XXX will start tokio vpn");
   let res = rt.block_on(async move {
-    let mut config = tun::Configuration::default();
+    let ping_ip = server_ip.clone();
+    let ping_token = token.clone();
+    let ping_cancel_token = shutdown_token.clone();
+    let h2 = tokio::spawn(async move {
+      start_ping_interval(&ping_ip, &ping_token, &ping_cancel_token).await;
+      0
+    });
+    let h1 = tokio::spawn(async move {
+      let mut config = tun::Configuration::default();
+      config.raw_fd(tun_fd);
+      // println!("XXX mtu {mtu} {tun_fd}");
+      let shutdown_token2 = shutdown_token.clone();
+      let Ok(device) = tun::create_as_async(&config) else {
+        log::error!("failed create tun device");
+        shutdown_token2.cancel();
+        return -1;
+      };
+      let server_addr = (server_ip, 24816, token);
+      let log_fn = |log_type: &str, log_message: &str| {
+        log::info!("[{log_type}] {log_message}");
+      };
 
-    config.raw_fd(tun_fd);
-
-    println!("XXX mtu {mtu} {tun_fd}");
-    // let f = unsafe { File::from_raw_fd(tun_fd) };
-    // let f = ManuallyDrop::new(f);
-    // let mut buf = [0; 1024];
-    // loop {
-    //   match f.read(&mut buf).await {
-    //     Ok(0) => {
-    //       println!("XXX end");
-    //       break;
-    //     }
-    //     Ok(size) => {
-    //       println!("XXX size {size} {}", hex2str(&buf[..size]));
-    //     }
-    //     Err(e) => {
-    //       println!("XXX error {e}");
-    //       break;
-    //     }
-    //   }
-    // }
-    // 0
-    let Ok(device) = tun::create_as_async(&config) else {
-      log::error!("failed create tun device");
-      return -1;
-    };
-    let server_addr = (server_ip, 24816, token);
-    let log_fn = |log_type: &str, log_message: &str| {
-      log::info!("[{log_type}] {log_message}");
-    };
-
-    match start_run_vpn(device, mtu, server_addr, shutdown_token, log_fn).await {
-      Ok(_) => 0,
-      Err(e) => {
-        log::error!("failed start_run_vpn: {e}");
-        -1
+      match start_run_vpn(device, mtu, server_addr, shutdown_token, log_fn).await {
+        Ok(_) => 0,
+        Err(e) => {
+          log::error!("failed start_run_vpn: {e}");
+          shutdown_token2.cancel();
+          -1
+        }
+      }
+    });
+    tokio::select! {
+      a = h1 => match a {
+        Err(_) => -1,
+        Ok(n) => n
+      },
+      b = h2 => match b {
+        Err(_) => -1,
+        Ok(n) => n,
       }
     }
   });

@@ -11,7 +11,7 @@ import {
   useForm,
 } from 'jinge-antd';
 
-import { DescribeImages, DescribeInstanceTypeConfigs, DescribeZones } from '@/service/tencent';
+import { DescribeImages, DescribeInstanceTypes, DescribeZones } from '@/service/tencent';
 import { copyToClipboard, generateStrongPassword } from '@/service/util';
 import { RegionOptions } from '@/service/region';
 import { onMount, vm, watch } from 'jinge';
@@ -19,16 +19,16 @@ import { z } from 'zod';
 import { globalSettings } from '@/store/settings';
 import { FormItem } from './FormItem';
 
-const ImageTypeOpts = [
-  {
-    label: '私有镜像',
-    value: 'PRIVATE_IMAGE',
-  },
-  {
-    label: '公共镜像',
-    value: 'PUBLIC_IMAGE',
-  },
-];
+// const ImageTypeOpts = [
+//   {
+//     label: '私有镜像',
+//     value: 'PRIVATE_IMAGE',
+//   },
+//   {
+//     label: '公共镜像',
+//     value: 'PUBLIC_IMAGE',
+//   },
+// ];
 
 export function InstanceConfigForm() {
   const { formErrors, formState, control, validate } = useForm(
@@ -36,7 +36,7 @@ export function InstanceConfigForm() {
       region: z.string(),
       zone: z.string(),
       instanceType: z.string(),
-      imageType: z.string(),
+      // imageType: z.string(),
       imageId: z.string(),
       loginPwd: z.string(),
       resourceName: z.string(),
@@ -59,21 +59,33 @@ export function InstanceConfigForm() {
 
   async function updateInstanceTypes(region?: string, zone?: string) {
     if (!region || !zone) return;
-    const [err, res] = await DescribeInstanceTypeConfigs({
+    const [err, res] = await DescribeInstanceTypes({
       region,
       Filters: [
         {
           Name: 'zone',
           Values: [zone],
         },
+        {
+          Name: 'instance-charge-type',
+          Values: ['SPOTPAID'],
+        },
       ],
     });
-    if (!err) {
-      const arr = res.InstanceTypeConfigSet.filter((t) => t.CPU === 2 && t.Memory === 2);
-      state.instTypeOpts = arr.map((instType) => ({
-        label: `${instType.InstanceType}(${instType.CPU} CPU, ${instType.Memory} GB)`,
-        value: instType.InstanceType,
-      }));
+    if (err) return;
+    const arr = res.InstanceTypeQuotaSet.filter(
+      (t) => t.Cpu === 2 && t.Memory === 2 && t.Status === 'SELL',
+    );
+    state.instTypeOpts = arr.map((instType) => ({
+      label: `${instType.InstanceType}(${instType.Cpu} CPU, ${instType.Memory} GB)`,
+      value: instType.InstanceType,
+    }));
+    if (arr.length > 0) {
+      if (!arr.some((v) => v.InstanceType === formState.instanceType)) {
+        formState.instanceType = arr[0].InstanceType;
+      }
+    } else {
+      formState.instanceType = undefined;
     }
   }
 
@@ -108,19 +120,18 @@ export function InstanceConfigForm() {
   });
 
   async function loadImages() {
-    const imageType = formState.imageType;
     const instanceType = formState.instanceType;
     const region = formState.region;
-    if (!(region && imageType && instanceType)) {
+    if (!(region && instanceType)) {
       return;
     }
-    const Filters = [{ Name: 'image-type', Values: [imageType] }];
-    if (imageType === 'PUBLIC_IMAGE') {
-      Filters.push({
+    const Filters = [
+      { Name: 'image-type', Values: ['PUBLIC_IMAGE'] },
+      {
         Name: 'platform',
         Values: ['Ubuntu'],
-      });
-    }
+      },
+    ];
     const [err, res] = await DescribeImages({
       region,
       Filters,
@@ -132,15 +143,7 @@ export function InstanceConfigForm() {
         label: image.ImageName,
         value: image.ImageId,
       }));
-      if (formState.imageType === 'PRIVATE_IMAGE') {
-        // 私有镜像约定使用 vmess uuid 作为镜像名。如果找到了，则填充 image id。
-        const img = res.ImageSet.find((ii) => ii.ImageName == globalSettings.resourceName);
-        if (img && globalSettings.imageId !== img.ImageId) {
-          formState.imageId = img.ImageId;
-        } else {
-          formState.imageId = undefined;
-        }
-      } else {
+      if (!res.ImageSet.some((v) => v.ImageId === formState.imageId)) {
         formState.imageId = res.ImageSet[0].ImageId;
       }
     } else {
@@ -148,7 +151,7 @@ export function InstanceConfigForm() {
       state.imageOpts = [];
     }
   }
-  watch(formState, 'imageType', loadImages);
+  // watch(formState, 'imageType', loadImages);
   watch(
     formState,
     'instanceType',
@@ -258,13 +261,13 @@ export function InstanceConfigForm() {
           )}
         </Controller>
       </FormItem>
-      <FormItem label='镜像类型：' required>
+      {/* <FormItem label='镜像类型：' required>
         <Controller control={control} name='imageType'>
           {(field) => (
             <Select options={ImageTypeOpts} value={field.value} on:change={field['on:change']} />
           )}
         </Controller>
-      </FormItem>
+      </FormItem> */}
       <FormItem label='镜像：' required error={formErrors.imageId}>
         <Controller control={control} name='imageId'>
           {(field) => (

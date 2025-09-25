@@ -2,21 +2,33 @@ import { Button, Popconfirm } from 'jinge-antd';
 
 import { invoke } from '@tauri-apps/api/core';
 import { TerminateInstance } from '@/service/tencent';
-import { type WithExpose, expose, vm } from 'jinge';
+import { type WithEvents, type WithExpose, expose, vm } from 'jinge';
 import { createGlobalInst, globalInst } from '@/store/instance';
+import { IS_MOBILE } from '@/service/util';
+import { globalSettings } from '@/store/settings';
 
 export function Control(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _props: WithExpose<{
+  props: {
+    vpnConnected?: boolean;
+  } & WithExpose<{
     create: () => void;
-  }>,
+  }> &
+    WithEvents<{
+      vpnConnectChanged(v: boolean): void;
+    }>,
 ) {
   const state = vm<{
     creating?: boolean;
     destroing?: boolean;
-  }>({});
+    vpnConnected?: boolean;
+  }>({
+    vpnConnected: props.vpnConnected,
+  });
   async function destroy() {
     if (!globalInst.data) return;
+    if (props.vpnConnected) {
+      //
+    }
     state.destroing = true;
     const [err] = await TerminateInstance(globalInst.data!.InstanceId);
     state.destroing = false;
@@ -31,6 +43,19 @@ export function Control(
     state.creating = true;
     await createGlobalInst();
     state.creating = false;
+  }
+  async function toggleVpn() {
+    if (state.vpnConnected) {
+      //
+    } else {
+      await invoke('tauri_android_start_vpn', {
+        serverIp: globalInst.ip,
+        token: globalSettings.token,
+        proxyApps: globalSettings.mobileProxyMode === 'app' ? globalSettings.mobileProxyApps : '',
+      });
+    }
+    state.vpnConnected = !state.vpnConnected;
+    props['on:vpnConnectChanged'](state.vpnConnected);
   }
 
   expose({
@@ -63,6 +88,15 @@ export function Control(
           className='text-xs'
         >
           创建主机
+        </Button>
+      )}
+      {IS_MOBILE && (
+        <Button
+          on:click={() => {
+            void toggleVpn();
+          }}
+        >
+          {state.vpnConnected ? '关闭 VPN' : '开启 VPN'}
         </Button>
       )}
     </div>
