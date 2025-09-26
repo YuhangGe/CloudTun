@@ -85,7 +85,7 @@ async fn handle_socket(
   });
 
   let mut read_remote_handle = tokio::spawn(async move {
-    let mut buf = [0u8; 8192];
+    let mut buf = [0u8; 4096];
     loop {
       match remote_reader.read(&mut buf).await {
         Ok(0) => {

@@ -58,7 +58,7 @@ pub async fn proxy_to_cloudtun_server<
   let read_log_fn = log_fn.clone();
   // 任务1: 从 Upgraded -> WebSocket
   let read_handle = tokio::spawn(async move {
-    let mut buf = [0u8; 8192];
+    let mut buf = [0u8; 4096];
     loop {
       match local_stream_reader.read(&mut buf).await {
         Ok(0) => {
