@@ -18,6 +18,7 @@ cargo {
   module  = "../../../../src-vpn"       // Cargo.toml路径
   libname = "cloudtunvpn"          // Cargo.toml 中 [package] 中 name
   targets = listOf("arm64","x86_64")
+  profile = "release"
 }
 
 android {

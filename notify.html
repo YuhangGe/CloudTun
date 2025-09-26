@@ -1,27 +1,25 @@
 <!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CloutTun - 通知</title>
+  </head>
 
-<head>
-  <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CloutTun - 通知</title>
-</head>
-
-<body>
-  <div id="root"></div>
-  <script>
-    if (typeof window.__TAURI_INTERNALS__ === 'undefined') {
-      window.__TAURI_INTERNALS__ = {
-        invoke() { },
-        transformCallback() { },
-      };
-      window.__TAURI_OS_PLUGIN_INTERNALS__ = {
-        platform: 'webmock',
-      };
-    }
-  </script>
-  <script type="module" src="/src/main.notify.tsx"></script>
-</body>
-
+  <body>
+    <div id="root"></div>
+    <script>
+      if (typeof window.__TAURI_INTERNALS__ === 'undefined') {
+        window.__TAURI_INTERNALS__ = {
+          invoke() {},
+          transformCallback() {},
+        };
+        window.__TAURI_OS_PLUGIN_INTERNALS__ = {
+          platform: 'webmock',
+        };
+      }
+    </script>
+    <script type="module" src="/src/main.notify.tsx"></script>
+  </body>
 </html>
