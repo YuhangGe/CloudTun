@@ -74,8 +74,7 @@ pub fn run() {
     .plugin(tauri_plugin_store::Builder::new().build())
     .plugin(tauri_plugin_http::init());
 
-  println!("xxx cloudtun startup 111");
-  info!("xxx cloudtun startup 222");
+  info!("xxx cloudtun startup");
 
   #[cfg(desktop)]
   {

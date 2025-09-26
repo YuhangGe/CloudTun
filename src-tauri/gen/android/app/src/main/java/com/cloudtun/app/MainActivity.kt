@@ -18,6 +18,7 @@ class MainActivity : TauriActivity() {
         if (data != null) {
           putExtra("serverIp", data.getStringExtra("serverIp"))
           putExtra("token", data.getStringExtra("token"))
+          putExtra("cvmId", data.getStringExtra("cvmId"))
           putExtra("proxyApps", data.getStringExtra("proxyApps"))
         }
       }

@@ -34,14 +34,17 @@ pub async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // "666".to_string(),
   );
 
+  let password: Vec<u8> = vec![0; 16];
+
   let log_fn = |log_type: &str, log_message: &str| {
     println!("{log_type} ==> {log_message}");
   };
 
   let shutdown_token = CancellationToken::new();
   let shutdown_token2 = shutdown_token.clone();
-  let run_handle =
-    spawn(async move { start_run_vpn(device, MTU, server_addr, shutdown_token2, log_fn).await });
+  let run_handle = spawn(async move {
+    start_run_vpn(device, MTU, server_addr, password, shutdown_token2, log_fn).await
+  });
   let ctrlc_handle = ctrlc2::AsyncCtrlC::new(move || {
     shutdown_token.cancel();
     true

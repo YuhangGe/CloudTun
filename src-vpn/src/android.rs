@@ -20,6 +20,7 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
   mtu: jchar,
   server_ip: JString,
   token: JString,
+  cvm_id: JString,
 ) -> jint {
   android_logger::init_once(
     android_logger::Config::default()
@@ -35,6 +36,17 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
     log::error!("failed get jstring");
     return -1;
   };
+  let Ok(cvm_id) = get_java_string(&mut env, &cvm_id) else {
+    log::error!("failed get jstring");
+    return -1;
+  };
+
+  let mut password = Vec::with_capacity(16);
+  let cvm_id_bytes = cvm_id.as_bytes();
+  let len = cvm_id_bytes.len();
+  for i in 0..16 {
+    password.push(cvm_id_bytes[i % len]);
+  }
 
   let shutdown_token = tokio_util::sync::CancellationToken::new();
   if let Ok(mut lock) = TUN_QUIT.lock() {
@@ -77,7 +89,7 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
         log::info!("[{log_type}] {log_message}");
       };
 
-      match start_run_vpn(device, mtu, server_addr, shutdown_token, log_fn).await {
+      match start_run_vpn(device, mtu, server_addr, password, shutdown_token, log_fn).await {
         Ok(_) => 0,
         Err(e) => {
           log::error!("failed start_run_vpn: {e}");
