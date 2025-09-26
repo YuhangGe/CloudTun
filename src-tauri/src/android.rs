@@ -13,6 +13,7 @@ use crate::util::emit_log;
 pub struct StartVpnArgs {
   pub server_ip: String,
   pub token: String,
+  pub cvm_id: String,
   pub proxy_apps: String,
 }
 
@@ -43,11 +44,18 @@ pub struct ListAllAppsResponse {
 pub async fn tauri_android_start_vpn<R: Runtime>(
   server_ip: &str,
   token: &str,
+  cvm_id: &str,
   proxy_apps: &str,
   h: AppHandle<R>,
   state: State<'_, Vpn<R>>,
 ) -> TAResult<bool> {
-  state.start_vpn(h, server_ip.into(), token.into(), proxy_apps.into())
+  state.start_vpn(
+    h,
+    server_ip.into(),
+    token.into(),
+    cvm_id.into(),
+    proxy_apps.into(),
+  )
 }
 
 #[tauri::command]
@@ -74,6 +82,7 @@ impl<R: Runtime> Vpn<R> {
     h: AppHandle<R>,
     server_ip: String,
     token: String,
+    cvm_id: String,
     proxy_apps: String,
   ) -> TAResult<bool> {
     let ret = self.0.run_mobile_plugin::<StartVpnResponse>(
@@ -82,6 +91,7 @@ impl<R: Runtime> Vpn<R> {
         proxy_apps,
         server_ip,
         token,
+        cvm_id,
       },
     );
 

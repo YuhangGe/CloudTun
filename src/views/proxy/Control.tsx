@@ -50,6 +50,7 @@ export function Control(
     } else {
       await invoke('tauri_android_start_vpn', {
         serverIp: globalInst.ip,
+        cvmId: globalInst.data!.InstanceId,
         token: globalSettings.token,
         proxyApps: globalSettings.mobileProxyMode === 'app' ? globalSettings.mobileProxyApps : '',
       });

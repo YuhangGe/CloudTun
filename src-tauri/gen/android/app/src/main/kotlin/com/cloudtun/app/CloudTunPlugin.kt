@@ -20,6 +20,8 @@ class StartVpnArgs {
   var serverIp: String? = null
   var token: String? = null
   var proxyApps: String? = null
+  
+  var cvmId: String? = null
 }
 
 data class AppInfo(
@@ -96,6 +98,7 @@ class CloudTunPlugin(private val activity: Activity): Plugin(activity) {
 //      }
       p.putExtra("serverIp", args.serverIp)
       p.putExtra("token", args.token)
+      p.putExtra("cvmId", args.cvmId)
       p.putExtra("proxyApps", args.proxyApps)
       activity.startActivityForResult(p, 0x9999)
       println("after startVpn")
@@ -107,6 +110,7 @@ class CloudTunPlugin(private val activity: Activity): Plugin(activity) {
         action = "START"
         putExtra("serverIp", args.serverIp)
         putExtra("token", args.token)
+        putExtra("cvmId", args.cvmId)
         putExtra("proxyApps", args.proxyApps)
       }
       activity.startService(intent)

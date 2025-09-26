@@ -115,7 +115,8 @@ class CloudTunVpnService : VpnService() {
 
     val serverIp = intent?.getStringExtra("serverIp")
     val token = intent?.getStringExtra("token")
-    if (serverIp == null || token == null) {
+    val cvmId = intent?.getStringExtra("cvmId")
+    if (serverIp == null || token == null || cvmId == null) {
       return START_STICKY
     }
     
@@ -129,7 +130,7 @@ class CloudTunVpnService : VpnService() {
 //        println("XXX: builder4")
         isRunning = true
         isVpnConnected = true
-        startProxyLoop(vpnInterface!!.fd, serverIp, token)
+        startProxyLoop(vpnInterface!!.fd, serverIp, token, cvmId)
       }
 
     } catch (e: IOException) {
@@ -142,14 +143,15 @@ class CloudTunVpnService : VpnService() {
   }
  
  
-  private fun startProxyLoop(fd: Int, serverIp: String, token: String) {
+  private fun startProxyLoop(fd: Int, serverIp: String, token: String, cvmId: String) {
       Thread {
          try {
            vpn.startVpn(
              fd,
              1500,
              serverIp,
-             token
+             token,
+             cvmId
            )
          } catch (ex: Exception) {
            println("failed vpn thread: $ex")
