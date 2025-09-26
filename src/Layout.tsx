@@ -2,7 +2,7 @@ import { Button, Dropdown, type MenuOption, Tooltip, message } from 'jinge-antd'
 import { invoke } from '@tauri-apps/api/core';
 import { globalSettings } from './store/settings';
 
-import imgLogo from '@/assets/logo-128x128.png';
+import imgLogo from '@/assets/logo-512.png';
 import { validateSettings } from './service/settings';
 import { cx, vm, watch } from 'jinge';
 import { SettingsView } from './views/settings';

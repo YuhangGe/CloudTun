@@ -22,32 +22,32 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 cloudtun-common = { path = "../src-common", features = ["tencent", "ping"] }
 log = "0.4.28"
-tauri = { version = "2", features = ["tray-icon", "devtools", "image-png"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+tauri = { version = "2.8.5", features = ["tray-icon", "devtools", "image-png"] }
+serde = { version = "1.0.227", features = ["derive"] }
+serde_json = "1.0.145"
 anyhow = "1.0.100"
 anyhow-tauri = "1.0.0"
-base64 = "0.22"
-sha2 = "0.10"
-chrono = "0.4"
-hmac = "0.12"
-uuid = { version = "1.17", features = ["v4"] }
-tauri-plugin-http = { version = "2.5", features = ["unsafe-headers"] }
-tauri-plugin-store = "2.4"
-tauri-plugin-os = "2.3"
-tokio = { version = "1", features = ["macros"] }
+base64 = "0.22.1"
+sha2 = "0.10.9"
+chrono = "0.4.42"
+hmac = "0.12.1"
+uuid = { version = "1.18.1", features = ["v4"] }
+tauri-plugin-http = { version = "2.5.2", features = ["unsafe-headers"] }
+tauri-plugin-store = "2.4.0"
+tauri-plugin-os = "2.3.1"
+tokio = { version = "1.47.1", features = ["macros"] }
 tokio-util = { version = "0.7.16" }
 env_logger = "0.11.8"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 cloudtun-proxy = { path = "../src-proxy" }
-tauri-plugin-autostart = "2.5"
-tauri-plugin-single-instance = "2.3"
-tauri-plugin-clipboard-manager = "2.3"
+tauri-plugin-autostart = "2.5.0"
+tauri-plugin-single-instance = "2.3.4"
+tauri-plugin-clipboard-manager = "2.3.0"
 
 # [target.'cfg(target_os = "android")'.dependencies]
 # cloudtun-vpn = { path = "../src-vpn" }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 tauri-plugin-ios = { path = "../tauri-plugin-ios" }
-oslog = "0.2"
+oslog = "0.2.0"

@@ -69,7 +69,7 @@ async fn start_proxy_client<R: Runtime>(
     local_addr: ("0.0.0.0".to_string(), 7892),
     default_rule: cloudtun_proxy::MatchType::Proxy,
     rules_config_file: None,
-    secret: password,
+    password,
   };
   let shutdown_token = CancellationToken::new();
   let h2 = h.clone();

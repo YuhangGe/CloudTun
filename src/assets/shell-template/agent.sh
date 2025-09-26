@@ -2,7 +2,7 @@
 cd /home/ubuntu
 curl -O https://raw.githubusercontent.com/YuhangGe/cloudtun-server-release/refs/heads/release/cloudtun-server
 chmod +x cloudtun-server
-nohup ./cloudtun-server --password=$PASSWORD --token=$TOKEN --secret-id=$SECRET_ID --secret-key=$SECRET_KEY --region=$REGION --cvm-name=$CVM_NAME > /home/ubuntu/cloudtun.log 2>&1 &
+nohup ./cloudtun-server --token=$TOKEN --secret-id=$SECRET_ID --secret-key=$SECRET_KEY --region=$REGION --cvm-name=$CVM_NAME > /home/ubuntu/cloudtun.log 2>&1 &
 # wget https://github.com/v2fly/v2ray-core/releases/download/v5.38.0/v2ray-linux-64.zip
 # unzip v2ray-linux-64.zip -d v2ray
 # cd v2ray

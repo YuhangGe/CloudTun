@@ -21,4 +21,4 @@ hyper = { version = "1.7.0", features = ["full"] }
 hyper-util = "0.1.17"
 
 ctrlc2 = { version = "3.7.3", features = ["async"], optional = true }
-clap = { version = "4.5.47", features = ["derive"], optional = true }
+clap = { version = "4.5.48", features = ["derive"], optional = true }

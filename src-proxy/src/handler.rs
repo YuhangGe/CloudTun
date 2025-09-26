@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use axum::{extract::Request, response::IntoResponse};
+use cloudtun_common::util::hex2str;
 use hyper::{Method, body::Incoming, server::conn::http1};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
@@ -13,7 +14,7 @@ use crate::{
 
 pub struct ProxyArgs {
   pub server_addr: (String, u16, String),
-  pub secret: Vec<u8>,
+  pub password: Vec<u8>,
   pub local_addr: (String, u16),
   pub default_rule: MatchType,
   pub rules_config_file: Option<String>,
@@ -29,15 +30,17 @@ pub async fn run_proxy_loop<F: Fn(&str, &str) + Send + Sync + 'static>(
   let log_fn = Arc::new(log_fn);
   let log_fn2 = log_fn.clone();
   let server_addr = Arc::new(args.server_addr.clone());
-  let secret = Arc::new(args.secret);
+  let password = Arc::new(args.password);
+  println!("Password: {}", hex2str(&password));
+
   let hyper_service = hyper::service::service_fn(move |req: Request<Incoming>| {
     let server_addr = server_addr.clone();
     let router = router.clone();
     let log_fn = log_fn2.clone();
-    let secret = secret.clone();
+    let password = password.clone();
     async move {
       if req.method() == Method::CONNECT {
-        proxy_request(req, server_addr, router, secret, log_fn).await
+        proxy_request(req, server_addr, router, password, log_fn).await
       } else {
         Ok("to be implemented".into_response())
       }

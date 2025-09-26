@@ -1,4 +1,4 @@
-import imgLogo from '@/assets/logo-128x128.png';
+import imgLogo from '@/assets/logo-512.png';
 import { type UnlistenFn, listen } from '@tauri-apps/api/event';
 import { onMount, vm } from 'jinge';
 import { Spin } from 'jinge-antd';
