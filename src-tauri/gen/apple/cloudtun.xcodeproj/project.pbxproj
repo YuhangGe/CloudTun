@@ -648,7 +648,7 @@
 				);
 				MARKETING_VERSION = 0.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.cloudtun.app;
-				PRODUCT_NAME = CloudTun;
+				PRODUCT_NAME = "CloudTun";
 				SDKROOT = iphoneos;
 				SWIFT_OBJC_BRIDGING_HEADER = "Sources/cloudtun/cloudtun_iOS-Bridging-Header.h";
 				SWIFT_VERSION = 6.0;
@@ -753,7 +753,7 @@
 				);
 				MARKETING_VERSION = 0.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.cloudtun.app;
-				PRODUCT_NAME = CloudTun;
+				PRODUCT_NAME = "CloudTun";
 				SDKROOT = iphoneos;
 				SWIFT_OBJC_BRIDGING_HEADER = "Sources/cloudtun/cloudtun_iOS-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
