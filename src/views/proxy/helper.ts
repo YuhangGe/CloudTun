@@ -139,11 +139,12 @@ export async function pingServerOnce(ip: string) {
   }
 }
 
-export async function startProxyClient(ip: string, token: string) {
+export async function startProxyClient(ip: string, token: string, instanceId: string) {
   try {
     await invoke('tauri_start_proxy_client', {
       serverIp: ip,
       token,
+      cvmId: instanceId,
     });
     return true;
   } catch (ex) {

@@ -8,7 +8,7 @@ use axum::{
   Router,
   routing::{any, get},
 };
-use cloudtun_common::{constant::REMOTE_PROXY_PORT, tencent::TencentCloudClient};
+use cloudtun_common::{constant::REMOTE_PROXY_PORT, tencent::TencentCloudClient, util::hex2str};
 
 //allows to split the websocket stream into separate TX and RX branches
 
@@ -33,7 +33,7 @@ struct Args {
   port: u16,
 
   /// 客户端连接时的鉴权 Token
-  #[arg(short, long)]
+  #[arg(long)]
   token: String,
 
   /// 腾讯云 SecretId
@@ -57,6 +57,8 @@ struct Args {
 async fn main() {
   let args = Args::parse();
 
+  let tencent_client = TencentCloudClient::new(args.secret_id, args.secret_key, args.region);
+  let password = get_password(&tencent_client, &args.cvm_name).await;
   let app = Router::new()
     .route("/ping", get(ping_handler))
     .route("/test", get(test_handler))
@@ -70,12 +72,18 @@ async fn main() {
 
   println!(
     "CloudTun Server Listening at {ip}:{port}
-  Auth Token: {}",
-    args.token
+  Auth Token: {}
+  Data Password: {}",
+    args.token,
+    hex2str(&password)
   );
 
-  let tencent_client = TencentCloudClient::new(args.secret_id, args.secret_key, args.region);
-  let context = Arc::new(Context::new(args.token, args.cvm_name, tencent_client));
+  let context = Arc::new(Context::new(
+    args.token,
+    password,
+    args.cvm_name,
+    tencent_client,
+  ));
 
   let serve_handle = axum::serve(
     listener,
@@ -89,26 +97,33 @@ async fn main() {
       int.tick().await;
       if context.is_ping_expired().await {
         println!("ping expired, bye!");
-        destroy_cvm(&context).await;
+        if let Err(e) = destroy_cvm(&context).await {
+          eprintln!("failed destroy cvm due to: {e}");
+        }
       }
     }
   });
   let _ = tokio::join!(serve_handle, timer_handle);
 }
 
-async fn destroy_cvm(ctx: &Context) {
-  let ret = match ctx.tx.describe_instances().await {
-    Err(e) => {
-      eprintln!("failed call describe_instances: {e}");
-      return;
+async fn get_password(tx: &TencentCloudClient, cvm_name: &str) -> Vec<u8> {
+  let cvm_id = match tx.get_instance_by_name(cvm_name).await {
+    Err(_) => {
+      eprintln!("cvm not found, use empty password");
+      return vec![0; 16];
     }
-    Ok(ret) => ret,
+    Ok(v) => v.id,
   };
-  let Some(inst) = ret.iter().find(|inst| inst.name.eq(&ctx.cvm_name)) else {
-    eprintln!("{} not found.", &ctx.cvm_name);
-    return;
-  };
-  if let Err(e) = ctx.tx.desroy_instance(&inst.id).await {
-    eprintln!("failed call destroy_instance: {e}");
+  let cvm_id_bytes = cvm_id.as_bytes();
+  let len = cvm_id_bytes.len();
+  let mut buf = Vec::with_capacity(16);
+  for i in 0..16 {
+    buf.push(cvm_id_bytes[i % len]);
   }
+  buf
+}
+
+async fn destroy_cvm(ctx: &Context) -> anyhow::Result<bool> {
+  let inst = ctx.tx.get_instance_by_name(&ctx.cvm_name).await?;
+  ctx.tx.desroy_instance(&inst.id).await
 }

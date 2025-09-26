@@ -5,7 +5,6 @@ use std::{
 
 use futures_util::{SinkExt, StreamExt};
 use http::HeaderValue;
-use rand::Rng;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio_tungstenite::{
   connect_async,
@@ -14,7 +13,7 @@ use tokio_tungstenite::{
 use tokio_util::bytes::Bytes;
 
 use crate::{
-  constant::{X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_SECRET_KEY, X_TOKEN_KEY},
+  constant::{X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_TOKEN_KEY},
   encode::xor_inplace_simd,
 };
 
@@ -26,7 +25,7 @@ pub async fn proxy_to_cloudtun_server<
   server: Arc<(String, u16, String)>,
   target_host: String,
   target_port: u16,
-  secret: Arc<(Vec<u8>, String)>,
+  secret: Arc<Vec<u8>>,
   log_fn: Arc<F>,
 ) -> std::io::Result<()> {
   let url = format!("ws://{}:{}/ws", server.0, server.1);
@@ -44,7 +43,6 @@ pub async fn proxy_to_cloudtun_server<
     X_CONNECT_PORT_KEY,
     HeaderValue::from_str(&target_port.to_string()).unwrap(),
   );
-  headers.append(X_SECRET_KEY, HeaderValue::from_str(&secret.1).unwrap());
 
   let (ws_stream, _) = connect_async(request)
     .await
@@ -74,7 +72,7 @@ pub async fn proxy_to_cloudtun_server<
 
           // println!("A: {}", hex2str(data));
           // println!("S: {}", hex2str(&SECRET));
-          xor_inplace_simd(data, &secret.0);
+          xor_inplace_simd(data, &secret);
           // println!("A2: {}", hex2str(data));
 
           if let Err(e) = ws_sink
@@ -123,15 +121,15 @@ pub async fn proxy_to_cloudtun_server<
   Ok(())
 }
 
-pub fn generate_proxy_secret() -> (Vec<u8>, String) {
-  let rng = rand::rng();
-  let secret: Vec<_> = rng.random_iter::<u8>().take(16).collect();
-  // let secret: Vec<_> = (0..16).map(|_| 0).collect();
-  let secret_hex = secret
-    .iter()
-    .map(|n| format!("{:02x}", n))
-    .collect::<Vec<_>>()
-    .join("");
-  // println!("xxx len {}, {}", secret.len(), secret_hex);
-  (secret, secret_hex)
-}
+// pub fn generate_proxy_secret() -> (Vec<u8>, String) {
+//   let rng = rand::rng();
+//   let secret: Vec<_> = rng.random_iter::<u8>().take(16).collect();
+//   // let secret: Vec<_> = (0..16).map(|_| 0).collect();
+//   let secret_hex = secret
+//     .iter()
+//     .map(|n| format!("{:02x}", n))
+//     .collect::<Vec<_>>()
+//     .join("");
+//   // println!("xxx len {}, {}", secret.len(), secret_hex);
+//   (secret, secret_hex)
+// }

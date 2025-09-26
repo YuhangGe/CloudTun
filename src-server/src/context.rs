@@ -1,4 +1,4 @@
-use std::time;
+use std::{sync::Arc, time};
 
 use cloudtun_common::tencent::TencentCloudClient;
 use futures_util::lock::Mutex;
@@ -6,6 +6,7 @@ use futures_util::lock::Mutex;
 #[derive(Debug)]
 pub struct Context {
   pub token: String,
+  pub password: Arc<Vec<u8>>,
   pub cvm_name: String,
   last_ping_ts: Mutex<u64>,
   pub tx: TencentCloudClient,
@@ -19,9 +20,10 @@ pub fn now_ts() -> u64 {
 }
 
 impl Context {
-  pub fn new(token: String, cvm_name: String, tx: TencentCloudClient) -> Self {
+  pub fn new(token: String, password: Vec<u8>, cvm_name: String, tx: TencentCloudClient) -> Self {
     Context {
-      token: token,
+      token,
+      password: Arc::new(password),
       cvm_name,
       last_ping_ts: Mutex::new(now_ts()),
       tx,

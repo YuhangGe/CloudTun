@@ -10,7 +10,7 @@ use axum::{
   response::IntoResponse,
 };
 use cloudtun_common::{
-  constant::{X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_SECRET_KEY, X_TOKEN_KEY},
+  constant::{X_CONNECT_HOST_KEY, X_CONNECT_PORT_KEY, X_TOKEN_KEY},
   encode::xor_inplace_simd,
 };
 use futures_util::{SinkExt, StreamExt};
@@ -34,26 +34,6 @@ pub async fn proxy_handler(
     return Err(StatusCode::UNAUTHORIZED);
   }
 
-  let Some(secret) = headers.get(X_SECRET_KEY).and_then(|v| {
-    v.to_str().ok().and_then(|s| {
-      if s.len() != 32 {
-        None
-      } else {
-        let mut bytes = Vec::with_capacity(16);
-        for i in (0..32).step_by(2) {
-          let byte_str = &s[i..i + 2];
-          let Ok(byte) = u8::from_str_radix(byte_str, 16) else {
-            return None;
-          };
-
-          bytes.push(byte);
-        }
-        Some(bytes)
-      }
-    })
-  }) else {
-    return Err(StatusCode::BAD_REQUEST);
-  };
   let Some(remote_host) = headers
     .get(X_CONNECT_HOST_KEY)
     .and_then(|v| v.to_str().map(|s| s.to_string()).ok())
@@ -68,10 +48,17 @@ pub async fn proxy_handler(
     return Err(StatusCode::BAD_REQUEST);
   };
 
+  let secret = context.password.clone();
+
   Ok(ws.on_upgrade(move |socket| handle_socket(socket, remote_host, remote_port, secret)))
 }
 
-async fn handle_socket(socket: WebSocket, remote_host: String, remote_port: u16, secret: Vec<u8>) {
+async fn handle_socket(
+  socket: WebSocket,
+  remote_host: String,
+  remote_port: u16,
+  secret: Arc<Vec<u8>>,
+) {
   let (mut ws_sender, mut ws_receiver) = socket.split();
   let Ok(remote_tcp) = TcpStream::connect((remote_host, remote_port)).await else {
     return;

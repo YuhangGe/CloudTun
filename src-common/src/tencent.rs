@@ -223,14 +223,22 @@ impl TencentCloudClient {
     }
   }
 
+  pub async fn get_instance_by_name(&self, cvm_name: &str) -> anyhow::Result<CvmInstance> {
+    self
+      .describe_instances()
+      .await?
+      .into_iter()
+      .find(|v| v.name.eq(cvm_name))
+      .ok_or(anyhow::anyhow!("not_found"))
+  }
+
   pub async fn describe_instances(&self) -> anyhow::Result<Vec<CvmInstance>> {
     #[derive(Debug, Deserialize)]
     struct X {
       #[serde(rename = "InstanceSet")]
       instances: Vec<CvmInstance>,
     }
-
-    let res = tx_call_api::<X>(
+    tx_call_api::<X>(
       &self.secret_id,
       &self.secret_key,
       TencentService::Cvm,
@@ -238,16 +246,12 @@ impl TencentCloudClient {
       "DescribeInstances",
       "{}".to_string(),
     )
-    .await?;
-
-    Ok(res.instances)
+    .await
+    .map(|ret| ret.instances)
   }
 
   pub async fn desroy_instance(&self, instance_id: &str) -> anyhow::Result<bool> {
-    #[derive(Debug, Deserialize)]
-    struct X {}
-
-    let _ = tx_call_api::<X>(
+    tx_call_api::<()>(
       &self.secret_id,
       &self.secret_key,
       TencentService::Cvm,
@@ -255,8 +259,7 @@ impl TencentCloudClient {
       "TerminateInstances",
       format!("{{\"InstanceIds\":[\"{}\"]}}", instance_id),
     )
-    .await?;
-
-    Ok(true)
+    .await
+    .map(|_| true)
   }
 }

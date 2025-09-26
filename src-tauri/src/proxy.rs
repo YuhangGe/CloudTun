@@ -50,6 +50,7 @@ async fn start_proxy_client<R: Runtime>(
   state: State<'_, ProxyLoop>,
   server_ip: &str,
   token: &str,
+  cvm_id: &str,
 ) -> anyhow::Result<()> {
   emit_log(&h, "log::proxy", "starting proxy client...");
   let proxy_loop = state.0.clone();
@@ -57,11 +58,18 @@ async fn start_proxy_client<R: Runtime>(
     proc.cancel();
   }
 
+  let mut password = Vec::with_capacity(16);
+  let cvm_id_bytes = cvm_id.as_bytes();
+  let len = cvm_id_bytes.len();
+  for i in 0..16 {
+    password.push(cvm_id_bytes[i % len]);
+  }
   let proxy_args = ProxyArgs {
     server_addr: (server_ip.to_string(), 24816, token.to_string()),
     local_addr: ("0.0.0.0".to_string(), 7892),
     default_rule: cloudtun_proxy::MatchType::Proxy,
     rules_config_file: None,
+    secret: password,
   };
   let shutdown_token = CancellationToken::new();
   let h2 = h.clone();
@@ -90,8 +98,9 @@ pub async fn tauri_start_proxy_client<R: Runtime>(
   state: State<'_, ProxyLoop>,
   server_ip: &str,
   token: &str,
+  cvm_id: &str,
 ) -> TAResult<()> {
-  start_proxy_client(handle, state, server_ip, token)
+  start_proxy_client(handle, state, server_ip, token, cvm_id)
     .await
     .into_ta_result()
 }

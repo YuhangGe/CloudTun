@@ -17,7 +17,7 @@ pub async fn proxy_request<F: Fn(&str, &str) + Send + Sync + 'static>(
   req: Request<Incoming>,
   server_addr: Arc<(String, u16, String)>,
   router: RouteMatcher,
-  secret: Arc<(Vec<u8>, String)>,
+  secret: Arc<Vec<u8>>,
   log_fn: Arc<F>,
 ) -> Result<Response, hyper::Error> {
   let Some(remote_auth) = req.uri().authority() else {

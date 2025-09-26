@@ -1,9 +1,9 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use cloudtun_common::proxy::{generate_proxy_secret, proxy_to_cloudtun_server};
+use cloudtun_common::proxy::proxy_to_cloudtun_server;
 use ipstack::{IpStackStream, IpStackUdpStream};
-use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::{
   io::{AsyncRead, AsyncWrite},
   sync::Mutex,
@@ -48,6 +48,7 @@ pub async fn start_run_vpn<D, F: Fn(&str, &str) + Send + Sync + 'static>(
   device: D,
   mtu: u16,
   server_addr: (String, u16, String),
+  password: Vec<u8>,
   shutdown_token: CancellationToken,
   log_fn: F,
 ) -> anyhow::Result<()>
@@ -66,11 +67,11 @@ where
 
   let mut ip_stack = ipstack::IpStack::new(ipstack_config, device);
 
-  let secret = Arc::new(generate_proxy_secret());
+  let password = Arc::new(password);
   let server_addr = Arc::new(server_addr);
 
   loop {
-    let secret = secret.clone();
+    let password = password.clone();
     let log_fn = log_fn.clone();
     let server_addr = server_addr.clone();
     let virtual_dns = virtual_dns.clone();
@@ -100,7 +101,7 @@ where
             server_addr,
             domain_name.unwrap_or(target_ip.to_string()),
             target_port,
-            secret,
+            password,
             log_fn,
           )
           .await
@@ -124,7 +125,7 @@ where
             let mut target_stream =
               match UdpStream::connect(SocketAddr::from_str(&target).unwrap()).await {
                 Err(e) => {
-                  eprintln!("failed create udp stream");
+                  eprintln!("failed create udp stream {e}");
                   return;
                 }
                 Ok(x) => x,

@@ -9,7 +9,7 @@ pub async fn proxy_tunnel<F: Fn(&str, &str) + Send + Sync + 'static>(
   server: Arc<(String, u16, String)>,
   target_host: String,
   target_port: u16,
-  secret: Arc<(Vec<u8>, String)>,
+  secret: Arc<Vec<u8>>,
   log_fn: Arc<F>,
 ) -> std::io::Result<()> {
   let upgraded = TokioIo::new(upgraded);

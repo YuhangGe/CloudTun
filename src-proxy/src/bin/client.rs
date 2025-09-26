@@ -28,13 +28,32 @@ struct Args {
   config: Option<String>,
 
   /// 和服务端通信的鉴权 Token
-  #[arg(short, long)]
+  #[arg(long)]
   token: String,
+
+  /// 和服务端传递数据的密码
+  #[arg(long)]
+  password: String,
 }
 
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
   let args = Args::parse();
+  if args.password.len() != 32 {
+    eprintln!("bad password");
+    process::exit(-1);
+  }
+
+  let mut password = Vec::with_capacity(16);
+  for i in (0..32).step_by(2) {
+    let byte_str = &args.password[i..i + 2];
+    let Ok(byte) = u8::from_str_radix(byte_str, 16) else {
+      eprintln!("bad password 2");
+      process::exit(-1);
+    };
+
+    password.push(byte);
+  }
   let proxy_args = ProxyArgs {
     server_addr: (args.server_ip, args.server_port, args.token),
     local_addr: (
@@ -42,6 +61,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
       args.local_port,
     ),
     default_rule: MatchType::Proxy,
+    secret: password,
     rules_config_file: args.config,
   };
 
