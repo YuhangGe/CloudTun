@@ -1,8 +1,6 @@
-use std::os::fd::RawFd;
-
 use anyhow_tauri::TAResult;
 use serde::{Deserialize, Serialize};
-use tauri::ipc::{Channel, InvokeResponseBody};
+// use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::plugin::{Builder, PluginHandle, TauriPlugin};
 use tauri::{AppHandle, Manager, Runtime, State};
 
@@ -56,6 +54,22 @@ pub async fn tauri_android_start_vpn<R: Runtime>(
     cvm_id.into(),
     proxy_apps.into(),
   )
+}
+
+#[tauri::command]
+pub async fn tauri_android_stop_vpn<R: Runtime>(
+  h: AppHandle<R>,
+  state: State<'_, Vpn<R>>,
+) -> TAResult<bool> {
+  state.stop_vpn(h)
+}
+
+#[tauri::command]
+pub async fn tauri_android_request_notification_permission<R: Runtime>(
+  h: AppHandle<R>,
+  state: State<'_, Vpn<R>>,
+) -> TAResult<bool> {
+  state.request_notification_permission(h)
 }
 
 #[tauri::command]
@@ -131,6 +145,38 @@ impl<R: Runtime> Vpn<R> {
           &h,
           "vpn",
           &format!("failed getVpnConnected due to: {}", &msg),
+        );
+        Ok(false)
+      }
+    }
+  }
+
+  pub fn stop_vpn(&self, h: AppHandle<R>) -> TAResult<bool> {
+    let ret = self.0.run_mobile_plugin::<StartVpnResponse>("stopVpn", ());
+
+    match ret {
+      Ok(x) => Ok(x.success),
+      Err(e) => {
+        let msg = e.to_string();
+        emit_log(&h, "vpn", &format!("failed stopVpn due to: {}", &msg));
+        Ok(false)
+      }
+    }
+  }
+
+  pub fn request_notification_permission(&self, h: AppHandle<R>) -> TAResult<bool> {
+    let ret = self
+      .0
+      .run_mobile_plugin::<StartVpnResponse>("requestNotificationPermission", ());
+
+    match ret {
+      Ok(x) => Ok(x.success),
+      Err(e) => {
+        let msg = e.to_string();
+        emit_log(
+          &h,
+          "vpn",
+          &format!("failed requestNotificationPermission due to: {}", &msg),
         );
         Ok(false)
       }

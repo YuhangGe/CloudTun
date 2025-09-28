@@ -1,6 +1,6 @@
 use anyhow_tauri::TAResult;
 use base64::Engine;
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Runtime};
 use uuid::Uuid;
 
 pub fn emit_log<R: Runtime>(h: &AppHandle<R>, log_type: &str, log_message: &str) {
@@ -32,6 +32,8 @@ pub async fn tauri_base64_covert(content: &str) -> TAResult<String> {
 #[tauri::command]
 pub fn tauri_open_devtools<R: Runtime>(h: AppHandle<R>) -> TAResult<()> {
   println!("open dev tools");
+  use tauri::Manager;
+
   if let Some(win) = h.get_webview_window("main") {
     win.open_devtools();
   }

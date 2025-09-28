@@ -3,27 +3,25 @@ mod android;
 #[cfg(desktop)]
 mod notify;
 #[cfg(desktop)]
-mod proxy;
-
 mod ping;
+#[cfg(desktop)]
+mod proxy;
 mod tencent;
 mod util;
+
 use log::info;
 #[cfg(desktop)]
 use proxy::{tauri_start_proxy_client, tauri_stop_proxy_client};
-
-use tauri::{AppHandle, Runtime, Wry};
-use tauri::{Manager, WebviewWindowBuilder};
-
 #[cfg(desktop)]
 use tauri::{
   menu::{Menu, MenuItem},
   tray::TrayIconBuilder,
+  AppHandle, Manager, Runtime, WebviewWindowBuilder, Wry,
 };
 
 #[cfg(desktop)]
 use notify::*;
-
+#[cfg(desktop)]
 use ping::*;
 use tencent::*;
 use util::*;
@@ -108,15 +106,19 @@ pub fn run() {
   {
     use crate::android::{
       tauri_android_get_vpn_connected, tauri_android_init_plugin, tauri_android_list_all_apps,
-      tauri_android_start_vpn,
+      tauri_android_request_notification_permission, tauri_android_start_vpn,
+      tauri_android_stop_vpn,
     };
 
     builder = builder
       .plugin(tauri_android_init_plugin())
       .invoke_handler(tauri::generate_handler![
         tauri_generate_uuid,
+        tauri_base64_covert,
+        tauri_android_request_notification_permission,
         tauri_calc_tencent_cloud_api_signature,
         tauri_android_start_vpn,
+        tauri_android_stop_vpn,
         tauri_android_list_all_apps,
         tauri_android_get_vpn_connected,
       ]);
@@ -130,6 +132,7 @@ pub fn run() {
       .plugin(init())
       .invoke_handler(tauri::generate_handler![
         tauri_generate_uuid,
+        tauri_base64_covert,
         tauri_calc_tencent_cloud_api_signature,
       ]);
   }
@@ -174,8 +177,8 @@ pub fn run() {
           .build(_app)
           .unwrap();
         _app.manage(NotifyWindow::<Wry>::new());
+        _app.manage(Ping::new());
       }
-      _app.manage(Ping::new());
 
       Ok(())
     })

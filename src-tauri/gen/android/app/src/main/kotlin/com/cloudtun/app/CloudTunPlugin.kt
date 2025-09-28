@@ -1,11 +1,16 @@
 package com.cloudtun.app
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.net.VpnService
+import android.os.Build
 import android.util.Base64
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
@@ -80,22 +85,7 @@ class CloudTunPlugin(private val activity: Activity): Plugin(activity) {
 //    val context = activity.applicationContext
     val p = VpnService.prepare(activity)
     if (p != null) {
-      
-//      activityResultCallback = { requestCode, resultCode, data ->
-//        val success = requestCode == 0x9999 && resultCode == Activity.RESULT_OK;
-//        if (success) {
-//            // 授权成功，启动服务
-//            val intent = Intent(activity, CloudTunVpnService::class.java).apply {
-//              putExtra("serverIp", args.serverIp)
-//              putExtra("token", args.token)
-//            }
-//            activity.startService(intent)
-//        }
-//        println("after startVpn")
-//        val ret = JSObject()
-//        ret.put("success", success)
-//        invoke.resolve(ret)
-//      }
+       
       p.putExtra("serverIp", args.serverIp)
       p.putExtra("token", args.token)
       p.putExtra("cvmId", args.cvmId)
@@ -119,7 +109,25 @@ class CloudTunPlugin(private val activity: Activity): Plugin(activity) {
       ret.put("success", true)
       invoke.resolve(ret)
     }
-  } 
+  }
+  
+  @Command
+  fun requestNotificationPermission(invoke: Invoke) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      if (ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS) !=
+        PackageManager.PERMISSION_GRANTED) {
+        // 请求权限
+        ActivityCompat.requestPermissions(
+          activity,
+          arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+          1001
+        )
+      }
+    }
+    val ret = JSObject()
+    ret.put("success", true)
+    invoke.resolve(ret)
+  }
   
   @Command
   fun stopVpn(invoke: Invoke) {
@@ -127,7 +135,9 @@ class CloudTunPlugin(private val activity: Activity): Plugin(activity) {
        action = "STOP"
     }
     activity.startService(intent)
-    invoke.resolve()
+    val ret = JSObject()
+    ret.put("success", true)
+    invoke.resolve(ret)
   }
   
   @Command

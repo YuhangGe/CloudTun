@@ -9,16 +9,20 @@ const ContextMenuOptions: MenuOption<string>[] = [
     'slot:icon': <span className='icon-[ant-design--reload-outlined]'></span>,
     label: '重新加载',
   },
-  {
-    value: 'dev',
-    label: '开发面板',
-    'slot:icon': <span className='icon-[oui--app-devtools]'></span>,
-  },
-  {
-    value: 'quit',
-    label: '退出程序',
-    'slot:icon': <span className='icon-[grommet-icons--power-shutdown]'></span>,
-  },
+  ...(!IS_MOBILE
+    ? [
+        {
+          value: 'dev',
+          label: '开发面板',
+          'slot:icon': <span className='icon-[oui--app-devtools]'></span>,
+        },
+        {
+          value: 'quit',
+          label: '退出程序',
+          'slot:icon': <span className='icon-[grommet-icons--power-shutdown]'></span>,
+        },
+      ]
+    : []),
 ];
 export function ContextMenu() {
   const state = vm({
@@ -49,9 +53,9 @@ export function ContextMenu() {
             if (!IS_MOBILE) {
               await invoke('tauri_stop_proxy_client');
               await invoke('tauri_close_notify_window');
+              await invoke('tauri_interval_ping_stop');
             }
 
-            await invoke('tauri_interval_ping_stop');
             history.replaceState(null, '', '/');
             location.reload();
           } else if (v == 'quit') {
