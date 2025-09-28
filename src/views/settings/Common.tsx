@@ -155,20 +155,22 @@ export function CommonSettingsForm() {
             )}
           </Controller>
         </FormItem>
-        <FormItem label='开机启动：' error={formErrors.autoStartApp}>
-          <Controller control={control} name='autoStartApp'>
-            {(field) => (
-              <div className='flex items-center'>
-                <Switch
-                  value={field.value}
-                  on:change={(checked) => {
-                    field['on:change'](checked);
-                  }}
-                />
-              </div>
-            )}
-          </Controller>
-        </FormItem>
+        {!IS_MOBILE && (
+          <FormItem label='开机启动：' error={formErrors.autoStartApp}>
+            <Controller control={control} name='autoStartApp'>
+              {(field) => (
+                <div className='flex items-center'>
+                  <Switch
+                    value={field.value}
+                    on:change={(checked) => {
+                      field['on:change'](checked);
+                    }}
+                  />
+                </div>
+              )}
+            </Controller>
+          </FormItem>
+        )}
         {IS_MOBILE && (
           <FormItem label='代理模式：' error={formErrors.mobileProxyMode}>
             <Controller control={control} name='mobileProxyMode'>

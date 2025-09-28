@@ -3,7 +3,7 @@ import { type CVMInstance, CreateInstance } from '@/service/tencent';
 import { IS_MOBILE, IS_REOPEN } from '@/service/util';
 import { loadInstance, pingServerOnce, startProxyClient } from '@/views/proxy/helper';
 import { vm } from 'jinge';
-import { type MessageInstance, message } from 'jinge-antd';
+import { type MessageInstance, type MessageUpdateOptions, message } from 'jinge-antd';
 // import { appendLog } from './log';
 import { showNotifyWindow } from '@/service/notify';
 import { invoke } from '@tauri-apps/api/core';
@@ -30,27 +30,19 @@ export const globalInst = vm<InstanceState>({
   state: 0,
 });
 
-// let pingInt = 0;
-// export function startPingV2RayInterval() {
-//   if (pingInt) clearInterval(pingInt);
-//   pingInt = window.setInterval(
-//     async () => {
-//       if (!globalInst.ip) return;
-//       const ret = await pingV2RayOnce(globalInst.ip!);
-//       if (!ret) {
-//         appendLog('[ping] ==> 服务器响应异常，可能是竞价实例被回收，请刷新主机信息后重新购买');
-//         if (IS_MOBILE) {
-//           message.error('V2Ray 远程主机失联！');
-//         } else {
-//           void showNotifyWindow({ notifyType: 'error', notifyMessage: 'V2Ray 远程主机失联！' });
-//         }
-//       } else {
-//         appendLog('[ping] ==> 服务器正常响应');
-//       }
-//     },
-//     2 * 60 * 1000,
-//   );
-// }
+function showMsg(content: string, type?: MessageUpdateOptions['type']) {
+  if (msg) {
+    msg.update({ content, type });
+  } else {
+    if (type === 'success') {
+      message.success(content);
+    } else if (type === 'error') {
+      message.error(content);
+    } else if (type === 'loading') {
+      msg = message.loading(content);
+    }
+  }
+}
 
 export async function loadGlobalInst(id?: string) {
   globalInst.loading = true;
@@ -64,19 +56,22 @@ const E1 = '创建失败！';
 const S2 = '启动远程代理服务...';
 
 export async function createGlobalInst() {
+  msg?.close();
+  msg = undefined;
+
   if (globalInst.data) {
-    message.error('实例已创建？？');
+    showMsg('实例已创建？？', 'error');
     return;
   }
   if (IS_MOBILE) {
-    msg = message.loading(S1);
+    showMsg(S1, 'loading');
   } else {
     void showNotifyWindow({ notifyType: 'processing', notifyMessage: S1 });
   }
   const deps = await loadInstanceDependentResources();
   if (!deps) {
     if (IS_MOBILE) {
-      msg?.update({ content: E1, type: 'error' });
+      showMsg(E1, 'error');
     } else {
       void showNotifyWindow({ notifyType: 'error', notifyMessage: E1 });
     }
@@ -86,7 +81,7 @@ export async function createGlobalInst() {
 
   if (err) {
     if (IS_MOBILE) {
-      msg?.update({ content: E1, type: 'error' });
+      showMsg(E1, 'error');
     } else {
       void showNotifyWindow({ notifyType: 'error', notifyMessage: E1 });
     }
@@ -122,7 +117,7 @@ async function updateInst(inst?: CVMInstance) {
   } else {
     if (!IS_REOPEN) {
       if (IS_MOBILE) {
-        msg?.update({ content: S2 });
+        showMsg(S2, 'loading');
       } else {
         void showNotifyWindow({ notifyType: 'processing', notifyMessage: S2 });
       }
@@ -143,6 +138,8 @@ async function updateConnect() {
           token: globalSettings.token,
         });
         await enableProxy();
+      } else {
+        showMsg('远程 CloudTun 服务已就绪，可启动本地 VPN！', 'success');
       }
     } else {
       globalInst.state = 4;
@@ -162,23 +159,12 @@ async function enableProxy() {
     globalInst.data!.InstanceId,
   );
   if (!r) {
-    if (IS_MOBILE) {
-      // message.error('启动本地 v2ray core 失败，请尝试退出后重启 CloudV2Ray。');
-    } else {
-      await showNotifyWindow({ notifyType: 'error', notifyMessage: '启动 CloudTun 代理失败！' });
-    }
+    showMsg('远程 CloudTun 服务启动失败！', 'error');
   } else {
     globalInst.state = 4;
-    if (IS_MOBILE) {
-      // message.success('远程主机安装 V2Ray 完成，已启动本地 v2ray-core 代理！');
-    } else {
-      await showNotifyWindow({
-        notifyType: 'success',
-        notifyMessage: 'CloudTun 代理启动成功！',
-      });
-      // setTimeout(() => {
-      //   void hideNotifyWindow();
-      // }, 3000);
-    }
+    await showNotifyWindow({
+      notifyType: 'success',
+      notifyMessage: 'CloudTun 代理启动成功！',
+    });
   }
 }

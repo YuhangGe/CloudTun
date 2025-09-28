@@ -82,7 +82,7 @@ export function Bandwidth(props: { price?: CVMPrice; inst?: CVMInstance }) {
   return (
     <div className='flex items-center'>
       <span className='mr-1 whitespace-nowrap'>公网带宽：</span>
-      <Tag className='w-30'>
+      <Tag className='w-35'>
         {globalSettings.bandWidth}
         <span className='ml-0.5'>Mbps</span>
       </Tag>

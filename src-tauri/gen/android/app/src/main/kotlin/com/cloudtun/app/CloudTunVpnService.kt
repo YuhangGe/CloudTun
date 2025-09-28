@@ -60,9 +60,9 @@ class CloudTunVpnService : VpnService() {
     
     val notification = NotificationCompat.Builder(this, CHANNEL_ID)
       .setContentTitle("CloudTun")
-//      .setSmallIcon(R.drawable.ic_vpn)
-      //      .setContentIntent(pendingIntent)
-      .setContentText("VPN Service Running")
+      .setSmallIcon(R.mipmap.ic_launcher)
+       //      .setContentIntent(pendingIntent)
+      .setContentText("VPN 代理已连接...")
       .setOngoing(true)
       .addAction(createStopAction())
       .setPriority(NotificationCompat.PRIORITY_HIGH)

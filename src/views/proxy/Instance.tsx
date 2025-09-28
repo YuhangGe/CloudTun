@@ -54,7 +54,7 @@ export function Instance() {
       <div className='flex items-center'>
         <span className='mr-1 whitespace-nowrap'>当前主机：</span>
 
-        <Tag className='w-30'>{globalInst.data?.InstanceName ?? '-'}</Tag>
+        <Tag className='w-35'>{globalInst.data?.InstanceName ?? '-'}</Tag>
         {state.status && <span className='text-secondary-text text-sm'>（{state.status}）</span>}
 
         <Button
@@ -70,7 +70,7 @@ export function Instance() {
       {globalInst.ip && (
         <div className='flex items-center'>
           <span className='mr-1 whitespace-nowrap'>公网地址：</span>
-          <Tag className='mr-2 w-30'>{globalInst.ip}</Tag>
+          <Tag className='mr-2 w-35'>{globalInst.ip}</Tag>
           <CopyButton text={`ssh ubuntu@${globalInst.ip}`} />
         </div>
       )}

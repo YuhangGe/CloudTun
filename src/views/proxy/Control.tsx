@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { TerminateInstance } from '@/service/tencent';
 import { type WithEvents, type WithExpose, expose, vm } from 'jinge';
 import { createGlobalInst, globalInst } from '@/store/instance';
-import { IS_MOBILE } from '@/service/util';
+import { IS_ANDROID, IS_MOBILE } from '@/service/util';
 import { globalSettings } from '@/store/settings';
 
 export function Control(
@@ -36,7 +36,13 @@ export function Control(
       globalInst.data = undefined;
       globalInst.state = 0;
       globalInst.ip = undefined;
-      await invoke('tauri_stop_v2ray_server');
+      if (IS_MOBILE) {
+        if (IS_ANDROID) {
+          await invoke('tauri_android_stop_vpn');
+        }
+      } else {
+        await invoke('tauri_stop_proxy_client');
+      }
     }
   }
   async function create() {

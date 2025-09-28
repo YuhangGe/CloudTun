@@ -22,7 +22,7 @@ export function Balance() {
   return (
     <div className='flex items-center'>
       <span className='mr-1 whitespace-nowrap'>账户余额：</span>
-      {state.price && <Tag className='mr-2 w-30'>¥{state.price}</Tag>}
+      {state.price && <Tag className='mr-2 w-35'>¥{state.price}</Tag>}
       <Button
         loading={state.loading}
         on:click={() => {

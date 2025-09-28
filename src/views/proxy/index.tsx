@@ -102,7 +102,7 @@ export function ProxyView() {
         <div className='text-lg font-medium'>主机配置</div>
         <div className='flex items-center'>
           <span className='mr-1 whitespace-nowrap'>实例规格：</span>
-          <Tag className='w-30'>{globalSettings.instanceType}</Tag>
+          <Tag className='w-35'>{globalSettings.instanceType}</Tag>
           {state.price && (
             <span className='text-secondary-text text-sm whitespace-nowrap'>
               （¥{state.price.InstancePrice.UnitPriceDiscount}/小时）

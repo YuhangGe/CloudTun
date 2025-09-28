@@ -23,7 +23,7 @@ export const DefaultSettings: Settings = {
   // imageType: 'PRIVATE_IMAGE',
   imageId: '',
   zone: import.meta.env.VITE_SETTING_ZONE ?? '',
-  resourceName: 'cloudtun::proxy',
+  resourceName: import.meta.env.VITE_RESOURCE_NAME ?? 'cloudtun',
   bandWidth: 200,
   secretKey: import.meta.env.VITE_SECRET_KEY ?? '',
   secretId: import.meta.env.VITE_SECRET_ID ?? '',

@@ -8,6 +8,7 @@ import { cx, vm, watch } from 'jinge';
 import { SettingsView } from './views/settings';
 import { LogView } from './views/logview';
 import { ProxyView } from './views/proxy';
+import { IS_MOBILE } from './service/util';
 
 const ViewItems: MenuOption<string>[] = [
   {
@@ -69,17 +70,19 @@ export function Layout() {
           </div>
         ))}
         <div className='flex-1'></div>
-        <Tooltip content='退出CloudTun，结束本地代理' placement='top-start'>
-          <Button
-            on:click={async () => {
-              await invoke('tauri_stop_proxy_client');
-              await invoke('tauri_exit_process');
-            }}
-            className='flex w-full items-center justify-center pt-2 pb-4'
-            slot:icon={<span className='icon-[grommet-icons--power-shutdown]'></span>}
-            type='link'
-          />
-        </Tooltip>
+        {!IS_MOBILE && (
+          <Tooltip content='退出CloudTun，结束本地代理' placement='top-start'>
+            <Button
+              on:click={async () => {
+                await invoke('tauri_stop_proxy_client');
+                await invoke('tauri_exit_process');
+              }}
+              className='flex w-full items-center justify-center pt-2 pb-4'
+              slot:icon={<span className='icon-[grommet-icons--power-shutdown]'></span>}
+              type='link'
+            />
+          </Tooltip>
+        )}
       </div>
       <div className='flex flex-1 flex-col overflow-x-hidden px-6 pt-6 max-sm:px-4'>
         <div className='mb-4 flex items-center sm:mb-5'>
