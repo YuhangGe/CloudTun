@@ -3,6 +3,11 @@ import { ContextMenu } from './ContextMenu';
 import { cx, onMount } from 'jinge';
 import { IS_ANDROID } from './service/util';
 import { invoke } from '@tauri-apps/api/core';
+import { message } from 'jinge-antd';
+
+if (IS_ANDROID) {
+  message.configContainer({ paddingTop: 32, paddingLeft: 32, paddingRight: 32 });
+}
 
 function App() {
   onMount(() => {

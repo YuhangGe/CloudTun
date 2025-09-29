@@ -4,7 +4,7 @@ import { FormItem } from './FormItem';
 import { globalSettings } from '@/store/settings';
 import { Switch } from './Swtich';
 import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
-import { IS_ANDROID, IS_MOBILE } from '@/service/util';
+import { IS_ANDROID, IS_IOS, IS_MOBILE } from '@/service/util';
 import { onMount, vm, vmRaw } from 'jinge';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -15,21 +15,21 @@ interface App {
   selected?: boolean;
 }
 
-function PickAppModal(props: { apps?: String }) {
+function PickAppModal(props: { apps?: string[] }) {
   const state = vm<{
-    apps: App[];
+    allApps: App[];
   }>({
-    apps: [],
+    allApps: [],
   });
 
   onMount(() => {
     invoke<App[]>('tauri_android_list_all_apps').then(
       (ret) => {
-        const idSet = new Set(props.apps?.split('\n'));
+        const idSet = new Set(props.apps);
         ret.forEach((app) => {
           app.selected = idSet.has(app.id);
         });
-        state.apps = ret;
+        state.allApps = ret;
       },
       (err) => {
         console.error(err);
@@ -39,16 +39,15 @@ function PickAppModal(props: { apps?: String }) {
 
   onModalConfirm(() => {
     return {
-      result: vmRaw(state.apps)
+      result: vmRaw(state.allApps)
         .filter((app) => app.selected)
-        .map((app) => app.id)
-        .join('\n'),
+        .map((app) => app.id),
     };
   });
 
   return (
     <div className='border-border mt-2 flex max-h-[60vh] flex-col overflow-auto rounded-sm border'>
-      {state.apps.map((app) => (
+      {state.allApps.map((app) => (
         <div className='border-border flex items-center border-b py-3 pl-3' key={app.id}>
           <div className='mr-3 h-11 w-11 shrink-0'>
             {app.icon ? (
@@ -82,10 +81,15 @@ export function CommonSettingsForm() {
       autoProxy: z.boolean(),
       autoStartApp: z.boolean(),
       mobileProxyMode: z.string(),
-      mobileProxyApps: z.string(),
     }),
     { defaultValues: globalSettings },
   );
+
+  const state = vm<{
+    apps: string[];
+  }>({
+    apps: globalSettings.mobileProxyApps.split('\n'),
+  });
 
   async function save() {
     const [err, data] = await validate();
@@ -116,25 +120,31 @@ export function CommonSettingsForm() {
       }
     }
 
+    const mobileProxyApps = state.apps.join('\n');
     if (
       data.mobileProxyMode !== globalSettings.mobileProxyMode ||
-      data.mobileProxyApps !== globalSettings.mobileProxyApps
+      mobileProxyApps !== globalSettings.mobileProxyApps
     ) {
       globalSettings.mobileProxyMode = data.mobileProxyMode as 'global' | 'app';
-      globalSettings.mobileProxyApps = data.mobileProxyApps;
+      globalSettings.mobileProxyApps = mobileProxyApps;
       message.success('保存成功！');
     }
   }
 
   async function pickApps() {
     const ret = await modal
-      .show<string>({
+      .show<string[]>({
         title: '选择应用',
-        'slot:content': <PickAppModal apps={formState.mobileProxyApps} />,
+        'slot:content': <PickAppModal apps={state.apps} />,
       })
       .waitForClose();
     if (ret !== undefined) {
-      formState.mobileProxyApps = ret;
+      const idSet = new Set(state.apps);
+      ret.forEach((app) => {
+        if (!idSet.has(app)) {
+          state.apps.push(app);
+        }
+      });
     }
   }
 
@@ -190,37 +200,46 @@ export function CommonSettingsForm() {
           </FormItem>
         )}
         {IS_MOBILE && formState.mobileProxyMode === 'app' && (
-          <FormItem label='代理应用：' error={formErrors.mobileProxyApps}>
-            <Controller control={control} name='mobileProxyApps'>
-              {(field) => (
-                <div className='relative'>
-                  <textarea
-                    className='border-border w-full rounded-md border p-2'
-                    rows={6}
-                    value={field.value}
-                    on:change={(evt) => {
-                      field['on:change'](evt.target.value);
-                    }}
-                  ></textarea>
-                  {IS_ANDROID && (
+          <FormItem label='代理应用：'>
+            <div className=''>
+              <ul className='border-border max-h-[200px] overflow-auto rounded-md border'>
+                {state.apps.map((app, idx) => (
+                  <li
+                    className='border-border flex items-center px-3 py-3 not-last:border-b'
+                    key={app}
+                  >
+                    <span className='flex-1'>{app}</span>
                     <Button
                       on:click={() => {
-                        void pickApps();
+                        state.apps.splice(idx, 1);
                       }}
-                      type='primary'
+                      type='link'
                       size='sm'
-                      className='absolute top-2 right-2'
-                    >
-                      选取
-                    </Button>
-                  )}
-                </div>
-              )}
-            </Controller>
+                      slot:icon={<span className='icon-[ant-design--delete-twotone]'></span>}
+                    ></Button>
+                  </li>
+                ))}
+              </ul>
+              <div className='mt-3 flex'>
+                <Button
+                  on:click={() => {
+                    if (IS_ANDROID) {
+                      void pickApps();
+                    } else if (IS_IOS) {
+                      // todo
+                    }
+                  }}
+                  size='sm'
+                  slot:icon={<span className='icon-[ant-design--plus-outlined]'></span>}
+                >
+                  添加
+                </Button>
+              </div>
+            </div>
           </FormItem>
         )}
       </div>
-      <div className='my-20 flex items-center gap-8'>
+      <div className='my-10 flex items-center gap-8'>
         <Button
           type='primary'
           on:click={() => {
