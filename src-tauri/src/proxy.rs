@@ -48,9 +48,10 @@ pub async fn stop_proxy_client(state: State<'_, ProxyLoop>) {
 async fn start_proxy_client<R: Runtime>(
   h: AppHandle<R>,
   state: State<'_, ProxyLoop>,
-  server_ip: &str,
-  token: &str,
-  cvm_id: &str,
+  server_ip: String,
+  token: String,
+  cvm_id: String,
+  proxy_rules: Option<String>,
 ) -> anyhow::Result<()> {
   emit_log(&h, "log::proxy", "starting proxy client...");
   let proxy_loop = state.0.clone();
@@ -68,7 +69,7 @@ async fn start_proxy_client<R: Runtime>(
     server_addr: (server_ip.to_string(), 24816, token.to_string()),
     local_addr: ("0.0.0.0".to_string(), 7892),
     default_rule: cloudtun_proxy::MatchType::Proxy,
-    rules_config_file: None,
+    proxy_rules,
     password,
   };
   let shutdown_token = CancellationToken::new();
@@ -96,13 +97,25 @@ async fn start_proxy_client<R: Runtime>(
 pub async fn tauri_start_proxy_client<R: Runtime>(
   handle: AppHandle<R>,
   state: State<'_, ProxyLoop>,
-  server_ip: &str,
-  token: &str,
-  cvm_id: &str,
+  server_ip: String,
+  token: String,
+  cvm_id: String,
+  proxy_rules: String,
 ) -> TAResult<()> {
-  start_proxy_client(handle, state, server_ip, token, cvm_id)
-    .await
-    .into_ta_result()
+  start_proxy_client(
+    handle,
+    state,
+    server_ip,
+    token,
+    cvm_id,
+    if proxy_rules.is_empty() {
+      None
+    } else {
+      Some(proxy_rules)
+    },
+  )
+  .await
+  .into_ta_result()
 }
 
 #[tauri::command]

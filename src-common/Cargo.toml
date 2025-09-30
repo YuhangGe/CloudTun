@@ -19,7 +19,7 @@ reqwest = { version = "0.12.23", default-features = false, features = [
   "rustls-tls",
 ], optional = true }
 
-serde = { version = "1.0.227", features = ["derive"], optional = true }
+serde = { version = "1.0.228", features = ["derive"], optional = true }
 anyhow = { version = "1.0.100", optional = true }
 
 # for proxy feature

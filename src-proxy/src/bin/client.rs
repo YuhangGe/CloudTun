@@ -54,6 +54,16 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     password.push(byte);
   }
+
+  let proxy_rules = if let Some(rules_config_file) = &args.config {
+    let mut f = File::open(rules_config_file).await?;
+    let mut rules = String::new();
+    f.read_to_string(&mut rules).await?;
+    rules
+  } else {
+    None
+  };
+
   let proxy_args = ProxyArgs {
     server_addr: (args.server_ip, args.server_port, args.token),
     local_addr: (
@@ -61,8 +71,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
       args.local_port,
     ),
     default_rule: MatchType::Proxy,
-    secret: password,
-    rules_config_file: args.config,
+    password,
+    proxy_rules,
   };
 
   let shutdown_token = CancellationToken::new();

@@ -13,8 +13,8 @@ bin = ["clap", "ctrlc2"]
 
 [dependencies]
 cloudtun-common = { path = "../src-common", features = ["proxy"] }
-axum = { version = "0.8.4", features = ["ws"] }
-axum-extra = { version = "0.10.1", features = ["typed-header"] }
+axum = { version = "0.8.5", features = ["ws"] }
+axum-extra = { version = "0.10.2", features = ["typed-header"] }
 tokio = { version = "1.47.1", features = ["full"] }
 tokio-util = "0.7.16"
 hyper = { version = "1.7.0", features = ["full"] }

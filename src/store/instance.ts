@@ -157,6 +157,7 @@ async function enableProxy() {
     globalInst.ip!,
     globalSettings.token,
     globalInst.data!.InstanceId,
+    globalSettings.proxyRules,
   );
   if (!r) {
     showMsg('远程 CloudTun 服务启动失败！', 'error');

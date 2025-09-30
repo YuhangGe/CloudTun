@@ -81,6 +81,7 @@ export function CommonSettingsForm() {
       autoProxy: z.boolean(),
       autoStartApp: z.boolean(),
       mobileProxyMode: z.string(),
+      proxyRules: z.string(),
     }),
     { defaultValues: globalSettings },
   );
@@ -118,6 +119,11 @@ export function CommonSettingsForm() {
         }
         message.success('已取消开机启动！');
       }
+    }
+
+    if (globalSettings.proxyRules !== data.proxyRules) {
+      globalSettings.proxyRules = data.proxyRules;
+      message.success('规格更新成功！');
     }
 
     const mobileProxyApps = state.apps.join('\n');
@@ -177,6 +183,22 @@ export function CommonSettingsForm() {
                     }}
                   />
                 </div>
+              )}
+            </Controller>
+          </FormItem>
+        )}
+        {!IS_MOBILE && (
+          <FormItem label='代理规则：' error={formErrors.proxyRules}>
+            <Controller control={control} name='proxyRules'>
+              {(field) => (
+                <textarea
+                  className='border-border rounded-md border p-3 leading-[1.3] outline-none'
+                  rows={5}
+                  value={field.value}
+                  on:input={(evt) => {
+                    field['on:change'](evt.target.value);
+                  }}
+                />
               )}
             </Controller>
           </FormItem>

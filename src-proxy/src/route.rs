@@ -1,9 +1,14 @@
 // static GEOSITE_DATA: &[u8] = include_bytes!("data/geosite.dat");
 // static GEOIP_DATA: &[u8] = include_bytes!("data/geoip.dat");
 
-use std::{collections::HashMap, fmt::Display, sync::Arc};
+use std::{
+  collections::HashMap,
+  fmt::Display,
+  ops::{Add, DerefMut},
+  sync::Arc,
+};
 
-use tokio::{fs::File, io::AsyncReadExt, sync::RwLock};
+use tokio::sync::{Mutex, RwLock};
 
 #[derive(Debug, Clone, Copy)]
 pub enum MatchType {
@@ -30,18 +35,21 @@ struct TrieNode {
 
 #[derive(Debug, Clone)]
 struct Trie {
+  rules_count: Arc<Mutex<usize>>,
   root: Arc<RwLock<TrieNode>>,
 }
 
 impl Trie {
   pub fn new() -> Self {
     Trie {
+      rules_count: Arc::new(Mutex::new(0)),
       root: Arc::new(RwLock::new(TrieNode::default())),
     }
   }
 
   pub async fn insert(&mut self, url: &str, match_type: MatchType) {
     let trie = &mut self.root.write().await;
+    let rules_count = &mut self.rules_count.lock().await;
     let mut cnext: &mut HashMap<u8, TrieNode> = &mut trie.next;
     let len = url.len() - 1;
     for (index, data) in url.as_bytes().iter().rev().enumerate() {
@@ -55,6 +63,7 @@ impl Trie {
             match_type: Some(match_type),
             next: HashMap::new(),
           });
+        *rules_count.deref_mut() = rules_count.add(1);
         // println!("insert new rule: {}, {}", url, match_type);
       } else {
         let x = cnext.entry(*data).or_default();
@@ -90,12 +99,8 @@ pub struct RouteMatcher {
   // pub rules_config_file: Option<String>,
 }
 
-async fn load_rules(rules_config_file: &str, trie: &mut Trie) -> std::io::Result<()> {
-  let mut f = File::open(rules_config_file).await?;
-  let mut rules = String::new();
-  f.read_to_string(&mut rules).await?;
-
-  for (line_number, line_content) in rules.split('\n').enumerate() {
+async fn load_rules(proxy_rules: &str, trie: &mut Trie) -> std::io::Result<()> {
+  for (line_number, line_content) in proxy_rules.split('\n').enumerate() {
     let line_cnt = line_content.trim_ascii();
     if line_cnt.is_empty() || line_cnt.starts_with('#') {
       continue;
@@ -138,6 +143,10 @@ async fn load_rules(rules_config_file: &str, trie: &mut Trie) -> std::io::Result
 }
 
 impl RouteMatcher {
+  pub async fn get_count(&self) -> usize {
+    *self.trie.rules_count.lock().await
+  }
+
   pub async fn load(
     default_rule: MatchType,
     rules_config_file: Option<String>,

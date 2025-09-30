@@ -5,11 +5,11 @@ edition = "2024"
 
 [dependencies]
 cloudtun-common = { path = "../src-common", features = ["tencent"] }
-axum = { version = "0.8.4", features = ["ws"] }
-axum-extra = { version = "0.10.1", features = ["typed-header"] }
+axum = { version = "0.8.5", features = ["ws"] }
+axum-extra = { version = "0.10.2", features = ["typed-header"] }
 futures-util = "0.3.31"
 headers = "0.4.1"
-tokio = { version = "1", features = ["full"] }
-tokio-tungstenite = "0.27.0"
+tokio = { version = "1.47.1", features = ["full"] }
+tokio-tungstenite = "0.28.0"
 clap = { version = "4.5.48", features = ["derive"] }
-anyhow = "1.0.99"
+anyhow = "1.0.100"

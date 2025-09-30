@@ -12,6 +12,7 @@ export interface Settings {
   token: string;
   autoProxy: boolean;
   autoStartApp: boolean;
+  proxyRules: string;
   mobileProxyApps: string;
   mobileProxyMode: 'global' | 'app';
 }
@@ -29,6 +30,7 @@ export const DefaultSettings: Settings = {
   secretId: import.meta.env.VITE_SECRET_ID ?? '',
   autoProxy: false,
   autoStartApp: false,
+  proxyRules: '',
   mobileProxyApps: 'com.android.chrome',
   mobileProxyMode: 'app',
 };

@@ -17,7 +17,7 @@ pub struct ProxyArgs {
   pub password: Vec<u8>,
   pub local_addr: (String, u16),
   pub default_rule: MatchType,
-  pub rules_config_file: Option<String>,
+  pub proxy_rules: Option<String>,
 }
 
 pub async fn run_proxy_loop<F: Fn(&str, &str) + Send + Sync + 'static>(
@@ -25,8 +25,8 @@ pub async fn run_proxy_loop<F: Fn(&str, &str) + Send + Sync + 'static>(
   shutdown_token: CancellationToken,
   log_fn: F,
 ) -> Result<(), Box<dyn std::error::Error>> {
-  let router: RouteMatcher =
-    RouteMatcher::load(args.default_rule, args.rules_config_file.clone()).await?;
+  let router: RouteMatcher = RouteMatcher::load(args.default_rule, args.proxy_rules).await?;
+  let proxy_rules_count = router.get_count().await;
   let log_fn = Arc::new(log_fn);
   let log_fn2 = log_fn.clone();
   let server_addr = Arc::new(args.server_addr.clone());
@@ -62,11 +62,11 @@ pub async fn run_proxy_loop<F: Fn(&str, &str) + Send + Sync + 'static>(
   );
   log_fn(
     "proxy::info",
-    &format!("Default Rule: {}", args.default_rule),
+    &format!(
+      "Proxy Rules: {}, default {}",
+      proxy_rules_count, args.default_rule
+    ),
   );
-  args.rules_config_file.map(|f| {
-    log_fn("proxy::info", &format!("Rules File: {f}"));
-  });
 
   loop {
     let accept_future = listener.accept();
