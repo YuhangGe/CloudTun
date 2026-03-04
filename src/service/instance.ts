@@ -47,11 +47,14 @@ export async function loadInstanceDependentResources(): Promise<
     return;
   }
   const resourceName = globalSettings.resourceName;
+  /// vpc 和安全组不分 zone，但 subnet 要分 zone.
+  const idx = globalSettings.zone.match(/\d+$/)?.[0] ?? 1;
+  const subnetName = resourceName + '_' + idx;
 
   const [vpc, b, c] = await Promise.all([
     loadVpc(resourceName),
     DescribeSubnets(
-      params('subnet', resourceName, {
+      params('subnet', subnetName, {
         Name: 'zone',
         Values: [globalSettings.zone],
       }),
@@ -65,9 +68,9 @@ export async function loadInstanceDependentResources(): Promise<
   if (!subnet) {
     const [err, res] = await CreateSubnet({
       VpcId: vpc.VpcId,
-      SubnetName: resourceName,
+      SubnetName: subnetName,
       Zone: globalSettings.zone,
-      CidrBlock: '10.9.0.0/16',
+      CidrBlock: `10.${idx}.0.0/16`,
     });
     if (err || !res.Subnet) return;
     subnet = res.Subnet;

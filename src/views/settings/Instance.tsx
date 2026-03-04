@@ -34,6 +34,21 @@ import { z } from 'zod';
 //   },
 // ];
 
+const DiskTypeOpts = [
+  {
+    label: '普通盘',
+    value: 'CLOUD_PREMIUM',
+  },
+  {
+    label: '通用型SSD',
+    value: 'CLOUD_BSSD',
+  },
+  {
+    label: '性能型SSD',
+    value: 'CLOUD_HSSD',
+  },
+];
+
 export function InstanceConfigForm() {
   const { formErrors, formState, control, validate } = useForm(
     z.object({
@@ -41,6 +56,7 @@ export function InstanceConfigForm() {
       zone: z.string(),
       instanceType: z.string(),
       // imageType: z.string(),
+      diskType: z.string(),
       imageId: z.string(),
       loginPwd: z.string(),
       resourceName: z.string(),
@@ -273,6 +289,17 @@ export function InstanceConfigForm() {
               value={field.value}
               on:change={field['on:change']}
               on:blur={field['on:blur']}
+            />
+          )}
+        </Controller>
+      </FormItem>
+      <FormItem label="磁盘类型：" required error={formErrors.diskType}>
+        <Controller control={control} name="diskType">
+          {(field) => (
+            <Select
+              options={DiskTypeOpts}
+              value={field.value}
+              on:change={field['on:change']}
             />
           )}
         </Controller>

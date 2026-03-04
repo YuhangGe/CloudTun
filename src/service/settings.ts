@@ -3,6 +3,7 @@ export interface Settings {
   instanceType: string;
   imageId: string;
   // imageType: 'PUBLIC_IMAGE' | 'PRIVATE_IMAGE';
+  diskType: string;
   zone: string;
   region: string;
   secretKey: string;
@@ -16,12 +17,19 @@ export interface Settings {
   mobileProxyApps: string;
   mobileProxyMode: 'global' | 'app';
 }
+
+const DEFAULT_PROXY_RULES = `tencent.com: direct
+.cn: direct
+qcloud.com: direct
+npmmirror.com: direct`;
+
 export const DefaultSettings: Settings = {
   region: import.meta.env.VITE_SETTING_REGION ?? 'ap-singapore',
   instanceType: import.meta.env.VITE_SETTING_INSTANCETYPE ?? '',
   token: import.meta.env.VITE_VMESS_ID ?? '',
   loginPwd: import.meta.env.VITE_SETTING_PASSWORD ?? '',
   // imageType: 'PRIVATE_IMAGE',
+  diskType: 'CLOUD_PREMIUM',
   imageId: '',
   zone: import.meta.env.VITE_SETTING_ZONE ?? '',
   resourceName: import.meta.env.VITE_RESOURCE_NAME ?? 'cloudtun',
@@ -30,7 +38,7 @@ export const DefaultSettings: Settings = {
   secretId: import.meta.env.VITE_SECRET_ID ?? '',
   autoProxy: false,
   autoStartApp: false,
-  proxyRules: '',
+  proxyRules: DEFAULT_PROXY_RULES,
   mobileProxyApps: 'com.android.chrome',
   mobileProxyMode: 'app',
 };

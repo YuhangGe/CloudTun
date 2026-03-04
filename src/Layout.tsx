@@ -53,7 +53,7 @@ export function Layout() {
 
   return (
     <>
-      <div className="border-border flex w-28 flex-0 flex-col border-r border-solid max-sm:hidden">
+      <div className="border-border flex w-28 shrink-0 flex-col border-r border-solid max-sm:hidden">
         <div className="pt-1.25 pl-5 max-sm:pl-3">
           <img src={imgLogo} className="size-16" />
         </div>

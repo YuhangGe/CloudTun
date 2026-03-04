@@ -156,7 +156,8 @@ function getInstanceApiParams() {
     Placement: { Zone: globalSettings.zone, ProjectId: 0 },
     SystemDisk: {
       DiskSize: 20,
-      DiskType: 'CLOUD_BSSD', // 'CLOUD_BSSD'
+      // DiskType: 'CLOUD_BSSD', // 'CLOUD_BSSD'
+      DiskType: globalSettings.diskType,
     },
     ImageId: globalSettings.imageId,
     InstanceName: globalSettings.resourceName,
