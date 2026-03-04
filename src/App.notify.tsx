@@ -1,8 +1,9 @@
-import imgLogo from '@/assets/logo-512.png';
 import { type UnlistenFn, listen } from '@tauri-apps/api/event';
 import { onMount, vm } from 'jinge';
+
+import { type Notify } from './service/notify';
 import { Spin } from 'jinge-antd';
-import type { Notify } from './service/notify';
+import imgLogo from '@/assets/logo-512.png';
 import { invoke } from '@tauri-apps/api/core';
 
 function App() {
@@ -33,30 +34,32 @@ function App() {
   });
 
   return (
-    <div className='bg-background flex size-full flex-col overflow-hidden px-4 py-3 backdrop-blur-2xl select-none'>
-      <div className='flex items-center gap-2'>
-        <img src={imgLogo} className='size-[18px]' />
-        <span className='text-sm'>CloudTun</span>
-        <span className='flex-1'></span>
-        <span className='icon-[gravity-ui--broadcast-signal] text-primary text-base'></span>
+    <div className="bg-background flex size-full flex-col overflow-hidden px-4 py-3 backdrop-blur-2xl select-none">
+      <div className="flex items-center gap-2">
+        <img src={imgLogo} className="size-4.5" />
+        <span className="text-sm">CloudTun</span>
+        <span className="flex-1"></span>
+        <span className="icon-[gravity-ui--broadcast-signal] text-primary text-base"></span>
       </div>
       {notify.notifyType === 'processing' && (
-        <p className='mt-4 flex items-center gap-3'>
-          <Spin size='sm' />
-          <span className='text-secondary-text text-[16px]'>{notify.notifyMessage}</span>
+        <p className="mt-4 flex items-center gap-3">
+          <Spin size="sm" />
+          <span className="text-secondary-text text-[16px]">
+            {notify.notifyMessage}
+          </span>
         </p>
       )}
 
       {notify.notifyType === 'success' && (
-        <p className='text-success mt-4 flex items-center gap-2'>
-          <span className='icon-[ant-design--check-circle-outlined] text-[21px]'></span>
-          <span className='text-[16px]'>{notify.notifyMessage}</span>
+        <p className="text-success mt-4 flex items-center gap-2">
+          <span className="icon-[ant-design--check-circle-outlined] text-[21px]"></span>
+          <span className="text-[16px]">{notify.notifyMessage}</span>
         </p>
       )}
       {notify.notifyType === 'error' && (
-        <p className='text-orange mt-4 flex items-center gap-2'>
-          <span className='icon-[ant-design--info-circle-outlined] text-[21px]'></span>
-          <span className='text-[16px]'>{notify.notifyMessage}</span>
+        <p className="text-orange mt-4 flex items-center gap-2">
+          <span className="icon-[ant-design--info-circle-outlined] text-[21px]"></span>
+          <span className="text-[16px]">{notify.notifyMessage}</span>
         </p>
       )}
     </div>

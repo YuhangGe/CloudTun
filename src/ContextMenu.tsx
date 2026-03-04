@@ -1,12 +1,13 @@
-import { invoke } from '@tauri-apps/api/core';
 import { Dropdown, type MenuOption } from 'jinge-antd';
 import { Portal, onMount, ref, registerEvent, vm } from 'jinge';
+
 import { IS_MOBILE } from './service/util';
+import { invoke } from '@tauri-apps/api/core';
 
 const ContextMenuOptions: MenuOption<string>[] = [
   {
     value: 'reload',
-    'slot:icon': <span className='icon-[ant-design--reload-outlined]'></span>,
+    'slot:icon': <span className="icon-[ant-design--reload-outlined]"></span>,
     label: '重新加载',
   },
   ...(!IS_MOBILE
@@ -14,12 +15,14 @@ const ContextMenuOptions: MenuOption<string>[] = [
         {
           value: 'dev',
           label: '开发面板',
-          'slot:icon': <span className='icon-[oui--app-devtools]'></span>,
+          'slot:icon': <span className="icon-[oui--app-devtools]"></span>,
         },
         {
           value: 'quit',
           label: '退出程序',
-          'slot:icon': <span className='icon-[grommet-icons--power-shutdown]'></span>,
+          'slot:icon': (
+            <span className="icon-[grommet-icons--power-shutdown]"></span>
+          ),
         },
       ]
     : []),
@@ -44,7 +47,7 @@ export function ContextMenu() {
   return (
     <Portal>
       <Dropdown
-        placement='bottom-start'
+        placement="bottom-start"
         open={state.open}
         on:openChange={(v) => (state.open = v)}
         options={ContextMenuOptions}
@@ -65,7 +68,7 @@ export function ContextMenu() {
           }
         }}
       >
-        <div className='bg-red fixed z-50 size-0' ref={el}></div>
+        <div className="bg-red fixed z-50 size-0" ref={el}></div>
       </Dropdown>
     </Portal>
   );

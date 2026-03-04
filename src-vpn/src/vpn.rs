@@ -61,8 +61,8 @@ where
   )));
 
   let mut ipstack_config = ipstack::IpStackConfig::default();
-  ipstack_config.mtu(mtu);
-  ipstack_config.tcp_timeout(std::time::Duration::from_secs(600));
+  let _ = ipstack_config.mtu(mtu);
+  // ipstack_config.tcp_timeout(std::time::Duration::from_secs(600));
   ipstack_config.udp_timeout(std::time::Duration::from_secs(10));
 
   let mut ip_stack = ipstack::IpStack::new(ipstack_config, device);

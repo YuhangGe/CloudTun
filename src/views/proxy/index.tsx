@@ -1,16 +1,17 @@
-import { validateSettings } from '@/service/settings';
 import { type CVMPrice, InquiryPriceRunInstances } from '@/service/tencent';
-import { onMount, ref, vm, watch } from 'jinge';
-import { Spin, Tag, message } from 'jinge-antd';
-import { Bandwidth } from './Bandwind';
-import { Balance } from './Balance';
-import { Instance } from './Instance';
-import { Control } from './Control';
-import { globalSettings } from '@/store/settings';
-import { globalInst, loadGlobalInst } from '@/store/instance';
 import { IS_ANDROID, IS_MOBILE, IS_RELOAD, IS_REOPEN } from '@/service/util';
-import { invoke } from '@tauri-apps/api/core';
+import { Spin, Tag, message } from 'jinge-antd';
+import { globalInst, loadGlobalInst } from '@/store/instance';
+import { onMount, ref, vm, watch } from 'jinge';
+
+import { Balance } from './Balance';
+import { Bandwidth } from './Bandwind';
+import { Control } from './Control';
+import { Instance } from './Instance';
 import { Vpn } from './Vpn';
+import { globalSettings } from '@/store/settings';
+import { invoke } from '@tauri-apps/api/core';
+import { validateSettings } from '@/service/settings';
 
 export function ProxyView() {
   const state = vm<{
@@ -87,24 +88,24 @@ export function ProxyView() {
   });
 
   return state.loading ? (
-    <div className='flex px-1 pt-5'>
-      <Spin size='sm' />
+    <div className="flex px-1 pt-5">
+      <Spin size="sm" />
     </div>
   ) : (
-    <div className='mt-3'>
-      <div className='flex flex-col gap-4'>
-        <div className='text-lg font-medium'>代理信息</div>
+    <div className="mt-3">
+      <div className="flex flex-col gap-4">
+        <div className="text-lg font-medium">代理信息</div>
         <Instance />
         {IS_MOBILE && <Vpn connected={state.vpnConnected} />}
         <Balance />
       </div>
-      <div className='mt-6 flex flex-col gap-4'>
-        <div className='text-lg font-medium'>主机配置</div>
-        <div className='flex items-center'>
-          <span className='mr-1 whitespace-nowrap'>实例规格：</span>
-          <Tag className='w-35'>{globalSettings.instanceType}</Tag>
+      <div className="mt-6 flex flex-col gap-4">
+        <div className="text-lg font-medium">主机配置</div>
+        <div className="flex items-center">
+          <span className="mr-1 whitespace-nowrap">实例规格：</span>
+          <Tag className="w-35">{globalSettings.instanceType}</Tag>
           {state.price && (
-            <span className='text-secondary-text text-sm whitespace-nowrap'>
+            <span className="text-secondary-text text-sm whitespace-nowrap">
               （¥{state.price.InstancePrice.UnitPriceDiscount}/小时）
             </span>
           )}

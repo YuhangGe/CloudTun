@@ -1,10 +1,19 @@
+import {
+  Button,
+  Controller,
+  Input,
+  InputAddon,
+  InputWrapper,
+  message,
+  useForm,
+} from 'jinge-antd';
 import { copyToClipboard, generateStrongPassword } from '@/service/util';
-import { invoke } from '@tauri-apps/api/core';
-import { onMount } from 'jinge';
-import { Button, Controller, Input, InputAddon, InputWrapper, message, useForm } from 'jinge-antd';
-import { z } from 'zod';
+
 import { FormItem } from './FormItem';
 import { globalSettings } from '@/store/settings';
+import { invoke } from '@tauri-apps/api/core';
+import { onMount } from 'jinge';
+import { z } from 'zod';
 
 export function SecretTokenForm() {
   const { formState, formErrors, validate, control } = useForm(
@@ -39,7 +48,7 @@ export function SecretTokenForm() {
 
   onMount(() => {
     if (!globalSettings.token) {
-      void resetToken();
+      resetToken();
     }
     if (!globalSettings.loginPwd) {
       resetPwd();
@@ -48,9 +57,9 @@ export function SecretTokenForm() {
 
   return (
     <>
-      <div className='mt-6 flex max-w-md flex-col gap-6 text-sm max-sm:max-w-full'>
-        <FormItem label='Secret Id：' required error={formErrors.secretId}>
-          <Controller control={control} name='secretId'>
+      <div className="mt-6 flex max-w-md flex-col gap-6 text-sm max-sm:max-w-full">
+        <FormItem label="Secret Id：" required error={formErrors.secretId}>
+          <Controller control={control} name="secretId">
             {(field) => (
               <Input
                 value={field.value}
@@ -60,8 +69,8 @@ export function SecretTokenForm() {
             )}
           </Controller>
         </FormItem>
-        <FormItem label='Secret Key：' required error={formErrors.secretKey}>
-          <Controller control={control} name='secretKey'>
+        <FormItem label="Secret Key：" required error={formErrors.secretKey}>
+          <Controller control={control} name="secretKey">
             {(field) => (
               <Input
                 value={field.value}
@@ -72,12 +81,12 @@ export function SecretTokenForm() {
           </Controller>
         </FormItem>
 
-        <FormItem label='Token：' required>
-          <Controller control={control} name='token'>
+        <FormItem label="Token：" required>
+          <Controller control={control} name="token">
             {(field) => (
               <InputWrapper>
                 <Input
-                  className='cursor-pointer'
+                  className="cursor-pointer"
                   noRoundedR
                   value={field.value}
                   on:change={field['on:change']}
@@ -89,13 +98,13 @@ export function SecretTokenForm() {
                 <InputAddon>
                   <Button
                     on:click={() => {
-                      void resetToken();
+                      resetToken();
                     }}
-                    className='!px-2'
+                    className="px-2!"
                     slot:icon={
-                      <span className='icon-[ant-design--reload-outlined] text-base'></span>
+                      <span className="icon-[ant-design--reload-outlined] text-base"></span>
                     }
-                    type='link'
+                    type="link"
                   />
                   <Button
                     on:click={() => {
@@ -106,9 +115,11 @@ export function SecretTokenForm() {
                         });
                       }
                     }}
-                    className='!border-l-border !rounded-none !px-2'
-                    type='link'
-                    slot:icon={<span className='icon-[ant-design--copy-outlined] text-base'></span>}
+                    className="border-l-border! rounded-none! px-2!"
+                    type="link"
+                    slot:icon={
+                      <span className="icon-[ant-design--copy-outlined] text-base"></span>
+                    }
                   />
                 </InputAddon>
               </InputWrapper>
@@ -116,9 +127,9 @@ export function SecretTokenForm() {
           </Controller>
         </FormItem>
       </div>
-      <div className='my-4 flex items-center gap-8'>
+      <div className="my-4 flex items-center gap-8">
         <Button
-          type='primary'
+          type="primary"
           on:click={() => {
             void save();
           }}

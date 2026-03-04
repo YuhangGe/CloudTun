@@ -1,6 +1,5 @@
-import { globalSettings } from '@/store/settings';
-import type { ApiFilter } from './tencent';
 import {
+  type ApiFilter,
   CreateSecurityGroupWithPolicies,
   CreateSubnet,
   CreateVpc,
@@ -8,10 +7,12 @@ import {
   DescribeSubnets,
   DescribeVpcs,
 } from './tencent';
+
+import { globalSettings } from '@/store/settings';
+import { invoke } from '@tauri-apps/api/core';
+import { message } from 'jinge-antd';
 import { renderTpl } from './util';
 import shellTpl from '@/assets/shell-template/agent.sh?raw';
-import { message } from 'jinge-antd';
-import { invoke } from '@tauri-apps/api/core';
 
 export interface InstanceDeps {
   vpcId: string;
@@ -27,7 +28,10 @@ async function loadVpc(resourceName: string) {
   const [err, res] = await DescribeVpcs(params('vpc', resourceName));
   if (err) return;
   if (!res.VpcSet.length) {
-    const [err, res] = await CreateVpc({ VpcName: resourceName, CidrBlock: '10.0.0.0/12' });
+    const [err, res] = await CreateVpc({
+      VpcName: resourceName,
+      CidrBlock: '10.0.0.0/12',
+    });
     if (err) return;
     return res.Vpc;
   } else {
@@ -35,7 +39,9 @@ async function loadVpc(resourceName: string) {
   }
 }
 
-export async function loadInstanceDependentResources(): Promise<InstanceDeps | undefined> {
+export async function loadInstanceDependentResources(): Promise<
+  InstanceDeps | undefined
+> {
   if (!globalSettings.zone || !globalSettings.imageId) {
     message.error('请先配置可用区、镜像等信息');
     return;
@@ -45,7 +51,10 @@ export async function loadInstanceDependentResources(): Promise<InstanceDeps | u
   const [vpc, b, c] = await Promise.all([
     loadVpc(resourceName),
     DescribeSubnets(
-      params('subnet', resourceName, { Name: 'zone', Values: [globalSettings.zone] }),
+      params('subnet', resourceName, {
+        Name: 'zone',
+        Values: [globalSettings.zone],
+      }),
     ),
     DescribeSecurityGroups(params('security-group', resourceName)),
   ]);

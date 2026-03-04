@@ -18,12 +18,12 @@ export function Switch(
         props['on:change']?.(state.checked);
       }}
       className={cx(
-        'relative flex h-[22px] w-[44px] cursor-pointer items-center rounded-full transition-[background] select-none',
+        'relative flex h-5.5 w-11 cursor-pointer items-center rounded-full transition-[background] select-none',
         state.checked ? 'bg-primary' : 'bg-black/25',
       )}
     >
       <div
-        className='absolute h-[18px] w-[18px] rounded-full bg-white transition-[left]'
+        className="absolute h-4.5 w-4.5 rounded-full bg-white transition-[left]"
         style={`left: ${state.checked ? 'calc(100% - 3px - 18px)' : '3px'}`}
       ></div>
     </div>

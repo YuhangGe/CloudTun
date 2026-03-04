@@ -1,11 +1,11 @@
 import { Button, Popconfirm } from 'jinge-antd';
-
-import { invoke } from '@tauri-apps/api/core';
-import { TerminateInstance } from '@/service/tencent';
+import { IS_ANDROID, IS_MOBILE } from '@/service/util';
 import { type WithEvents, type WithExpose, expose, vm } from 'jinge';
 import { createGlobalInst, globalInst } from '@/store/instance';
-import { IS_ANDROID, IS_MOBILE } from '@/service/util';
+
+import { TerminateInstance } from '@/service/tencent';
 import { globalSettings } from '@/store/settings';
+import { invoke } from '@tauri-apps/api/core';
 
 export function Control(
   props: {
@@ -58,7 +58,10 @@ export function Control(
         serverIp: globalInst.ip,
         cvmId: globalInst.data!.InstanceId,
         token: globalSettings.token,
-        proxyApps: globalSettings.mobileProxyMode === 'app' ? globalSettings.mobileProxyApps : '',
+        proxyApps:
+          globalSettings.mobileProxyMode === 'app'
+            ? globalSettings.mobileProxyApps
+            : '',
       });
     }
     state.vpnConnected = !state.vpnConnected;
@@ -70,17 +73,17 @@ export function Control(
   });
 
   return (
-    <div className='mt-6 flex flex-wrap items-center gap-2 border-t border-t-blue-200 pt-3'>
+    <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-t-blue-200 pt-3">
       {globalInst.data ? (
         <Popconfirm
-          title='确认销毁主机？'
-          placement='top-start'
-          content='销毁后代理服务不可用，请重新创建主机'
+          title="确认销毁主机？"
+          placement="top-start"
+          content="销毁后代理服务不可用，请重新创建主机"
           on:confirm={() => {
             void destroy();
           }}
         >
-          <Button loading={state.destroing} size='sm' className='text-xs'>
+          <Button loading={state.destroing} size="sm" className="text-xs">
             销毁主机
           </Button>
         </Popconfirm>
@@ -90,16 +93,16 @@ export function Control(
           on:click={() => {
             void create();
           }}
-          type='primary'
-          size='sm'
-          className='text-xs'
+          type="primary"
+          size="sm"
+          className="text-xs"
         >
           创建主机
         </Button>
       )}
       {IS_MOBILE && globalInst.state >= 3 && (
         <Button
-          size='sm'
+          size="sm"
           on:click={() => {
             void toggleVpn();
           }}

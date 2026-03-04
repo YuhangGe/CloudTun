@@ -1,4 +1,5 @@
 import { Button, Popover } from 'jinge-antd';
+
 import { CopyButton } from '@/components/Copy';
 import { globalSettings } from '@/store/settings';
 import { vm } from 'jinge';
@@ -34,11 +35,13 @@ export function ShareCode(props: { ip: string }) {
   return (
     <>
       <Popover
-        placement='bottom-end'
-        className='h-[200px] w-[200px] rounded-lg bg-white shadow-lg'
+        placement="bottom-end"
+        className="h-50 w-50 rounded-lg bg-white shadow-lg"
         slot:content={
-          <div className=''>
-            {state.qrcode && <img className='h-full w-full' src={state.qrcode} />}
+          <div className="">
+            {state.qrcode && (
+              <img className="h-full w-full" src={state.qrcode} />
+            )}
           </div>
         }
         on:openChange={(v) => {
@@ -48,9 +51,11 @@ export function ShareCode(props: { ip: string }) {
         }}
       >
         <Button
-          size='sm'
-          type='link'
-          slot:icon={<span className='icon-[ant-design--qrcode-outlined] text-base'></span>}
+          size="sm"
+          type="link"
+          slot:icon={
+            <span className="icon-[ant-design--qrcode-outlined] text-base"></span>
+          }
         />
       </Popover>
       <CopyButton text={url} />

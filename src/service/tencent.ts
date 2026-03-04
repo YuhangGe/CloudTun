@@ -1,8 +1,9 @@
-import { invoke } from '@tauri-apps/api/core';
-import { fetch } from '@tauri-apps/plugin-http';
 import { type InstanceDeps, getInstanceAgentShell } from './instance';
-import { message } from 'jinge-antd';
+
+import { fetch } from '@tauri-apps/plugin-http';
 import { globalSettings } from '@/store/settings';
+import { invoke } from '@tauri-apps/api/core';
+import { message } from 'jinge-antd';
 
 export type ApiResult<T> = [Error] | [undefined, T];
 const ServiceVersionMap = {
@@ -97,7 +98,13 @@ export interface CVMInstance {
     InternetChargeType: 'TRAFFIC_POSTPAID_BY_HOUR';
     InternetMaxBandwidthOut: number;
   };
-  InstanceState: 'PENDING' | 'RUNNING' | 'STOPPED' | 'SHUTDOWN' | 'TERMINATING' | 'LAUNCH_FAILED';
+  InstanceState:
+    | 'PENDING'
+    | 'RUNNING'
+    | 'STOPPED'
+    | 'SHUTDOWN'
+    | 'TERMINATING'
+    | 'LAUNCH_FAILED';
 }
 export function DescribeInstances({
   region,
@@ -139,7 +146,8 @@ export function DescribeInstanceTypes({
   });
 }
 function getInstanceApiParams() {
-  if (!globalSettings.zone || !globalSettings.imageId) throw new Error('settings missing');
+  if (!globalSettings.zone || !globalSettings.imageId)
+    throw new Error('settings missing');
   return {
     InstanceChargeType: 'SPOTPAID',
     InstanceType: globalSettings.instanceType,
@@ -148,7 +156,7 @@ function getInstanceApiParams() {
     Placement: { Zone: globalSettings.zone, ProjectId: 0 },
     SystemDisk: {
       DiskSize: 20,
-      DiskType: 'CLOUD_PREMIUM', // 'CLOUD_BSSD'
+      DiskType: 'CLOUD_BSSD', // 'CLOUD_BSSD'
     },
     ImageId: globalSettings.imageId,
     InstanceName: globalSettings.resourceName,
@@ -227,7 +235,10 @@ export function InquiryPriceRunInstances() {
   });
 }
 
-export function ResetInstancesInternetMaxBandwidth(instanceId: string, maxBandwidth: number) {
+export function ResetInstancesInternetMaxBandwidth(
+  instanceId: string,
+  maxBandwidth: number,
+) {
   return callTencentApi({
     service: 'cvm',
     action: 'ResetInstancesInternetMaxBandwidth',
@@ -405,7 +416,9 @@ export function DescribeZones({ region }: { region?: string }) {
     action: 'DescribeZones',
   }).then((res) => {
     if (!res[0]) {
-      res[1].ZoneSet = res[1].ZoneSet.filter((z) => z.ZoneState === 'AVAILABLE');
+      res[1].ZoneSet = res[1].ZoneSet.filter(
+        (z) => z.ZoneState === 'AVAILABLE',
+      );
     }
     return res;
   });
@@ -495,7 +508,13 @@ export function InvokeCommand({
     data,
   });
 }
-export function DeleteCommand({ region, ...data }: { region?: string; CommandId: string }) {
+export function DeleteCommand({
+  region,
+  ...data
+}: {
+  region?: string;
+  CommandId: string;
+}) {
   return callTencentApi({
     service: 'tat',
     region,

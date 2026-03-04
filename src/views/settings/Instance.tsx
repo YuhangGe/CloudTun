@@ -10,14 +10,18 @@ import {
   message,
   useForm,
 } from 'jinge-antd';
-
-import { DescribeImages, DescribeInstanceTypes, DescribeZones } from '@/service/tencent';
+import {
+  DescribeImages,
+  DescribeInstanceTypes,
+  DescribeZones,
+} from '@/service/tencent';
 import { copyToClipboard, generateStrongPassword } from '@/service/util';
-import { RegionOptions } from '@/service/region';
 import { onMount, vm, watch } from 'jinge';
-import { z } from 'zod';
-import { globalSettings } from '@/store/settings';
+
 import { FormItem } from './FormItem';
+import { RegionOptions } from '@/service/region';
+import { globalSettings } from '@/store/settings';
+import { z } from 'zod';
 
 // const ImageTypeOpts = [
 //   {
@@ -178,9 +182,9 @@ export function InstanceConfigForm() {
   });
 
   return (
-    <div className='mt-6 flex max-w-md flex-col gap-6 text-sm max-sm:max-w-full'>
-      <FormItem label='区域：' required error={formErrors.region}>
-        <Controller control={control} name='region'>
+    <div className="mt-6 flex max-w-md flex-col gap-6 text-sm max-sm:max-w-full">
+      <FormItem label="区域：" required error={formErrors.region}>
+        <Controller control={control} name="region">
           {(field) => (
             <Select
               options={RegionOptions}
@@ -194,18 +198,22 @@ export function InstanceConfigForm() {
           )}
         </Controller>
       </FormItem>
-      <FormItem label='可用区：' required>
-        <Controller control={control} name='zone'>
+      <FormItem label="可用区：" required>
+        <Controller control={control} name="zone">
           {(field) => (
-            <Select options={state.zoneOpts} value={field.value} on:change={field['on:change']} />
+            <Select
+              options={state.zoneOpts}
+              value={field.value}
+              on:change={field['on:change']}
+            />
           )}
         </Controller>
       </FormItem>
-      <FormItem label='规格：' required>
-        <Controller control={control} name='instanceType'>
+      <FormItem label="规格：" required>
+        <Controller control={control} name="instanceType">
           {(field) => (
             <Select
-              className='max-h-[200px] overflow-y-auto'
+              className="max-h-50 overflow-y-auto"
               options={state.instTypeOpts}
               value={field.value}
               on:change={field['on:change']}
@@ -213,12 +221,12 @@ export function InstanceConfigForm() {
           )}
         </Controller>
       </FormItem>
-      <FormItem label='登录密码：' required>
-        <Controller control={control} name='loginPwd'>
+      <FormItem label="登录密码：" required>
+        <Controller control={control} name="loginPwd">
           {(field) => (
             <InputWrapper>
               <Input
-                className='cursor-pointer'
+                className="cursor-pointer"
                 noRoundedR
                 value={field.value}
                 on:change={field['on:change']}
@@ -230,11 +238,13 @@ export function InstanceConfigForm() {
               <InputAddon>
                 <Button
                   on:click={() => {
-                    void resetPwd();
+                    resetPwd();
                   }}
-                  className='!px-2'
-                  slot:icon={<span className='icon-[ant-design--reload-outlined] text-base'></span>}
-                  type='link'
+                  className="px-2!"
+                  slot:icon={
+                    <span className="icon-[ant-design--reload-outlined] text-base"></span>
+                  }
+                  type="link"
                 />
                 <Button
                   on:click={() => {
@@ -245,19 +255,25 @@ export function InstanceConfigForm() {
                       });
                     }
                   }}
-                  className='!border-l-border !rounded-none !px-2'
-                  type='link'
-                  slot:icon={<span className='icon-[ant-design--copy-outlined] text-base'></span>}
+                  className="border-l-border! rounded-none! px-2!"
+                  type="link"
+                  slot:icon={
+                    <span className="icon-[ant-design--copy-outlined] text-base"></span>
+                  }
                 />
               </InputAddon>
             </InputWrapper>
           )}
         </Controller>
       </FormItem>
-      <FormItem label='资源名：' required>
-        <Controller control={control} name='resourceName'>
+      <FormItem label="资源名：" required>
+        <Controller control={control} name="resourceName">
           {(field) => (
-            <Input value={field.value} on:change={field['on:change']} on:blur={field['on:blur']} />
+            <Input
+              value={field.value}
+              on:change={field['on:change']}
+              on:blur={field['on:blur']}
+            />
           )}
         </Controller>
       </FormItem>
@@ -268,15 +284,19 @@ export function InstanceConfigForm() {
           )}
         </Controller>
       </FormItem> */}
-      <FormItem label='镜像：' required error={formErrors.imageId}>
-        <Controller control={control} name='imageId'>
+      <FormItem label="镜像：" required error={formErrors.imageId}>
+        <Controller control={control} name="imageId">
           {(field) => (
-            <Select options={state.imageOpts} value={field.value} on:change={field['on:change']} />
+            <Select
+              options={state.imageOpts}
+              value={field.value}
+              on:change={field['on:change']}
+            />
           )}
         </Controller>
       </FormItem>
-      <FormItem label='带宽' required error={formErrors.bandWidth}>
-        <Controller control={control} name='bandWidth'>
+      <FormItem label="带宽" required error={formErrors.bandWidth}>
+        <Controller control={control} name="bandWidth">
           {(field) => (
             <InputWrapper>
               <InputNumber
@@ -287,15 +307,15 @@ export function InstanceConfigForm() {
                 on:change={field['on:change']}
                 on:blur={field['on:blur']}
               />
-              <InputAddon className='px-2'>Mbps</InputAddon>
+              <InputAddon className="px-2">Mbps</InputAddon>
             </InputWrapper>
           )}
         </Controller>
       </FormItem>
 
-      <div className='my-4 flex items-center gap-8'>
+      <div className="my-4 flex items-center gap-8">
         <Button
-          type='primary'
+          type="primary"
           on:click={() => {
             void save();
           }}

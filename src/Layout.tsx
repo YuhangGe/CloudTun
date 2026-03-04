@@ -1,29 +1,37 @@
-import { Button, Dropdown, type MenuOption, Tooltip, message } from 'jinge-antd';
-import { invoke } from '@tauri-apps/api/core';
-import { globalSettings } from './store/settings';
-
-import imgLogo from '@/assets/logo-512.png';
-import { validateSettings } from './service/settings';
+import {
+  Button,
+  Dropdown,
+  type MenuOption,
+  Tooltip,
+  message,
+} from 'jinge-antd';
 import { cx, vm, watch } from 'jinge';
-import { SettingsView } from './views/settings';
+
+import { IS_MOBILE } from './service/util';
 import { LogView } from './views/logview';
 import { ProxyView } from './views/proxy';
-import { IS_MOBILE } from './service/util';
+import { SettingsView } from './views/settings';
+import { globalSettings } from './store/settings';
+import imgLogo from '@/assets/logo-512.png';
+import { invoke } from '@tauri-apps/api/core';
+import { validateSettings } from './service/settings';
 
 const ViewItems: MenuOption<string>[] = [
   {
     label: '代理',
-    'slot:icon': <span className='icon-[material-symbols--wifi-proxy-outline]'></span>,
+    'slot:icon': (
+      <span className="icon-[material-symbols--wifi-proxy-outline]"></span>
+    ),
     value: 'proxy',
   },
   {
     label: '日志',
-    'slot:icon': <span className='icon-[tabler--logs]'></span>,
+    'slot:icon': <span className="icon-[tabler--logs]"></span>,
     value: 'logs',
   },
   {
     label: '设置',
-    'slot:icon': <span className='icon-[ant-design--setting-outlined]'></span>,
+    'slot:icon': <span className="icon-[ant-design--setting-outlined]"></span>,
     value: 'settings',
   },
 ];
@@ -38,16 +46,16 @@ export function Layout() {
     state,
     'view',
     (v) => {
-      state.title = ViewItems.find((it) => it.value === v)?.label!;
+      state.title = ViewItems.find((it) => it.value === v)!.label!;
     },
     { immediate: true },
   );
 
   return (
     <>
-      <div className='border-border flex w-28 flex-shrink-0 flex-col border-r border-solid max-sm:hidden'>
-        <div className='pt-[5px] pl-5 max-sm:pl-3'>
-          <img src={imgLogo} className='size-16' />
+      <div className="border-border flex w-28 flex-0 flex-col border-r border-solid max-sm:hidden">
+        <div className="pt-1.25 pl-5 max-sm:pl-3">
+          <img src={imgLogo} className="size-16" />
         </div>
         {ViewItems.map((item) => (
           <div
@@ -66,46 +74,50 @@ export function Layout() {
             )}
           >
             {item['slot:icon']}
-            <span className='ml-2'>{item.label}</span>
+            <span className="ml-2">{item.label}</span>
           </div>
         ))}
-        <div className='flex-1'></div>
+        <div className="flex-1"></div>
         {!IS_MOBILE && (
-          <Tooltip content='退出CloudTun，结束本地代理' placement='top-start'>
+          <Tooltip content="退出CloudTun，结束本地代理" placement="top-start">
             <Button
               on:click={async () => {
                 await invoke('tauri_stop_proxy_client');
                 await invoke('tauri_exit_process');
               }}
-              className='flex w-full items-center justify-center pt-2 pb-4'
-              slot:icon={<span className='icon-[grommet-icons--power-shutdown]'></span>}
-              type='link'
+              className="flex w-full items-center justify-center pt-2 pb-4"
+              slot:icon={
+                <span className="icon-[grommet-icons--power-shutdown]"></span>
+              }
+              type="link"
             />
           </Tooltip>
         )}
       </div>
-      <div className='flex flex-1 flex-col overflow-x-hidden px-6 pt-6 max-sm:px-4'>
-        <div className='mb-4 flex items-center sm:mb-5'>
-          <div className='flex items-center text-2xl sm:hidden'>
-            <img src={imgLogo} className='block size-10' />
-            <span className='ml-2 font-medium'>CloudTun</span>
-            <span className='mx-2'>-</span>
+      <div className="flex flex-1 flex-col overflow-x-hidden px-6 pt-6 max-sm:px-4">
+        <div className="mb-4 flex items-center sm:mb-5">
+          <div className="flex items-center text-2xl sm:hidden">
+            <img src={imgLogo} className="block size-10" />
+            <span className="ml-2 font-medium">CloudTun</span>
+            <span className="mx-2">-</span>
           </div>
-          <div className='max-sm:text-secondary-text text-2xl whitespace-nowrap'>{state.title}</div>
-          <div className='flex-1' />
+          <div className="max-sm:text-secondary-text text-2xl whitespace-nowrap">
+            {state.title}
+          </div>
+          <div className="flex-1" />
 
           <Dropdown
-            placement='bottom-end'
+            placement="bottom-end"
             options={ViewItems}
             on:change={(v) => {
               state.view = v;
             }}
           >
             <Button
-              className='sm:!hidden'
-              type='link'
+              className="sm:hidden!"
+              type="link"
               slot:icon={
-                <span className='icon-[ant-design--menu-outlined] shrink-0 text-xl'></span>
+                <span className="icon-[ant-design--menu-outlined] shrink-0 text-xl"></span>
               }
             />
           </Dropdown>

@@ -1,35 +1,53 @@
 {
+  "oxc.typeAware": true,
   "editor.tabSize": 2,
   "editor.formatOnSave": true,
-  "editor.formatOnPaste": true,
-  "editor.formatOnType": true,
-  "editor.quickSuggestions": {
-    "strings": "on"
-  },
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.defaultFormatter": "biomejs.biome",
   "[typescript]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "biomejs.biome",
     "editor.codeActionsOnSave": {
-      "source.fixAll": "explicit"
+      "source.sortImports": "never",
+      "source.fixAll.oxc": "explicit"
+    }
+  },
+  "[javascript]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.codeActionsOnSave": {
+      "source.sortImports": "never",
+      "source.fixAll.oxc": "explicit"
     }
   },
   "[typescriptreact]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "biomejs.biome",
     "editor.codeActionsOnSave": {
-      "source.fixAll": "explicit"
+      "source.sortImports": "never",
+      "source.fixAll.oxc": "explicit"
     }
   },
+  "[scss]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[jsonc]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[json]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "biomejs.biome"
+  },
   "[rust]": {
+    "editor.formatOnSave": true,
     "editor.defaultFormatter": "rust-lang.rust-analyzer"
+  },
+  "[toml]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "tamasfe.even-better-toml"
   },
   "iconifySearch.codeType": "tailwindcss-react",
   "iconifySearch.favorTabs": ["ant-design", "material-symbols"],
-  "iconifySearch.favorGroup": "ant-design",
-
-  "[toml]": {
-    "editor.defaultFormatter": "tamasfe.even-better-toml"
-  },
-  "eslint.useFlatConfig": true
-  // "rust-analyzer.cargo.target": "x86_64-linux-android"
-  // "rust-analyzer.cargo.target": "aarch64-apple-ios"
-  // "rust-analyzer.cargo.target": "aarch64-linux-android"
-  // "rust-analyzer.cargo.target": "x86_64-pc-windows-msvc"
+  "iconifySearch.favorGroup": "ant-design"
 }

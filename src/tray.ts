@@ -1,3 +1,4 @@
+// oxlint-disable unicorn/no-empty-file
 // import { defaultWindowIcon } from '@tauri-apps/api/app';
 // import { invoke } from '@tauri-apps/api/core';
 // import { Menu } from '@tauri-apps/api/menu';

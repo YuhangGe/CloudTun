@@ -1,12 +1,21 @@
-import { Button, Controller, Select, message, modal, onModalConfirm, useForm } from 'jinge-antd';
-import { z } from 'zod';
-import { FormItem } from './FormItem';
-import { globalSettings } from '@/store/settings';
-import { Switch } from './Swtich';
-import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
+import {
+  Button,
+  Controller,
+  Select,
+  message,
+  modal,
+  onModalConfirm,
+  useForm,
+} from 'jinge-antd';
 import { IS_ANDROID, IS_IOS, IS_MOBILE } from '@/service/util';
+import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
 import { onMount, vm, vmRaw } from 'jinge';
+
+import { FormItem } from './FormItem';
+import { Switch } from './Swtich';
+import { globalSettings } from '@/store/settings';
 import { invoke } from '@tauri-apps/api/core';
+import { z } from 'zod';
 
 interface App {
   name: string;
@@ -46,23 +55,26 @@ function PickAppModal(props: { apps?: string[] }) {
   });
 
   return (
-    <div className='border-border mt-2 flex max-h-[60vh] flex-col overflow-auto rounded-sm border'>
+    <div className="border-border mt-2 flex max-h-[60vh] flex-col overflow-auto rounded-sm border">
       {state.allApps.map((app) => (
-        <div className='border-border flex items-center border-b py-3 pl-3' key={app.id}>
-          <div className='mr-3 h-11 w-11 shrink-0'>
+        <div
+          className="border-border flex items-center border-b py-3 pl-3"
+          key={app.id}
+        >
+          <div className="mr-3 h-11 w-11 shrink-0">
             {app.icon ? (
-              <img src={app.icon} className='w-full rounded-full' />
+              <img src={app.icon} className="w-full rounded-full" />
             ) : (
-              <div className='bg-blue/25 size-full rounded-full'></div>
+              <div className="bg-blue/25 size-full rounded-full"></div>
             )}
           </div>
-          <div className='flex flex-1 flex-col justify-between'>
-            <p className='font-bold'>{app.name}</p>
-            <p className='text-secondary-text text-sm'>{app.id}</p>
+          <div className="flex flex-1 flex-col justify-between">
+            <p className="font-bold">{app.name}</p>
+            <p className="text-secondary-text text-sm">{app.id}</p>
           </div>
-          <div className='ml-3 w-10 shrink-0'>
+          <div className="ml-3 w-10 shrink-0">
             <input
-              type='checkbox'
+              type="checkbox"
               on:change={(evt) => {
                 app.selected = evt.target.checked;
               }}
@@ -156,11 +168,11 @@ export function CommonSettingsForm() {
 
   return (
     <>
-      <div className='mt-6 flex max-w-md flex-col gap-6 text-sm max-sm:max-w-full'>
-        <FormItem label='自动代理：' error={formErrors.autoProxy}>
-          <Controller control={control} name='autoProxy'>
+      <div className="mt-6 flex max-w-md flex-col gap-6 text-sm max-sm:max-w-full">
+        <FormItem label="自动代理：" error={formErrors.autoProxy}>
+          <Controller control={control} name="autoProxy">
             {(field) => (
-              <div className='flex items-center'>
+              <div className="flex items-center">
                 <Switch
                   value={field.value}
                   on:change={(checked) => {
@@ -172,10 +184,10 @@ export function CommonSettingsForm() {
           </Controller>
         </FormItem>
         {!IS_MOBILE && (
-          <FormItem label='开机启动：' error={formErrors.autoStartApp}>
-            <Controller control={control} name='autoStartApp'>
+          <FormItem label="开机启动：" error={formErrors.autoStartApp}>
+            <Controller control={control} name="autoStartApp">
               {(field) => (
-                <div className='flex items-center'>
+                <div className="flex items-center">
                   <Switch
                     value={field.value}
                     on:change={(checked) => {
@@ -188,11 +200,11 @@ export function CommonSettingsForm() {
           </FormItem>
         )}
         {!IS_MOBILE && (
-          <FormItem label='代理规则：' error={formErrors.proxyRules}>
-            <Controller control={control} name='proxyRules'>
+          <FormItem label="代理规则：" error={formErrors.proxyRules}>
+            <Controller control={control} name="proxyRules">
               {(field) => (
                 <textarea
-                  className='border-border rounded-md border p-3 leading-[1.3] outline-none'
+                  className="border-border rounded-md border p-3 leading-[1.3] outline-none"
                   rows={5}
                   value={field.value}
                   on:input={(evt) => {
@@ -204,10 +216,10 @@ export function CommonSettingsForm() {
           </FormItem>
         )}
         {IS_MOBILE && (
-          <FormItem label='代理模式：' error={formErrors.mobileProxyMode}>
-            <Controller control={control} name='mobileProxyMode'>
+          <FormItem label="代理模式：" error={formErrors.mobileProxyMode}>
+            <Controller control={control} name="mobileProxyMode">
               {(field) => (
-                <div className='flex w-40 items-center'>
+                <div className="flex w-40 items-center">
                   <Select
                     on:change={field['on:change']}
                     value={field.value}
@@ -222,27 +234,29 @@ export function CommonSettingsForm() {
           </FormItem>
         )}
         {IS_MOBILE && formState.mobileProxyMode === 'app' && (
-          <FormItem label='代理应用：'>
-            <div className=''>
-              <ul className='border-border max-h-[200px] overflow-auto rounded-md border'>
+          <FormItem label="代理应用：">
+            <div className="">
+              <ul className="border-border max-h-50 overflow-auto rounded-md border">
                 {state.apps.map((app, idx) => (
                   <li
-                    className='border-border flex items-center px-3 py-3 not-last:border-b'
+                    className="border-border flex items-center px-3 py-3 not-last:border-b"
                     key={app}
                   >
-                    <span className='flex-1'>{app}</span>
+                    <span className="flex-1">{app}</span>
                     <Button
                       on:click={() => {
                         state.apps.splice(idx, 1);
                       }}
-                      type='link'
-                      size='sm'
-                      slot:icon={<span className='icon-[ant-design--delete-twotone]'></span>}
+                      type="link"
+                      size="sm"
+                      slot:icon={
+                        <span className="icon-[ant-design--delete-twotone]"></span>
+                      }
                     ></Button>
                   </li>
                 ))}
               </ul>
-              <div className='mt-3 flex'>
+              <div className="mt-3 flex">
                 <Button
                   on:click={() => {
                     if (IS_ANDROID) {
@@ -251,8 +265,10 @@ export function CommonSettingsForm() {
                       // todo
                     }
                   }}
-                  size='sm'
-                  slot:icon={<span className='icon-[ant-design--plus-outlined]'></span>}
+                  size="sm"
+                  slot:icon={
+                    <span className="icon-[ant-design--plus-outlined]"></span>
+                  }
                 >
                   添加
                 </Button>
@@ -261,9 +277,9 @@ export function CommonSettingsForm() {
           </FormItem>
         )}
       </div>
-      <div className='my-10 flex items-center gap-8'>
+      <div className="my-10 flex items-center gap-8">
         <Button
-          type='primary'
+          type="primary"
           on:click={() => {
             void save();
           }}

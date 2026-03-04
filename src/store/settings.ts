@@ -1,8 +1,9 @@
 import { DefaultSettings, type Settings } from '@/service/settings';
-import { currentInWebMock } from '@/service/util';
 import { type Store, load } from '@tauri-apps/plugin-store';
 import { isString, vm, vmRaw, vmWatch } from 'jinge';
+
 import { appendLog } from './log';
+import { currentInWebMock } from '@/service/util';
 
 let tauriSettingStore: Store | undefined = undefined;
 
@@ -33,7 +34,10 @@ export async function loadGlobalSettings() {
     if (tm) clearTimeout(tm);
     tm = window.setTimeout(() => {
       tm = 0;
-      void tauriSettingStore?.set('settings', JSON.stringify(vmRaw(globalSettings), null, 2));
+      void tauriSettingStore?.set(
+        'settings',
+        JSON.stringify(vmRaw(globalSettings), null, 2),
+      );
     });
   });
 }

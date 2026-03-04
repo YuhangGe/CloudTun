@@ -1,7 +1,9 @@
-import { uid } from '@/service/util';
+// oxlint-disable typescript/restrict-template-expressions
+
 import { listen } from '@tauri-apps/api/event';
-import { vm } from 'jinge';
 import { message } from 'jinge-antd';
+import { uid } from '@/service/util';
+import { vm } from 'jinge';
 
 export interface Log {
   id: string;

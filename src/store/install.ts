@@ -1,3 +1,4 @@
+// oxlint-disable unicorn/no-empty-file
 // import { globalStore } from './global';
 // import type { LoadingMessage } from '@/service/util';
 // import { IS_MOBILE, loadingMessage } from '@/service/util';

@@ -1,12 +1,11 @@
-import path from 'node:path';
-import { networkInterfaces } from 'node:os';
-import { defineConfig } from 'vite';
-import tsconfigPaths from 'vite-tsconfig-paths';
-import imagemin from 'vite-plugin-minipic';
-import tailwindcss from '@tailwindcss/vite';
-import { jingeVitePlugin } from 'jinge-compiler';
-
 import { TailwindThemePlugin } from './vite-plugin';
+import { defineConfig } from 'vite';
+import imagemin from 'vite-plugin-minipic';
+import { jingeVitePlugin } from 'jinge-compiler';
+import { networkInterfaces } from 'node:os';
+import path from 'node:path';
+import tailwindcss from '@tailwindcss/vite';
+import tsconfigPaths from 'vite-tsconfig-paths';
 
 let IPv4 = '';
 Object.entries(networkInterfaces()).some(([, nets]) => {
@@ -46,6 +45,7 @@ export default defineConfig({
       ignored: ['**/src-tauri/**'],
     },
   },
+  oxc: false,
   optimizeDeps: {
     exclude: ['jinge-antd'],
   },
