@@ -3,8 +3,7 @@ use std::time::{self, SystemTime};
 
 use anyhow::bail;
 use chrono::{TimeZone, Utc};
-use hmac::digest::Output;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use reqwest::header::HeaderValue;
 use sha2::{Digest, Sha256};
 
@@ -54,10 +53,10 @@ impl TencentService {
   }
 }
 
-fn hmac(message: &str, key: &[u8]) -> Output<Sha256> {
+fn hmac(message: &str, key: &[u8]) -> Vec<u8> {
   let mut hmac = HmacSha256::new_from_slice(key).unwrap();
   hmac.update(message.as_bytes());
-  hmac.finalize().into_bytes()
+  hmac.finalize().into_bytes().to_vec()
 }
 
 pub fn tencent_cloud_api_signature(
@@ -68,12 +67,12 @@ pub fn tencent_cloud_api_signature(
   timestamp: i64,
   body: &str,
 ) -> String {
-  let hashed_payload = format!("{:x}", Sha256::digest(body.as_bytes()));
+  let hashed_payload = hex::encode(Sha256::digest(body.as_bytes()));
   let canonical_request = format!(
     "POST\n/\n\ncontent-type:application/json\nhost:{}\n\ncontent-type;host\n{}",
     service_host, &hashed_payload
   );
-  let hashed_canonical_request = format!("{:x}", Sha256::digest(canonical_request.as_bytes()));
+  let hashed_canonical_request = hex::encode(Sha256::digest(canonical_request.as_bytes()));
   // println!("{} {} {}", body, hashed_payload, hashed_canonical_request);
   // println!("{}", canonical_request);
   let date = Utc
@@ -88,6 +87,7 @@ pub fn tencent_cloud_api_signature(
   );
   // println!("{}", string_to_sign);
   let secret_date = hmac(&date, format!("TC3{}", secret_key).as_bytes());
+
   let secret_service = hmac(service_name, &secret_date);
   let secret_signing = hmac("tc3_request", &secret_service);
   // println!("{:x}", &secret_date);
@@ -96,8 +96,10 @@ pub fn tencent_cloud_api_signature(
 
   let signature = hmac(&string_to_sign, &secret_signing);
   format!(
-    "TC3-HMAC-SHA256 Credential={}/{}, SignedHeaders=content-type;host, Signature={:x}",
-    secret_id, credential_scope, signature
+    "TC3-HMAC-SHA256 Credential={}/{}, SignedHeaders=content-type;host, Signature={}",
+    secret_id,
+    credential_scope,
+    hex::encode(signature)
   )
 }
 

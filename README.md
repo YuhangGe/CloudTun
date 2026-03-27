@@ -25,7 +25,7 @@
 
 1. 安装 rust 环境，安装 nightly channel 并默认切到 nightly。（SIMD 并行指令加速需要 nightly 环境编译）。
 2. 安装 node + pnpm.
-3. 项目根目录执行 `pnpm install`。 
+3. 项目根目录执行 `pnpm install`。
 
 ### PC 平台
 

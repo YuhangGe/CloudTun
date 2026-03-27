@@ -1,22 +1,15 @@
-import { type CVMInstance, CreateInstance } from '@/service/tencent';
-import { IS_MOBILE, IS_REOPEN } from '@/service/util';
-import {
-  type MessageInstance,
-  type MessageUpdateOptions,
-  message,
-} from 'jinge-antd';
-import {
-  loadInstance,
-  pingServerOnce,
-  startProxyClient,
-} from '@/views/proxy/helper';
-
-import { globalSettings } from './settings';
 import { invoke } from '@tauri-apps/api/core';
+import { vm } from 'jinge';
+import { type MessageInstance, type MessageUpdateOptions, message } from 'jinge-antd';
+
 import { loadInstanceDependentResources } from '@/service/instance';
 // import { appendLog } from './log';
 import { showNotifyWindow } from '@/service/notify';
-import { vm } from 'jinge';
+import { type CVMInstance, CreateInstance } from '@/service/tencent';
+import { IS_MOBILE, IS_REOPEN } from '@/service/util';
+import { loadInstance, pingServerOnce, startProxyClient } from '@/views/proxy/helper';
+
+import { globalSettings } from './settings';
 
 export interface InstanceState {
   data?: CVMInstance;

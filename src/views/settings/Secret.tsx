@@ -1,19 +1,12 @@
-import {
-  Button,
-  Controller,
-  Input,
-  InputAddon,
-  InputWrapper,
-  message,
-  useForm,
-} from 'jinge-antd';
-import { copyToClipboard, generateStrongPassword } from '@/service/util';
-
-import { FormItem } from './FormItem';
-import { globalSettings } from '@/store/settings';
 import { invoke } from '@tauri-apps/api/core';
 import { onMount } from 'jinge';
+import { Button, Controller, Input, InputAddon, InputWrapper, message, useForm } from 'jinge-antd';
 import { z } from 'zod';
+
+import { copyToClipboard, generateStrongPassword } from '@/service/util';
+import { globalSettings } from '@/store/settings';
+
+import { FormItem } from './FormItem';
 
 export function SecretTokenForm() {
   const { formState, formErrors, validate, control } = useForm(
@@ -115,11 +108,9 @@ export function SecretTokenForm() {
                         });
                       }
                     }}
-                    className="border-l-border! rounded-none! px-2!"
+                    className="rounded-none! border-l-border! px-2!"
                     type="link"
-                    slot:icon={
-                      <span className="icon-[ant-design--copy-outlined] text-base"></span>
-                    }
+                    slot:icon={<span className="icon-[ant-design--copy-outlined] text-base"></span>}
                   />
                 </InputAddon>
               </InputWrapper>

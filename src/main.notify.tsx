@@ -1,7 +1,7 @@
 import './style.css';
+import { bootstrap } from 'jinge';
 
 import App from './App.notify';
-import { bootstrap } from 'jinge';
 
 const root = document.querySelector('#root')!;
 if (!root) throw new Error('#root not found');

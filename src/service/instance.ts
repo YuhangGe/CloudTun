@@ -1,3 +1,9 @@
+import { invoke } from '@tauri-apps/api/core';
+import { message } from 'jinge-antd';
+
+import shellTpl from '@/assets/shell-template/agent.sh?raw';
+import { globalSettings } from '@/store/settings';
+
 import {
   type ApiFilter,
   CreateSecurityGroupWithPolicies,
@@ -7,12 +13,7 @@ import {
   DescribeSubnets,
   DescribeVpcs,
 } from './tencent';
-
-import { globalSettings } from '@/store/settings';
-import { invoke } from '@tauri-apps/api/core';
-import { message } from 'jinge-antd';
 import { renderTpl } from './util';
-import shellTpl from '@/assets/shell-template/agent.sh?raw';
 
 export interface InstanceDeps {
   vpcId: string;
@@ -39,9 +40,7 @@ async function loadVpc(resourceName: string) {
   }
 }
 
-export async function loadInstanceDependentResources(): Promise<
-  InstanceDeps | undefined
-> {
+export async function loadInstanceDependentResources(): Promise<InstanceDeps | undefined> {
   if (!globalSettings.zone || !globalSettings.imageId) {
     message.error('请先配置可用区、镜像等信息');
     return;

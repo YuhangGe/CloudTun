@@ -1,3 +1,4 @@
+import { onMount, vm, watch } from 'jinge';
 import {
   Button,
   Controller,
@@ -10,18 +11,14 @@ import {
   message,
   useForm,
 } from 'jinge-antd';
-import {
-  DescribeImages,
-  DescribeInstanceTypes,
-  DescribeZones,
-} from '@/service/tencent';
+import { z } from 'zod';
+
+import { RegionOptions } from '@/service/region';
+import { DescribeImages, DescribeInstanceTypes, DescribeZones } from '@/service/tencent';
 import { copyToClipboard, generateStrongPassword } from '@/service/util';
-import { onMount, vm, watch } from 'jinge';
+import { globalSettings } from '@/store/settings';
 
 import { FormItem } from './FormItem';
-import { RegionOptions } from '@/service/region';
-import { globalSettings } from '@/store/settings';
-import { z } from 'zod';
 
 // const ImageTypeOpts = [
 //   {
@@ -217,11 +214,7 @@ export function InstanceConfigForm() {
       <FormItem label="可用区：" required>
         <Controller control={control} name="zone">
           {(field) => (
-            <Select
-              options={state.zoneOpts}
-              value={field.value}
-              on:change={field['on:change']}
-            />
+            <Select options={state.zoneOpts} value={field.value} on:change={field['on:change']} />
           )}
         </Controller>
       </FormItem>
@@ -257,9 +250,7 @@ export function InstanceConfigForm() {
                     resetPwd();
                   }}
                   className="px-2!"
-                  slot:icon={
-                    <span className="icon-[ant-design--reload-outlined] text-base"></span>
-                  }
+                  slot:icon={<span className="icon-[ant-design--reload-outlined] text-base"></span>}
                   type="link"
                 />
                 <Button
@@ -271,11 +262,9 @@ export function InstanceConfigForm() {
                       });
                     }
                   }}
-                  className="border-l-border! rounded-none! px-2!"
+                  className="rounded-none! border-l-border! px-2!"
                   type="link"
-                  slot:icon={
-                    <span className="icon-[ant-design--copy-outlined] text-base"></span>
-                  }
+                  slot:icon={<span className="icon-[ant-design--copy-outlined] text-base"></span>}
                 />
               </InputAddon>
             </InputWrapper>
@@ -285,22 +274,14 @@ export function InstanceConfigForm() {
       <FormItem label="资源名：" required>
         <Controller control={control} name="resourceName">
           {(field) => (
-            <Input
-              value={field.value}
-              on:change={field['on:change']}
-              on:blur={field['on:blur']}
-            />
+            <Input value={field.value} on:change={field['on:change']} on:blur={field['on:blur']} />
           )}
         </Controller>
       </FormItem>
       <FormItem label="磁盘类型：" required error={formErrors.diskType}>
         <Controller control={control} name="diskType">
           {(field) => (
-            <Select
-              options={DiskTypeOpts}
-              value={field.value}
-              on:change={field['on:change']}
-            />
+            <Select options={DiskTypeOpts} value={field.value} on:change={field['on:change']} />
           )}
         </Controller>
       </FormItem>
@@ -314,11 +295,7 @@ export function InstanceConfigForm() {
       <FormItem label="镜像：" required error={formErrors.imageId}>
         <Controller control={control} name="imageId">
           {(field) => (
-            <Select
-              options={state.imageOpts}
-              value={field.value}
-              on:change={field['on:change']}
-            />
+            <Select options={state.imageOpts} value={field.value} on:change={field['on:change']} />
           )}
         </Controller>
       </FormItem>

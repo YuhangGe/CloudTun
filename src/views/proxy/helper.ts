@@ -1,3 +1,6 @@
+import { invoke } from '@tauri-apps/api/core';
+import { fetch } from '@tauri-apps/plugin-http';
+
 import {
   type CVMInstance,
   CreateCommand,
@@ -6,11 +9,8 @@ import {
   DescribeInstances,
   ModifyCommand,
 } from '@/service/tencent';
-
 import { appendLog } from '@/store/log';
-import { fetch } from '@tauri-apps/plugin-http';
 import { globalSettings } from '@/store/settings';
-import { invoke } from '@tauri-apps/api/core';
 
 export async function loadInstance(id?: string) {
   return await DescribeInstances({
@@ -126,8 +126,7 @@ export async function pingServerOnce(ip: string) {
         'x-token': globalSettings.token,
       },
     });
-    if (res.status !== 200)
-      throw new Error(`bad response status: ${res.status}`);
+    if (res.status !== 200) throw new Error(`bad response status: ${res.status}`);
     const txt = await res.text();
     if (txt === 'pong!') {
       appendLog('[log::info] 远程代理服务服务器正常响应！');

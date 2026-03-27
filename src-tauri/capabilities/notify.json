@@ -2,9 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "notify_window",
   "description": "Capability for the notify window",
-  "windows": [
-    "notify_window"
-  ],
+  "windows": ["notify_window"],
   "permissions": [
     "core:event:default",
     "core:window:allow-show",

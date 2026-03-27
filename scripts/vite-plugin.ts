@@ -1,8 +1,7 @@
-import { readFile, writeFile } from 'node:fs/promises';
-
-import { type PluginOption } from 'vite';
 import { getTailwindThemeCss } from 'jinge-antd/colors';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { type PluginOption } from 'vite';
 
 export function Base64LoaderPlugin(): PluginOption {
   return {
@@ -25,10 +24,7 @@ export function TailwindThemePlugin(): PluginOption {
   return {
     name: 'tailwind-theme-generator',
     async config(config) {
-      const css = await readFile(
-        path.resolve(__dirname, '../src/tailwind.css'),
-        'utf-8',
-      );
+      const css = await readFile(path.resolve(__dirname, '../src/tailwind.css'), 'utf-8');
 
       await writeFile(
         path.resolve(__dirname, '../src/style.css'),
