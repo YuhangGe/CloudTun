@@ -11,9 +11,7 @@ export function CopyButton(props: { text: string; className?: string }) {
           message.success('已复制！');
         });
       }}
-      slot:icon={
-        <span className="icon-[ant-design--copy-outlined] text-base"></span>
-      }
+      slot:icon={<span className="icon-[ant-design--copy-outlined] text-base"></span>}
       size="sm"
       type="link"
     />

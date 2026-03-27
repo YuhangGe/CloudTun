@@ -1,10 +1,10 @@
+import { invoke } from '@tauri-apps/api/core';
 import { cx, onMount } from 'jinge';
+import { message } from 'jinge-antd';
 
 import { ContextMenu } from './ContextMenu';
-import { IS_ANDROID } from './service/util';
 import { Layout } from './Layout';
-import { invoke } from '@tauri-apps/api/core';
-import { message } from 'jinge-antd';
+import { IS_ANDROID } from './service/util';
 
 if (IS_ANDROID) {
   message.configContainer({
@@ -21,12 +21,7 @@ function App() {
     }
   });
   return (
-    <div
-      className={cx(
-        'bg-background flex size-full overflow-hidden',
-        IS_ANDROID && 'pt-8',
-      )}
-    >
+    <div className={cx('flex size-full overflow-hidden bg-background', IS_ANDROID && 'pt-8')}>
       <Layout />
       <ContextMenu />
     </div>

@@ -1,5 +1,5 @@
-import { Button, Tag } from 'jinge-antd';
 import { onMount, vm } from 'jinge';
+import { Button, Tag } from 'jinge-antd';
 
 import { DescribeAccountBalance } from '@/service/tencent';
 
@@ -29,9 +29,7 @@ export function Balance() {
         on:click={() => {
           void loadPrice();
         }}
-        slot:icon={
-          <span className="icon-[ant-design--reload-outlined] text-base"></span>
-        }
+        slot:icon={<span className="icon-[ant-design--reload-outlined] text-base"></span>}
         size="sm"
         type="link"
       ></Button>

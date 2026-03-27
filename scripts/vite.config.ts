@@ -1,11 +1,11 @@
-import { TailwindThemePlugin } from './vite-plugin';
-import { defineConfig } from 'vite';
-import imagemin from 'vite-plugin-minipic';
+import tailwindcss from '@tailwindcss/vite';
 import { jingeVitePlugin } from 'jinge-compiler';
 import { networkInterfaces } from 'node:os';
 import path from 'node:path';
-import tailwindcss from '@tailwindcss/vite';
-import tsconfigPaths from 'vite-tsconfig-paths';
+import { defineConfig } from 'vite';
+import imagemin from 'vite-plugin-minipic';
+
+import { TailwindThemePlugin } from './vite-plugin';
 
 let IPv4 = '';
 Object.entries(networkInterfaces()).some(([, nets]) => {
@@ -50,6 +50,7 @@ export default defineConfig({
     exclude: ['jinge-antd'],
   },
   resolve: {
+    tsconfigPaths: true,
     alias: {
       'jinge-antd': 'jinge-antd/source',
     },
@@ -63,16 +64,5 @@ export default defineConfig({
       },
     },
   },
-  plugins: [
-    tailwindcss(),
-    tsconfigPaths({
-      projects: [path.resolve(__dirname, '../tsconfig.json')],
-    }),
-    TailwindThemePlugin(),
-    jingeVitePlugin(),
-    imagemin(),
-    tsconfigPaths({
-      projects: [path.resolve(__dirname, '../tsconfig.json')],
-    }),
-  ],
+  plugins: [tailwindcss(), TailwindThemePlugin(), jingeVitePlugin(), imagemin()],
 });

@@ -1,17 +1,18 @@
+import { invoke } from '@tauri-apps/api/core';
+import { onMount, ref, vm, watch } from 'jinge';
+import { Spin, Tag, message } from 'jinge-antd';
+
+import { validateSettings } from '@/service/settings';
 import { type CVMPrice, InquiryPriceRunInstances } from '@/service/tencent';
 import { IS_ANDROID, IS_MOBILE, IS_RELOAD, IS_REOPEN } from '@/service/util';
-import { Spin, Tag, message } from 'jinge-antd';
 import { globalInst, loadGlobalInst } from '@/store/instance';
-import { onMount, ref, vm, watch } from 'jinge';
+import { globalSettings } from '@/store/settings';
 
 import { Balance } from './Balance';
 import { Bandwidth } from './Bandwind';
 import { Control } from './Control';
 import { Instance } from './Instance';
 import { Vpn } from './Vpn';
-import { globalSettings } from '@/store/settings';
-import { invoke } from '@tauri-apps/api/core';
-import { validateSettings } from '@/service/settings';
 
 export function ProxyView() {
   const state = vm<{
@@ -105,7 +106,7 @@ export function ProxyView() {
           <span className="mr-1 whitespace-nowrap">实例规格：</span>
           <Tag className="w-35">{globalSettings.instanceType}</Tag>
           {state.price && (
-            <span className="text-secondary-text text-sm whitespace-nowrap">
+            <span className="text-sm whitespace-nowrap text-secondary-text">
               （¥{state.price.InstancePrice.UnitPriceDiscount}/小时）
             </span>
           )}

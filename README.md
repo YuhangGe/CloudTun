@@ -25,7 +25,7 @@
 
 1. 安装 rust 环境，安装 nightly channel 并默认切到 nightly。（SIMD 并行指令加速需要 nightly 环境编译）。
 2. 安装 node + pnpm.
-3. 项目根目录执行 `pnpm install`。 
+3. 项目根目录执行 `pnpm install`。
 
 ### PC 平台
 
@@ -57,3 +57,17 @@ pnpm tauri android build
 TODO: 支持 IOS 平台。
 
 所有网络代理和VPN流量转发的相关的逻辑都是 rust 实现，理论上 ios 平台的接入也没有屏障。
+
+## Docker
+
+1. 先构建基础镜像。
+
+```bash
+docker build -f Dockerfile.base -t cloudtun-base .
+```
+
+2. 然后构建 `server-fc`。
+
+```bash
+
+```

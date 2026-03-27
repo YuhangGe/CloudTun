@@ -1,11 +1,11 @@
-import { Button, Popconfirm } from 'jinge-antd';
-import { IS_ANDROID, IS_MOBILE } from '@/service/util';
+import { invoke } from '@tauri-apps/api/core';
 import { type WithEvents, type WithExpose, expose, vm } from 'jinge';
-import { createGlobalInst, globalInst } from '@/store/instance';
+import { Button, Popconfirm } from 'jinge-antd';
 
 import { TerminateInstance } from '@/service/tencent';
+import { IS_ANDROID, IS_MOBILE } from '@/service/util';
+import { createGlobalInst, globalInst } from '@/store/instance';
 import { globalSettings } from '@/store/settings';
-import { invoke } from '@tauri-apps/api/core';
 
 export function Control(
   props: {
@@ -57,11 +57,7 @@ export function Control(
       await invoke('tauri_android_start_vpn', {
         serverIp: globalInst.ip,
         cvmId: globalInst.data!.InstanceId,
-        token: globalSettings.token,
-        proxyApps:
-          globalSettings.mobileProxyMode === 'app'
-            ? globalSettings.mobileProxyApps
-            : '',
+        proxyApps: globalSettings.mobileProxyMode === 'app' ? globalSettings.mobileProxyApps : '',
       });
     }
     state.vpnConnected = !state.vpnConnected;

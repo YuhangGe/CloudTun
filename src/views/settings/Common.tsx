@@ -1,21 +1,14 @@
-import {
-  Button,
-  Controller,
-  Select,
-  message,
-  modal,
-  onModalConfirm,
-  useForm,
-} from 'jinge-antd';
-import { IS_ANDROID, IS_IOS, IS_MOBILE } from '@/service/util';
+import { invoke } from '@tauri-apps/api/core';
 import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
 import { onMount, vm, vmRaw } from 'jinge';
+import { Button, Controller, Select, message, modal, onModalConfirm, useForm } from 'jinge-antd';
+import { z } from 'zod';
+
+import { IS_ANDROID, IS_IOS, IS_MOBILE } from '@/service/util';
+import { globalSettings } from '@/store/settings';
 
 import { FormItem } from './FormItem';
 import { Switch } from './Swtich';
-import { globalSettings } from '@/store/settings';
-import { invoke } from '@tauri-apps/api/core';
-import { z } from 'zod';
 
 interface App {
   name: string;
@@ -55,22 +48,19 @@ function PickAppModal(props: { apps?: string[] }) {
   });
 
   return (
-    <div className="border-border mt-2 flex max-h-[60vh] flex-col overflow-auto rounded-sm border">
+    <div className="mt-2 flex max-h-[60vh] flex-col overflow-auto rounded-sm border border-border">
       {state.allApps.map((app) => (
-        <div
-          className="border-border flex items-center border-b py-3 pl-3"
-          key={app.id}
-        >
+        <div className="flex items-center border-b border-border py-3 pl-3" key={app.id}>
           <div className="mr-3 h-11 w-11 shrink-0">
             {app.icon ? (
               <img src={app.icon} className="w-full rounded-full" />
             ) : (
-              <div className="bg-blue/25 size-full rounded-full"></div>
+              <div className="size-full rounded-full bg-blue/25"></div>
             )}
           </div>
           <div className="flex flex-1 flex-col justify-between">
             <p className="font-bold">{app.name}</p>
-            <p className="text-secondary-text text-sm">{app.id}</p>
+            <p className="text-sm text-secondary-text">{app.id}</p>
           </div>
           <div className="ml-3 w-10 shrink-0">
             <input
@@ -204,7 +194,7 @@ export function CommonSettingsForm() {
             <Controller control={control} name="proxyRules">
               {(field) => (
                 <textarea
-                  className="border-border rounded-md border p-3 leading-[1.3] outline-none"
+                  className="rounded-md border border-border p-3 leading-[1.3] outline-none"
                   rows={5}
                   value={field.value}
                   on:input={(evt) => {
@@ -236,10 +226,10 @@ export function CommonSettingsForm() {
         {IS_MOBILE && formState.mobileProxyMode === 'app' && (
           <FormItem label="代理应用：">
             <div className="">
-              <ul className="border-border max-h-50 overflow-auto rounded-md border">
+              <ul className="max-h-50 overflow-auto rounded-md border border-border">
                 {state.apps.map((app, idx) => (
                   <li
-                    className="border-border flex items-center px-3 py-3 not-last:border-b"
+                    className="flex items-center border-border px-3 py-3 not-last:border-b"
                     key={app}
                   >
                     <span className="flex-1">{app}</span>
@@ -249,9 +239,7 @@ export function CommonSettingsForm() {
                       }}
                       type="link"
                       size="sm"
-                      slot:icon={
-                        <span className="icon-[ant-design--delete-twotone]"></span>
-                      }
+                      slot:icon={<span className="icon-[ant-design--delete-twotone]"></span>}
                     ></Button>
                   </li>
                 ))}
@@ -266,9 +254,7 @@ export function CommonSettingsForm() {
                     }
                   }}
                   size="sm"
-                  slot:icon={
-                    <span className="icon-[ant-design--plus-outlined]"></span>
-                  }
+                  slot:icon={<span className="icon-[ant-design--plus-outlined]"></span>}
                 >
                   添加
                 </Button>

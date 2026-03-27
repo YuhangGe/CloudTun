@@ -31,7 +31,7 @@ pub async fn test_handler(State(ctx): State<Arc<Context>>) -> Result<&'static st
     }
     Ok(ret) => ret,
   };
-  let Some(inst) = ret.iter().find(|inst| inst.name.eq("vray::proxy")) else {
+  let Some(inst) = ret.iter().find(|inst| inst.name.eq("cloudtun")) else {
     return Err(StatusCode::NOT_FOUND);
   };
   match ctx.tx.desroy_instance(&inst.id).await {

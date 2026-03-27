@@ -1,8 +1,8 @@
-import { Button, Tag } from 'jinge-antd';
-import { globalInst, loadGlobalInst } from '@/store/instance';
 import { vm, watch } from 'jinge';
+import { Button, Tag } from 'jinge-antd';
 
 import { CopyButton } from '@/components/Copy';
+import { globalInst, loadGlobalInst } from '@/store/instance';
 
 export function Instance() {
   const state = vm<{
@@ -47,9 +47,7 @@ export function Instance() {
         <div className="flex items-center">
           <span className="mr-1 whitespace-nowrap">本地代理：</span>
           <div className="flex items-center">
-            <Tag className="mr-2 overflow-x-auto font-mono">
-              http://127.0.0.1:7892
-            </Tag>
+            <Tag className="mr-2 overflow-x-auto font-mono">http://127.0.0.1:7892</Tag>
             <CopyButton text="http://127.0.0.1:7892" />
           </div>
         </div>
@@ -58,20 +56,14 @@ export function Instance() {
         <span className="mr-1 whitespace-nowrap">当前主机：</span>
 
         <Tag className="w-35">{globalInst.data?.InstanceName ?? '-'}</Tag>
-        {state.status && (
-          <span className="text-secondary-text text-sm">
-            （{state.status}）
-          </span>
-        )}
+        {state.status && <span className="text-sm text-secondary-text">（{state.status}）</span>}
 
         <Button
           loading={globalInst.loading}
           on:click={() => {
             void loadGlobalInst(globalInst.data?.InstanceId);
           }}
-          slot:icon={
-            <span className="icon-[ant-design--reload-outlined] text-base"></span>
-          }
+          slot:icon={<span className="icon-[ant-design--reload-outlined] text-base"></span>}
           size="sm"
           type="link"
         ></Button>

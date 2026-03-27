@@ -1,27 +1,20 @@
-import {
-  Button,
-  Dropdown,
-  type MenuOption,
-  Tooltip,
-  message,
-} from 'jinge-antd';
+import { invoke } from '@tauri-apps/api/core';
 import { cx, vm, watch } from 'jinge';
+import { Button, Dropdown, type MenuOption, Tooltip, message } from 'jinge-antd';
 
+import imgLogo from '@/assets/logo-512.png';
+
+import { validateSettings } from './service/settings';
 import { IS_MOBILE } from './service/util';
+import { globalSettings } from './store/settings';
 import { LogView } from './views/logview';
 import { ProxyView } from './views/proxy';
 import { SettingsView } from './views/settings';
-import { globalSettings } from './store/settings';
-import imgLogo from '@/assets/logo-512.png';
-import { invoke } from '@tauri-apps/api/core';
-import { validateSettings } from './service/settings';
 
 const ViewItems: MenuOption<string>[] = [
   {
     label: '代理',
-    'slot:icon': (
-      <span className="icon-[material-symbols--wifi-proxy-outline]"></span>
-    ),
+    'slot:icon': <span className="icon-[material-symbols--wifi-proxy-outline]"></span>,
     value: 'proxy',
   },
   {
@@ -53,7 +46,7 @@ export function Layout() {
 
   return (
     <>
-      <div className="border-border flex w-28 shrink-0 flex-col border-r border-solid max-sm:hidden">
+      <div className="flex w-28 shrink-0 flex-col border-r border-solid border-border max-sm:hidden">
         <div className="pt-1.25 pl-5 max-sm:pl-3">
           <img src={imgLogo} className="size-16" />
         </div>
@@ -69,7 +62,7 @@ export function Layout() {
               state.view = item.value;
             }}
             className={cx(
-              'hover:bg-hover flex w-full cursor-pointer items-center py-5 pl-5 text-lg hover:text-white',
+              'flex w-full cursor-pointer items-center py-5 pl-5 text-lg hover:bg-hover hover:text-white',
               state.view === item.value && 'text-blue',
             )}
           >
@@ -86,9 +79,7 @@ export function Layout() {
                 await invoke('tauri_exit_process');
               }}
               className="flex w-full items-center justify-center pt-2 pb-4"
-              slot:icon={
-                <span className="icon-[grommet-icons--power-shutdown]"></span>
-              }
+              slot:icon={<span className="icon-[grommet-icons--power-shutdown]"></span>}
               type="link"
             />
           </Tooltip>
@@ -101,9 +92,7 @@ export function Layout() {
             <span className="ml-2 font-medium">CloudTun</span>
             <span className="mx-2">-</span>
           </div>
-          <div className="max-sm:text-secondary-text text-2xl whitespace-nowrap">
-            {state.title}
-          </div>
+          <div className="text-2xl whitespace-nowrap max-sm:text-secondary-text">{state.title}</div>
           <div className="flex-1" />
 
           <Dropdown

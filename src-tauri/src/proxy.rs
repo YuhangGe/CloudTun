@@ -49,7 +49,6 @@ async fn start_proxy_client<R: Runtime>(
   h: AppHandle<R>,
   state: State<'_, ProxyLoop>,
   server_ip: String,
-  token: String,
   cvm_id: String,
   proxy_rules: Option<String>,
 ) -> anyhow::Result<()> {
@@ -66,7 +65,7 @@ async fn start_proxy_client<R: Runtime>(
     password.push(cvm_id_bytes[i % len]);
   }
   let proxy_args = ProxyArgs {
-    server_addr: (server_ip.to_string(), 24816, token.to_string()),
+    server_addr: (server_ip.to_string(), 24816, cvm_id),
     local_addr: ("0.0.0.0".to_string(), 7892),
     default_rule: cloudtun_proxy::MatchType::Proxy,
     proxy_rules,
@@ -98,7 +97,6 @@ pub async fn tauri_start_proxy_client<R: Runtime>(
   handle: AppHandle<R>,
   state: State<'_, ProxyLoop>,
   server_ip: String,
-  token: String,
   cvm_id: String,
   proxy_rules: String,
 ) -> TAResult<()> {
@@ -106,7 +104,6 @@ pub async fn tauri_start_proxy_client<R: Runtime>(
     handle,
     state,
     server_ip,
-    token,
     cvm_id,
     if proxy_rules.is_empty() {
       None

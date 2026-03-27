@@ -1,12 +1,6 @@
 {
   "identifier": "ios-capability",
-  "platforms": [
-    "iOS"
-  ],
-  "windows": [
-    "main"
-  ],
-  "permissions": [
-    "ios:default"
-  ]
+  "platforms": ["iOS"],
+  "windows": ["main"],
+  "permissions": ["ios:default"]
 }

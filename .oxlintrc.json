@@ -6,7 +6,7 @@
   },
   "rules": {
     "no-implied-eval": "off",
-    "sort-imports": "error",
+    "sort-imports": "off",
     "no-duplicate-imports": "error",
     "consistent-type-imports": [
       "error",

@@ -1,8 +1,7 @@
-import unzip, { type Entry, type ZipFile } from 'yauzl';
-
 import { createWriteStream } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import unzip, { type Entry, type ZipFile } from 'yauzl';
 
 /**
  * 跨平台的 unzip 方案。windows 系统下没有 unzip 命令。

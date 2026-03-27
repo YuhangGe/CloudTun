@@ -1,0 +1,21 @@
+FROM python:3.7.4-stretch
+
+# 设置环境变量，让Rustup从RsProxy镜像站下载工具链
+ENV RUSTUP_DIST_SERVER="https://rsproxy.cn" \
+    RUSTUP_UPDATE_ROOT="https://rsproxy.cn/rustup"
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y
+RUN echo 'export PATH=$HOME/.cargo/bin:$PATH' >> $HOME/.bashrc
+RUN mkdir -p /root/.cargo && \
+    echo '[source.crates-io]' > /root/.cargo/config.toml && \
+    echo 'replace-with = "rsproxy-sparse"' >> /root/.cargo/config.toml && \
+    echo '[source.rsproxy]' >> /root/.cargo/config.toml && \
+    echo 'registry = "https://rsproxy.cn/crates.io-index"' >> /root/.cargo/config.toml && \
+    echo '[source.rsproxy-sparse]' >> /root/.cargo/config.toml && \
+    echo 'registry = "sparse+https://rsproxy.cn/index/"' >> /root/.cargo/config.toml && \
+    echo '[registries.rsproxy]' >> /root/.cargo/config.toml && \
+    echo 'index = "https://rsproxy.cn/crates.io-index"' >> /root/.cargo/config.toml && \
+    echo '[net]' >> /root/.cargo/config.toml && \
+    echo 'git-fetch-with-cli = true' >> /root/.cargo/config.toml
+
+RUN /root/.cargo/bin/rustup install nightly
+WORKDIR /app

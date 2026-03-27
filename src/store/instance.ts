@@ -1,27 +1,21 @@
-import { type CVMInstance, CreateInstance } from '@/service/tencent';
-import { IS_MOBILE, IS_REOPEN } from '@/service/util';
-import {
-  type MessageInstance,
-  type MessageUpdateOptions,
-  message,
-} from 'jinge-antd';
-import {
-  loadInstance,
-  pingServerOnce,
-  startProxyClient,
-} from '@/views/proxy/helper';
-
-import { globalSettings } from './settings';
 import { invoke } from '@tauri-apps/api/core';
+import { vm } from 'jinge';
+import { type MessageInstance, type MessageUpdateOptions, message } from 'jinge-antd';
+
 import { loadInstanceDependentResources } from '@/service/instance';
 // import { appendLog } from './log';
 import { showNotifyWindow } from '@/service/notify';
-import { vm } from 'jinge';
+import { type CVMInstance, CreateInstance } from '@/service/tencent';
+import { IS_MOBILE, IS_REOPEN } from '@/service/util';
+import { loadInstance, pingServerOnce, startProxyClient } from '@/views/proxy/helper';
+
+import { globalSettings } from './settings';
 
 export interface InstanceState {
   data?: CVMInstance;
   loading?: boolean;
   ip?: string;
+  id?: string;
   /**
    * 0: 实例未创建
    * 1: 实例已创建
@@ -137,14 +131,14 @@ async function updateInst(inst?: CVMInstance) {
 
 async function updateConnect() {
   globalInst.state = 2;
-  const ret = await pingServerOnce(globalInst.ip!);
+  const ret = await pingServerOnce(globalInst.ip!, globalInst.data!.InstanceId);
   if (ret) {
     globalInst.state = 3;
     if (!IS_REOPEN) {
       if (!IS_MOBILE) {
         await invoke('tauri_interval_ping_start', {
           ip: globalInst.ip!,
-          token: globalSettings.token,
+          token: globalInst.data!.InstanceId!,
         });
         await enableProxy();
       } else {
@@ -164,7 +158,6 @@ async function updateConnect() {
 async function enableProxy() {
   const r = await startProxyClient(
     globalInst.ip!,
-    globalSettings.token,
     globalInst.data!.InstanceId,
     globalSettings.proxyRules,
   );

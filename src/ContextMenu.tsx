@@ -1,8 +1,8 @@
-import { Dropdown, type MenuOption } from 'jinge-antd';
+import { invoke } from '@tauri-apps/api/core';
 import { Portal, onMount, ref, registerEvent, vm } from 'jinge';
+import { Dropdown, type MenuOption } from 'jinge-antd';
 
 import { IS_MOBILE } from './service/util';
-import { invoke } from '@tauri-apps/api/core';
 
 const ContextMenuOptions: MenuOption<string>[] = [
   {
@@ -20,9 +20,7 @@ const ContextMenuOptions: MenuOption<string>[] = [
         {
           value: 'quit',
           label: '退出程序',
-          'slot:icon': (
-            <span className="icon-[grommet-icons--power-shutdown]"></span>
-          ),
+          'slot:icon': <span className="icon-[grommet-icons--power-shutdown]"></span>,
         },
       ]
     : []),
@@ -68,7 +66,7 @@ export function ContextMenu() {
           }
         }}
       >
-        <div className="bg-red fixed z-50 size-0" ref={el}></div>
+        <div className="fixed z-50 size-0 bg-red" ref={el}></div>
       </Dropdown>
     </Portal>
   );

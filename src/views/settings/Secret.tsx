@@ -1,24 +1,15 @@
-import {
-  Button,
-  Controller,
-  Input,
-  InputAddon,
-  InputWrapper,
-  message,
-  useForm,
-} from 'jinge-antd';
-import { copyToClipboard, generateStrongPassword } from '@/service/util';
+import { onMount } from 'jinge';
+import { Button, Controller, Input, message, useForm } from 'jinge-antd';
+import { z } from 'zod';
+
+import { generateStrongPassword } from '@/service/util';
+import { globalSettings } from '@/store/settings';
 
 import { FormItem } from './FormItem';
-import { globalSettings } from '@/store/settings';
-import { invoke } from '@tauri-apps/api/core';
-import { onMount } from 'jinge';
-import { z } from 'zod';
 
 export function SecretTokenForm() {
   const { formState, formErrors, validate, control } = useForm(
     z.object({
-      token: z.string(),
       secretId: z.string().min(1),
       secretKey: z.string().min(1),
       loginPwd: z.string().min(1),
@@ -26,16 +17,16 @@ export function SecretTokenForm() {
     { defaultValues: globalSettings },
   );
 
-  function resetToken() {
-    invoke('tauri_generate_uuid').then(
-      (id) => {
-        formState.token = id as string;
-      },
-      (err) => {
-        message.error(`${err}`);
-      },
-    );
-  }
+  // function resetToken() {
+  //   invoke('tauri_generate_uuid').then(
+  //     (id) => {
+  //       formState.token = id as string;
+  //     },
+  //     (err) => {
+  //       message.error(`${err}`);
+  //     },
+  //   );
+  // }
   function resetPwd() {
     formState.loginPwd = generateStrongPassword();
   }
@@ -47,9 +38,9 @@ export function SecretTokenForm() {
   }
 
   onMount(() => {
-    if (!globalSettings.token) {
-      resetToken();
-    }
+    // if (!globalSettings.token) {
+    //   resetToken();
+    // }
     if (!globalSettings.loginPwd) {
       resetPwd();
     }
@@ -81,7 +72,7 @@ export function SecretTokenForm() {
           </Controller>
         </FormItem>
 
-        <FormItem label="Token：" required>
+        {/* <FormItem label="Token：" required>
           <Controller control={control} name="token">
             {(field) => (
               <InputWrapper>
@@ -115,17 +106,15 @@ export function SecretTokenForm() {
                         });
                       }
                     }}
-                    className="border-l-border! rounded-none! px-2!"
+                    className="rounded-none! border-l-border! px-2!"
                     type="link"
-                    slot:icon={
-                      <span className="icon-[ant-design--copy-outlined] text-base"></span>
-                    }
+                    slot:icon={<span className="icon-[ant-design--copy-outlined] text-base"></span>}
                   />
                 </InputAddon>
               </InputWrapper>
             )}
           </Controller>
-        </FormItem>
+        </FormItem> */}
       </div>
       <div className="my-4 flex items-center gap-8">
         <Button

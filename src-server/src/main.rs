@@ -32,10 +32,6 @@ struct Args {
   #[arg(short, long, default_value_t = REMOTE_PROXY_PORT)]
   port: u16,
 
-  /// 客户端连接时的鉴权 Token
-  #[arg(long)]
-  token: String,
-
   /// 腾讯云 SecretId
   #[arg(long)]
   secret_id: String,
@@ -58,7 +54,7 @@ async fn main() {
   let args = Args::parse();
 
   let tencent_client = TencentCloudClient::new(args.secret_id, args.secret_key, args.region);
-  let password = get_password(&tencent_client, &args.cvm_name).await;
+  let (token, password) = get_password(&tencent_client, &args.cvm_name).await;
   let app = Router::new()
     .route("/ping", get(ping_handler))
     .route("/test", get(test_handler))
@@ -74,16 +70,11 @@ async fn main() {
     "CloudTun Server Listening at {ip}:{port}
   Auth Token: {}
   Data Password: {}",
-    args.token,
+    token,
     hex2str(&password)
   );
 
-  let context = Arc::new(Context::new(
-    args.token,
-    password,
-    args.cvm_name,
-    tencent_client,
-  ));
+  let context = Arc::new(Context::new(token, password, args.cvm_name, tencent_client));
 
   let serve_handle = axum::serve(
     listener,
@@ -106,11 +97,10 @@ async fn main() {
   let _ = tokio::join!(serve_handle, timer_handle);
 }
 
-async fn get_password(tx: &TencentCloudClient, cvm_name: &str) -> Vec<u8> {
+async fn get_password(tx: &TencentCloudClient, cvm_name: &str) -> (String, Vec<u8>) {
   let cvm_id = match tx.get_instance_by_name(cvm_name).await {
-    Err(_) => {
-      eprintln!("cvm not found, use empty password");
-      return vec![0; 16];
+    Err(e) => {
+      panic!("cvm not found! error: {}", e);
     }
     Ok(v) => v.id,
   };
@@ -120,7 +110,7 @@ async fn get_password(tx: &TencentCloudClient, cvm_name: &str) -> Vec<u8> {
   for i in 0..16 {
     buf.push(cvm_id_bytes[i % len]);
   }
-  buf
+  (cvm_id, buf)
 }
 
 async fn destroy_cvm(ctx: &Context) -> anyhow::Result<bool> {

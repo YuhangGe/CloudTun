@@ -1,10 +1,11 @@
+import { vm } from 'jinge';
 import { Tabs, message } from 'jinge-antd';
+
+import { globalSettings } from '@/store/settings';
 
 import { CommonSettingsForm } from './Common';
 import { InstanceConfigForm } from './Instance';
 import { SecretTokenForm } from './Secret';
-import { globalSettings } from '@/store/settings';
-import { vm } from 'jinge';
 
 const TabOptions = [
   {

@@ -1,9 +1,10 @@
 // oxlint-disable typescript/restrict-template-expressions
 
 import { listen } from '@tauri-apps/api/event';
-import { message } from 'jinge-antd';
-import { uid } from '@/service/util';
 import { vm } from 'jinge';
+import { message } from 'jinge-antd';
+
+import { uid } from '@/service/util';
 
 export interface Log {
   id: string;

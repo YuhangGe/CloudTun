@@ -1,3 +1,4 @@
+import { isNumber, vm } from 'jinge';
 import {
   Button,
   InputAddon,
@@ -15,7 +16,6 @@ import {
   type CVMPrice,
   ResetInstancesInternetMaxBandwidth,
 } from '@/service/tencent';
-import { isNumber, vm } from 'jinge';
 import { globalSettings } from '@/store/settings';
 
 function BandwidthEditModal(props: { bw: number; instanceId: string }) {
@@ -24,10 +24,7 @@ function BandwidthEditModal(props: { bw: number; instanceId: string }) {
   });
 
   onModalConfirm(async () => {
-    const [err] = await ResetInstancesInternetMaxBandwidth(
-      props.instanceId,
-      state.bw,
-    );
+    const [err] = await ResetInstancesInternetMaxBandwidth(props.instanceId, state.bw);
     if (!err) {
       void message.success('更新带宽大小成功！');
       return { result: state.bw };
@@ -37,7 +34,7 @@ function BandwidthEditModal(props: { bw: number; instanceId: string }) {
   return (
     <>
       <div>
-        <p className="text-secondary-text pt-2 pb-1 text-xs">
+        <p className="pt-2 pb-1 text-xs text-secondary-text">
           当前版本公网IP按使用流量计费，带宽大小不直接影响费用。
         </p>
         <div className="flex w-full items-center">
@@ -73,10 +70,7 @@ export function Bandwidth(props: { price?: CVMPrice; inst?: CVMInstance }) {
         title: '调整公网带宽大小',
         className: 'max-sm:w-[70vw]',
         'slot:content': (
-          <BandwidthEditModal
-            instanceId={props.inst!.InstanceId}
-            bw={state.bandWidth}
-          />
+          <BandwidthEditModal instanceId={props.inst!.InstanceId} bw={state.bandWidth} />
         ),
       })
       .waitForClose();
@@ -99,16 +93,14 @@ export function Bandwidth(props: { price?: CVMPrice; inst?: CVMInstance }) {
               void openModal();
             }}
             className="translate-y-[1.5px] text-lg"
-            slot:icon={
-              <span className="icon-[tdesign--arrow-up-down-3] text-base"></span>
-            }
+            slot:icon={<span className="icon-[tdesign--arrow-up-down-3] text-base"></span>}
             type="link"
             size="sm"
           />
         </Tooltip>
       )}
       {props.price && (
-        <span className="text-secondary-text text-sm whitespace-nowrap">
+        <span className="text-sm whitespace-nowrap text-secondary-text">
           （¥{props.price.BandwidthPrice.UnitPriceDiscount}/GB）
         </span>
       )}

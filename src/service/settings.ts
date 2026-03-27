@@ -10,7 +10,6 @@ export interface Settings {
   secretId: string;
   loginPwd: string;
   bandWidth: number;
-  token: string;
   autoProxy: boolean;
   autoStartApp: boolean;
   proxyRules: string;
@@ -26,7 +25,6 @@ npmmirror.com: direct`;
 export const DefaultSettings: Settings = {
   region: import.meta.env.VITE_SETTING_REGION ?? 'ap-singapore',
   instanceType: import.meta.env.VITE_SETTING_INSTANCETYPE ?? '',
-  token: import.meta.env.VITE_VMESS_ID ?? '',
   loginPwd: import.meta.env.VITE_SETTING_PASSWORD ?? '',
   // imageType: 'PRIVATE_IMAGE',
   diskType: 'CLOUD_PREMIUM',
@@ -44,7 +42,7 @@ export const DefaultSettings: Settings = {
 };
 
 export function validateSettings(s: Settings) {
-  if (!s.secretKey || !s.secretId || !s.token) {
+  if (!s.secretKey || !s.secretId) {
     return '请先配置密钥参数';
   }
   if (!s.imageId) {

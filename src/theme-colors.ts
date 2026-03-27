@@ -1,5 +1,6 @@
-import { presetDarkPalettes, presetPalettes } from '@ant-design/colors';
 import type { IntRange } from 'type-fest';
+
+import { presetDarkPalettes, presetPalettes } from '@ant-design/colors';
 /** 需要引入的颜色名称 */
 const PalleteNames = [
   'red',
@@ -68,9 +69,7 @@ function AntdColors(dark = false) {
     //   console.log(dark, name, Object.keys(presetPalettes), presetPalettes[name]);
     // }
     Object.assign(colors, {
-      ...Object.fromEntries(
-        clr.map((c, i) => [`${name}-${i === 0 ? 50 : i * 100}`, c]),
-      ),
+      ...Object.fromEntries(clr.map((c, i) => [`${name}-${i === 0 ? 50 : i * 100}`, c])),
       [name]: clr.primary ?? clr[5],
     });
   });
@@ -84,22 +83,12 @@ function AntdColors(dark = false) {
   colors.warning = colors.gold;
   colors.error = colors['red-400'];
   colors.background = dark ? '#141414' : '#fff';
-  colors['leading-text'] = dark
-    ? 'rgba(255,255,255,0.851)'
-    : 'rgba(0, 0, 0, 0.8784)';
-  colors['normal-text'] = dark
-    ? 'rgba(255,255,255,0.851)'
-    : 'rgba(0, 0, 0, 0.8784)';
-  colors['secondary-text'] = dark
-    ? 'rgba(255,255,255,0.651)'
-    : 'rgba(0, 0, 0, 0.651)';
-  colors['disabled-text'] = dark
-    ? 'rgba(255,255,255,0.251)'
-    : 'rgba(0, 0, 0, 0.251)';
+  colors['leading-text'] = dark ? 'rgba(255,255,255,0.851)' : 'rgba(0, 0, 0, 0.8784)';
+  colors['normal-text'] = dark ? 'rgba(255,255,255,0.851)' : 'rgba(0, 0, 0, 0.8784)';
+  colors['secondary-text'] = dark ? 'rgba(255,255,255,0.651)' : 'rgba(0, 0, 0, 0.651)';
+  colors['disabled-text'] = dark ? 'rgba(255,255,255,0.251)' : 'rgba(0, 0, 0, 0.251)';
   colors.border = dark ? '#424242' : '#d9d9d9';
-  colors.separator = dark
-    ? 'rgba(253,253,253,0.1216)'
-    : 'rgba(5, 5, 5, 0.0588)';
+  colors.separator = dark ? 'rgba(253,253,253,0.1216)' : 'rgba(5, 5, 5, 0.0588)';
   colors.divider = dark ? 'rgba(253,253,253,0.1216)' : 'rgba(5, 5, 5, 0.0588)';
   colors['layout-background'] = dark ? '#000' : '#f5f5f5';
 
@@ -121,10 +110,7 @@ function str2rgb(str: string) {
   str = str.slice(1); // frop prefix '#'
   return [0, 1, 2]
     .map((n) => {
-      return parseInt(
-        str.length === 3 ? str[n] + str[n] : str.slice(n * 2, n * 2 + 2),
-        16,
-      );
+      return parseInt(str.length === 3 ? str[n] + str[n] : str.slice(n * 2, n * 2 + 2), 16);
     })
     .join(' ');
 }
@@ -137,8 +123,7 @@ export function getAntdTailwindThemes() {
     const darkColor = darkColors[name as keyof AntdThemeColors];
     const lightNoAlpha = lightColor.startsWith('#');
     const darkNoAlpha = darkColor.startsWith('#');
-    if (lightNoAlpha !== darkNoAlpha)
-      throw new Error('dark and light not match');
+    if (lightNoAlpha !== darkNoAlpha) throw new Error('dark and light not match');
     const cssVarName = `--antd-${name}`;
     lightCss[cssVarName] = lightColor;
     darkCss[cssVarName] = darkColor;

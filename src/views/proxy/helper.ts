@@ -1,3 +1,6 @@
+import { invoke } from '@tauri-apps/api/core';
+import { fetch } from '@tauri-apps/plugin-http';
+
 import {
   type CVMInstance,
   CreateCommand,
@@ -6,11 +9,8 @@ import {
   DescribeInstances,
   ModifyCommand,
 } from '@/service/tencent';
-
 import { appendLog } from '@/store/log';
-import { fetch } from '@tauri-apps/plugin-http';
 import { globalSettings } from '@/store/settings';
-import { invoke } from '@tauri-apps/api/core';
 
 export async function loadInstance(id?: string) {
   return await DescribeInstances({
@@ -115,19 +115,17 @@ export async function createOrUpdateCommand(shellContent: string) {
 //   return false; // timeout
 // }
 
-export async function pingServerOnce(ip: string) {
-  if (!globalSettings.token) return false;
+export async function pingServerOnce(ip: string, token: string) {
   try {
     const url = `http://${ip}:24816/ping`;
     appendLog(`[log::info] Ping ${url}`);
     const res = await fetch(url, {
       connectTimeout: 5000,
       headers: {
-        'x-token': globalSettings.token,
+        'x-token': token,
       },
     });
-    if (res.status !== 200)
-      throw new Error(`bad response status: ${res.status}`);
+    if (res.status !== 200) throw new Error(`bad response status: ${res.status}`);
     const txt = await res.text();
     if (txt === 'pong!') {
       appendLog('[log::info] 远程代理服务服务器正常响应！');
@@ -141,16 +139,10 @@ export async function pingServerOnce(ip: string) {
   }
 }
 
-export async function startProxyClient(
-  ip: string,
-  token: string,
-  instanceId: string,
-  proxyRules: string,
-) {
+export async function startProxyClient(ip: string, instanceId: string, proxyRules: string) {
   try {
     await invoke('tauri_start_proxy_client', {
       serverIp: ip,
-      token,
       cvmId: instanceId,
       proxyRules,
     });

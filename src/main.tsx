@@ -1,7 +1,7 @@
 import './style.css';
+import { bootstrap } from 'jinge';
 
 import App from './App';
-import { bootstrap } from 'jinge';
 import { loadGlobalSettings } from './store/settings';
 
 const root = document.querySelector('#root')!;

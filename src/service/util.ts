@@ -1,6 +1,6 @@
-import { message } from 'jinge-antd';
-import { platform } from '@tauri-apps/plugin-os';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+import { platform } from '@tauri-apps/plugin-os';
+import { message } from 'jinge-antd';
 
 export const currentPlatform = platform();
 /**
@@ -28,9 +28,7 @@ export const copyToClipboard = (textToCopy: string) => {
   return writeText(textToCopy);
 };
 export function uid() {
-  return (
-    Date.now().toString(32) + Math.floor(Math.random() * 0xffffff).toString(32)
-  );
+  return Date.now().toString(32) + Math.floor(Math.random() * 0xffffff).toString(32);
 }
 
 export function renderTpl(tpl: string, ctx: Record<string, unknown>) {
@@ -76,7 +74,6 @@ if (!IS_RELOAD) {
 }
 export const IS_REOPEN = location.search.includes('mode=reopen');
 
-export const IS_MOBILE =
-  currentPlatform === 'android' || currentPlatform === 'ios';
+export const IS_MOBILE = currentPlatform === 'android' || currentPlatform === 'ios';
 export const IS_IOS = currentPlatform === 'ios';
 export const IS_ANDROID = currentPlatform === 'android';
