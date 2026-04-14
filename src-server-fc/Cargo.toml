@@ -1,10 +1,10 @@
 [package]
-name = "cloudtun-server"
+name = "cloudtun-server-fc"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-cloudtun-common = { path = "../src-common", features = ["tencent"] }
+cloudtun-common = { path = "../src-common" }
 axum = { version = "0.8.8", features = ["ws"] }
 axum-extra = { version = "0.12.5", features = ["typed-header"] }
 futures-util = "0.3.32"

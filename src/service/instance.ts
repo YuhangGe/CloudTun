@@ -121,7 +121,6 @@ export async function getInstanceAgentShell() {
     SECRET_KEY: globalSettings.secretKey,
     SECRET_ID: globalSettings.secretId,
     CVM_NAME: globalSettings.resourceName,
-    TOKEN: globalSettings.token,
     REGION: globalSettings.region,
   });
   const x = await invoke<string>('tauri_base64_covert', { content: tpl });

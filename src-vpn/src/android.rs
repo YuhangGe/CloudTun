@@ -19,7 +19,6 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
   tun_fd: jint,
   mtu: jchar,
   server_ip: JString,
-  token: JString,
   cvm_id: JString,
 ) -> jint {
   android_logger::init_once(
@@ -32,10 +31,10 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
     log::error!("failed get jstring");
     return -1;
   };
-  let Ok(token) = get_java_string(&mut env, &token) else {
-    log::error!("failed get jstring");
-    return -1;
-  };
+  // let Ok(token) = get_java_string(&mut env, &token) else {
+  //   log::error!("failed get jstring");
+  //   return -1;
+  // };
   let Ok(cvm_id) = get_java_string(&mut env, &cvm_id) else {
     log::error!("failed get jstring");
     return -1;
@@ -68,7 +67,7 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
   log::info!("XXX will start tokio vpn");
   let res = rt.block_on(async move {
     let ping_ip = server_ip.clone();
-    let ping_token = token.clone();
+    let ping_token = cvm_id.clone();
     let ping_cancel_token = shutdown_token.clone();
     let h2 = tokio::spawn(async move {
       start_ping_interval(&ping_ip, &ping_token, &ping_cancel_token).await;
@@ -84,7 +83,7 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
         shutdown_token2.cancel();
         return -1;
       };
-      let server_addr = (server_ip, 24816, token);
+      let server_addr = (server_ip, 24816, cvm_id);
       let log_fn = |log_type: &str, log_message: &str| {
         log::info!("[{log_type}] {log_message}");
       };
