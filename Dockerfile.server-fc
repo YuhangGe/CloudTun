@@ -1,0 +1,14 @@
+FROM cloudtun-base
+ 
+WORKDIR /app
+RUN /root/.cargo/bin/cargo new --bin rust-docker-web
+WORKDIR /app/rust-docker-web
+COPY src-common/ /app/rust-docker-web/src-common/
+COPY src-server-fc/ /app/rust-docker-web/src-server-fc/
+
+WORKDIR /app/rust-docker-web/src-server-fc
+RUN /root/.cargo/bin/cargo build --release
+
+WORKDIR /app
+RUN cp /app/rust-docker-web/src-server-fc/target/release/cloudtun-server-fc /app/cloudtun-server-fc
+RUN rm -rf /app/rust-docker-web

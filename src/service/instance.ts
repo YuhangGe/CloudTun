@@ -122,6 +122,7 @@ export async function getInstanceAgentShell() {
     SECRET_ID: globalSettings.secretId,
     CVM_NAME: globalSettings.resourceName,
     REGION: globalSettings.region,
+    BIN_NAME: 'cloudtun-server',
   });
   const x = await invoke<string>('tauri_base64_covert', { content: tpl });
   return x;
