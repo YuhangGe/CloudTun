@@ -58,16 +58,10 @@ TODO: 支持 IOS 平台。
 
 所有网络代理和VPN流量转发的相关的逻辑都是 rust 实现，理论上 ios 平台的接入也没有屏障。
 
-## Docker
-
-1. 先构建基础镜像。
+### 服务端
 
 ```bash
-docker build -f Dockerfile.base -t cloudtun-base .
+./scripts/build-server.sh
 ```
 
-2. 然后构建 `server-fc`。
-
-```bash
-
-```
+构建完成后，在 `bin` 目录下会有 `cloudtun-server`。
