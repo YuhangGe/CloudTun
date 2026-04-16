@@ -1,9 +1,7 @@
 #![cfg(target_os = "android")]
 
 use jni::{
-  JNIEnv,
-  objects::{JClass, JString},
-  sys::{jchar, jint},
+  EnvUnowned, errors::ThrowRuntimeExAndDefault, objects::{JClass, JString}, sys::{jchar, jint}
 };
 
 use crate::{start_ping_interval, start_run_vpn};
@@ -14,7 +12,7 @@ static TUN_QUIT: std::sync::Mutex<Option<tokio_util::sync::CancellationToken>> =
 /// Start cloudtun
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
-  mut env: JNIEnv,
+  mut env: EnvUnowned,
   _clazz: JClass,
   tun_fd: jint,
   mtu: jchar,
@@ -64,7 +62,7 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
     return -3;
   };
 
-  log::info!("XXX will start tokio vpn");
+  log::info!("XXX will start tokio vpn with ip {}, token: {}", server_ip, cvm_id);
   let res = rt.block_on(async move {
     let ping_ip = server_ip.clone();
     let ping_token = cvm_id.clone();
@@ -113,7 +111,7 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
 
 /// Shutdown cloudtun
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_stop(_env: JNIEnv, _: JClass) -> jint {
+pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_stop(_env: EnvUnowned, _: JClass) -> jint {
   if let Ok(mut lock) = TUN_QUIT.lock() {
     if let Some(shutdown_token) = lock.take() {
       shutdown_token.cancel();
@@ -123,6 +121,10 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_stop(_env: JNIEnv, _:
   -1
 }
 
-fn get_java_string(env: &mut JNIEnv, string: &JString) -> anyhow::Result<String> {
-  Ok(env.get_string(string)?.into())
+fn get_java_string(env: &mut EnvUnowned , input: &JString) -> anyhow::Result<String> {
+   let v = env.with_env(|_| -> Result<String, jni::errors::Error> {
+      Ok(input.to_string())
+    });
+    let v = v.resolve::<ThrowRuntimeExAndDefault>();
+    Ok(v)
 }

@@ -24,8 +24,6 @@ cargo {
 android {
     compileSdk = 36
     namespace = "com.cloudtun.app"
-    ndkVersion = "28.2.13676358"
-
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "true"
         applicationId = "com.cloudtun.app"
@@ -33,16 +31,6 @@ android {
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
-
-        ndk {
-          abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86","x86_64")
-        }
-        externalNativeBuild {
-          ndkBuild {
-            arguments("APP_CFLAGS+=-DPKGNAME=hev/sockstun -ffile-prefix-map=${rootDir}=.")
-            arguments("APP_LDFLAGS+=-Wl,--build-id=none")
-          }
-        }
     }
     buildTypes {
         getByName("debug") {
@@ -50,7 +38,7 @@ android {
             isDebuggable = true
             isJniDebuggable = true
             isMinifyEnabled = false
-            packaging {
+            packaging {               
                 jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")
                 jniLibs.keepDebugSymbols.add("*/armeabi-v7a/*.so")
                 jniLibs.keepDebugSymbols.add("*/x86/*.so")
@@ -72,12 +60,6 @@ android {
     buildFeatures {
         buildConfig = true
     }
-
-//    externalNativeBuild {
-//      ndkBuild {
-//        path = file("src/main/jni/Android.mk")
-//      }
-//    }
 }
 
 rust {

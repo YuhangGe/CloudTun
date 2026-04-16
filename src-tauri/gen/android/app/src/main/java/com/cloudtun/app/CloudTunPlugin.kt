@@ -23,7 +23,6 @@ import java.io.ByteArrayOutputStream
 @InvokeArg
 class StartVpnArgs {
   var serverIp: String? = null
-  var token: String? = null
   var proxyApps: String? = null
   
   var cvmId: String? = null
@@ -81,13 +80,12 @@ class CloudTunPlugin(private val activity: Activity): Plugin(activity) {
   @Command
   fun startVpn(invoke: Invoke) {
     val args = invoke.parseArgs(StartVpnArgs::class.java)
-    println("startVpn: ${args.serverIp} ${args.token}")
+    println("startVpn: ${args.serverIp}")
 //    val context = activity.applicationContext
     val p = VpnService.prepare(activity)
     if (p != null) {
        
       p.putExtra("serverIp", args.serverIp)
-      p.putExtra("token", args.token)
       p.putExtra("cvmId", args.cvmId)
       p.putExtra("proxyApps", args.proxyApps)
       activity.startActivityForResult(p, 0x9999)
@@ -99,7 +97,6 @@ class CloudTunPlugin(private val activity: Activity): Plugin(activity) {
       val intent = Intent(activity, CloudTunVpnService::class.java).apply {
         action = "START"
         putExtra("serverIp", args.serverIp)
-        putExtra("token", args.token)
         putExtra("cvmId", args.cvmId)
         putExtra("proxyApps", args.proxyApps)
       }

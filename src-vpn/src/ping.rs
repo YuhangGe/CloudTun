@@ -20,7 +20,7 @@ pub async fn start_ping_interval(ip: &str, token: &str, cancel_token: &Cancellat
     }
     if !success {
       // TODO：通过 kotlin/swift 层把广播传递出去
-      eprintln!("cloudtun server ping failed!");
+      eprintln!("cloudtun server ping failed! {} {}", ip, token);
     } else {
       println!("cloudtun server ping success!");
       // emit_log(&h, "log::ping", "远程 V2Ray 运行中，服务器正常响应！");
