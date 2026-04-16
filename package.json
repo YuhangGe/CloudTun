@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc && vite build -c scripts/vite.config.ts",
+    "build": "tsgo && vite build -c scripts/vite.config.ts",
     "build-apk": "tauri android build --apk --target aarch64",
     "dev": "vite dev -c scripts/vite.config.ts",
-    "lint": "tsc --noEmit && oxlint --type-aware && oxfmt --check",
+    "lint": "tsgo --noEmit && oxlint --type-aware && oxfmt --check",
     "lint-fix": "oxfmt && oxlint --type-aware --fix",
     "lint-staged": "lint-staged",
     "prepare": "husky",
