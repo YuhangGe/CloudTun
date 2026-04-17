@@ -52,6 +52,12 @@ pnpm tauri android build
 # 如果是开发，pnpm tauri android dev
 ```
 
+构建好后签名发布 apk
+
+```bash
+pnpm bun run .\scripts\deploy-android.ts
+```
+
 ### IOS 平台
 
 TODO: 支持 IOS 平台。
