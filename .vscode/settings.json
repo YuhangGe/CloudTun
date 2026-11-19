@@ -4,7 +4,6 @@
   "editor.formatOnSave": true,
   "oxc.fmt.configPath": ".oxfmtrc.json",
   "oxc.path.oxfmt": "node_modules/oxfmt/bin/oxfmt",
-  "js/ts.experimental.useTsgo": true,
   "editor.defaultFormatter": "oxc.oxc-vscode",
   "[typescript]": {
     "editor.formatOnSave": true,

@@ -181,6 +181,7 @@ async fn tx_call_api<T: for<'a> Deserialize<'a>>(
   headers.insert("X-TC-Region", HeaderValue::from_str(region)?);
   let res = req
     .post(service.get_api_url())
+    .timeout(std::time::Duration::from_secs(30))
     .headers(headers)
     .body(data)
     .send()
@@ -197,7 +198,7 @@ async fn tx_call_api<T: for<'a> Deserialize<'a>>(
         source = s.source();
         i += 1;
       }
-      panic!();
+      return Err(e.into());
     }
   };
 

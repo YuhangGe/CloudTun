@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cloudtun_proxy::{run_proxy_loop, ProxyArgs};
+use cloudtun_proxy::{PreparedProxy, ProxyArgs};
 use tauri::{AppHandle, Runtime};
 use tokio_util::sync::CancellationToken;
 
@@ -10,41 +10,23 @@ use anyhow_tauri::{IntoTAResult, TAResult};
 use tauri::State;
 use tokio::sync::Mutex;
 
-pub struct ProxyLoop(Arc<Mutex<Option<CancellationToken>>>);
-
+struct RunningProxy {
+  cancel: CancellationToken,
+  task: tokio::task::JoinHandle<()>,
+}
+pub struct ProxyLoop(Arc<Mutex<Option<RunningProxy>>>);
 impl ProxyLoop {
   pub fn new() -> Self {
     Self(Arc::new(Mutex::new(None)))
   }
 }
-
-// async fn read<R: Runtime, T: AsyncRead + Unpin>(stdo: T, h: &AppHandle<R>) {
-//   let reader = tokio::io::BufReader::new(stdo);
-//   let mut lines_reader = reader.lines();
-//   loop {
-//     match lines_reader.next_line().await {
-//       Ok(line) => {
-//         if let Some(l) = line {
-//           emit_log(h, "log::v2ray", &l);
-//         } else {
-//           break;
-//         }
-//       }
-//       Err(e) => {
-//         eprintln!("{}", e);
-//         break;
-//       }
-//     }
-//   }
-// }
-
 pub async fn stop_proxy_client(state: State<'_, ProxyLoop>) {
-  let proxy_loop = state.0.clone();
-  if let Some(proc) = proxy_loop.lock().await.take() {
-    proc.cancel();
-  };
+  let mut state = state.0.lock().await;
+  if let Some(running) = state.take() {
+    running.cancel.cancel();
+    let _ = running.task.await;
+  }
 }
-
 async fn start_proxy_client<R: Runtime>(
   h: AppHandle<R>,
   state: State<'_, ProxyLoop>,
@@ -52,43 +34,36 @@ async fn start_proxy_client<R: Runtime>(
   cvm_id: String,
   proxy_rules: Option<String>,
 ) -> anyhow::Result<()> {
-  emit_log(&h, "log::proxy", "starting proxy client...");
-  let proxy_loop = state.0.clone();
-  if let Some(proc) = proxy_loop.lock().await.take() {
-    proc.cancel();
+  anyhow::ensure!(
+    !server_ip.is_empty() && !cvm_id.is_empty(),
+    "server IP and instance ID are required"
+  );
+  let mut state = state.0.lock().await;
+  if let Some(running) = state.take() {
+    running.cancel.cancel();
+    let _ = running.task.await;
   }
-
-  let mut password = Vec::with_capacity(16);
-  let cvm_id_bytes = cvm_id.as_bytes();
-  let len = cvm_id_bytes.len();
-  for i in 0..16 {
-    password.push(cvm_id_bytes[i % len]);
-  }
-  let proxy_args = ProxyArgs {
-    server_addr: (server_ip.to_string(), 24816, cvm_id),
-    local_addr: ("0.0.0.0".to_string(), 7892),
+  let password = cvm_id.as_bytes().iter().copied().cycle().take(16).collect();
+  let proxy = PreparedProxy::bind(ProxyArgs {
+    server_addr: (server_ip, 24816, cvm_id),
+    local_addr: ("0.0.0.0".into(), 7892),
     default_rule: cloudtun_proxy::MatchType::Proxy,
     proxy_rules,
     password,
-  };
-  let shutdown_token = CancellationToken::new();
-  let h2 = h.clone();
-  let log_fn = move |log_type: &str, log_message: &str| {
-    emit_log(&h2, log_type, log_message);
-  };
-  tokio::spawn(async move {
+  })
+  .await?;
+  let cancel = CancellationToken::new();
+  let token = cancel.clone();
+  let task = tokio::spawn(async move {
+    let h2 = h.clone();
+    if let Err(e) = proxy
+      .run(token, move |kind, message| emit_log(&h2, kind, message))
+      .await
     {
-      proxy_loop
-        .clone()
-        .lock()
-        .await
-        .replace(shutdown_token.clone());
-    }
-    if let Err(e) = run_proxy_loop(proxy_args, shutdown_token, log_fn).await {
-      eprintln!("failed run_proxy_loop: {e}");
+      emit_log(&h, "proxy::error", &format!("proxy stopped: {e}"));
     }
   });
-
+  *state = Some(RunningProxy { cancel, task });
   Ok(())
 }
 

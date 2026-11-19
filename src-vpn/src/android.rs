@@ -1,10 +1,23 @@
 #![cfg(target_os = "android")]
 
 use jni::{
-  EnvUnowned, errors::ThrowRuntimeExAndDefault, objects::{JClass, JString}, sys::{jchar, jint}
+  EnvUnowned,
+  errors::ThrowRuntimeExAndDefault,
+  objects::{JClass, JString},
+  sys::{jchar, jint},
 };
 
 use crate::{start_ping_interval, start_run_vpn};
+use std::os::fd::{BorrowedFd, IntoRawFd};
+
+struct RunningGuard;
+impl Drop for RunningGuard {
+  fn drop(&mut self) {
+    if let Ok(mut state) = TUN_QUIT.lock() {
+      *state = None;
+    }
+  }
+}
 
 static TUN_QUIT: std::sync::Mutex<Option<tokio_util::sync::CancellationToken>> =
   std::sync::Mutex::new(None);
@@ -38,6 +51,14 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
     return -1;
   };
 
+  if cvm_id.is_empty() || server_ip.is_empty() || tun_fd < 0 || mtu < 576 {
+    return -1;
+  }
+  // Kotlin retains ownership of its ParcelFileDescriptor. Duplicate it before
+  // starting asynchronous work so either side can close its own descriptor safely.
+  let Ok(owned_fd) = (unsafe { BorrowedFd::borrow_raw(tun_fd) }).try_clone_to_owned() else {
+    return -1;
+  };
   let mut password = Vec::with_capacity(16);
   let cvm_id_bytes = cvm_id.as_bytes();
   let len = cvm_id_bytes.len();
@@ -57,12 +78,17 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
     return -2;
   }
 
+  let _running_guard = RunningGuard;
   let Ok(rt) = tokio::runtime::Runtime::new() else {
     log::error!("failed to create tokio runtime with");
     return -3;
   };
 
-  log::info!("XXX will start tokio vpn with ip {}, token: {}", server_ip, cvm_id);
+  log::info!(
+    "XXX will start tokio vpn with ip {}, token: {}",
+    server_ip,
+    cvm_id
+  );
   let res = rt.block_on(async move {
     let ping_ip = server_ip.clone();
     let ping_token = cvm_id.clone();
@@ -73,7 +99,7 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
     });
     let h1 = tokio::spawn(async move {
       let mut config = tun::Configuration::default();
-      config.raw_fd(tun_fd);
+      config.raw_fd(owned_fd.into_raw_fd());
       // println!("XXX mtu {mtu} {tun_fd}");
       let shutdown_token2 = shutdown_token.clone();
       let Ok(device) = tun::create_as_async(&config) else {
@@ -111,9 +137,12 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
 
 /// Shutdown cloudtun
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_stop(_env: EnvUnowned, _: JClass) -> jint {
-  if let Ok(mut lock) = TUN_QUIT.lock() {
-    if let Some(shutdown_token) = lock.take() {
+pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_stop(
+  _env: EnvUnowned,
+  _: JClass,
+) -> jint {
+  if let Ok(lock) = TUN_QUIT.lock() {
+    if let Some(shutdown_token) = lock.as_ref() {
       shutdown_token.cancel();
       return 0;
     }
@@ -121,10 +150,8 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_stop(_env: EnvUnowned
   -1
 }
 
-fn get_java_string(env: &mut EnvUnowned , input: &JString) -> anyhow::Result<String> {
-   let v = env.with_env(|_| -> Result<String, jni::errors::Error> {
-      Ok(input.to_string())
-    });
-    let v = v.resolve::<ThrowRuntimeExAndDefault>();
-    Ok(v)
+fn get_java_string(env: &mut EnvUnowned, input: &JString) -> anyhow::Result<String> {
+  let v = env.with_env(|_| -> Result<String, jni::errors::Error> { Ok(input.to_string()) });
+  let v = v.resolve::<ThrowRuntimeExAndDefault>();
+  Ok(v)
 }

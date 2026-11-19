@@ -14,7 +14,7 @@ use cloudtun_common::{constant::REMOTE_PROXY_PORT, tencent::TencentCloudClient, 
 
 use crate::{
   context::Context,
-  proxy::proxy_handler,
+  proxy::{proxy_handler, udp_proxy_handler},
   routes::{ping_handler, test_handler},
 };
 
@@ -58,7 +58,8 @@ async fn main() {
   let app = Router::new()
     .route("/ping", get(ping_handler))
     .route("/test", get(test_handler))
-    .route("/ws", any(proxy_handler));
+    .route("/ws", any(proxy_handler))
+    .route("/udp", any(udp_proxy_handler));
 
   let ip = args.ip.unwrap_or("0.0.0.0".to_string());
   let port = args.port;

@@ -16,18 +16,18 @@ bin = ["ctrlc2"]
 
 [dependencies]
 cloudtun-common = { path = "../src-common", features = ["proxy", "ping"] }
-tun = { version = "0.8.7", features = ["async"] }
-tokio = { version = "1.52.0", features = ["full"] }
-tokio-util = "0.7.18"
-ipstack = { version = "1.0.0" }
-hashlink = "0.11.0"
-tproxy-config = "7.0.6"
-hickory-proto = "0.25.2"
-async-trait = "0.1.89"
-udp-stream = { version = "0.0.12", default-features = false }
-anyhow = "1.0.102"
-log = "0.4.29"
-ctrlc2 = { "version" = "3.7.3", features = ["async"], optional = true }
+tun = { version = "0.8.15", features = ["async"] }
+tokio = { version = "1.54.1", features = ["full"] }
+tokio-util = "0.7.20"
+ipstack = { version = "1.0.1" }
+hashlink = "0.12.2"
+tproxy-config = "7.0.10"
+hickory-proto = "0.26.3"
+async-trait = "0.1.92"
+udp-stream = { version = "0.0.13", default-features = false }
+anyhow = "1.0.104"
+log = "0.4.35"
+ctrlc2 = { "version" = "4.0.2", features = ["async"], optional = true }
 
 
 [target.'cfg(target_os="android")'.dependencies]

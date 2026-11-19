@@ -2,7 +2,8 @@ use core::simd::Simd;
 
 type U8x16 = Simd<u8, 16>;
 
-/// 对 data 原地 XOR，key 长度固定为 16 字节（重复使用）
+/// Legacy wire format: XOR complete 16-byte blocks and leave the tail unchanged.
+/// Both peers must keep this framing until a new format is negotiated.
 pub fn xor_inplace_simd(data: &mut [u8], key: &[u8]) {
   //  for i in 0..data.len() {
   //   data[i] = data[i]  ^ key[i % 16]
@@ -28,7 +29,6 @@ pub fn xor_inplace_simd(data: &mut [u8], key: &[u8]) {
   // }
 }
 
-
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -39,7 +39,7 @@ mod tests {
     let mut data = b"Hello, world! This is a test of XOR SIMD.".to_vec();
     // 备份做纯标量对比
     let mut expected = data.clone();
-    for (i, b) in expected.iter_mut().enumerate() {
+    for (i, b) in expected.iter_mut().take(data.len() / 16 * 16).enumerate() {
       *b ^= key[i % 16];
     }
 

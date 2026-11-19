@@ -1,74 +1,55 @@
-use std::sync::Arc;
-
+use crate::{
+  route::{MatchType, RouteMatcher},
+  tunnel::proxy_tunnel,
+};
 use axum::{
   body::Body,
   response::{IntoResponse, Response},
 };
 use hyper::{Request, StatusCode, body::Incoming, upgrade::Upgraded};
 use hyper_util::rt::TokioIo;
+use std::sync::Arc;
 use tokio::net::TcpStream;
-
-use crate::{
-  route::{MatchType, RouteMatcher},
-  tunnel::proxy_tunnel,
-};
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 pub async fn proxy_request<F: Fn(&str, &str) + Send + Sync + 'static>(
   req: Request<Incoming>,
-  server_addr: Arc<(String, u16, String)>,
+  server: Arc<(String, u16, String)>,
   router: RouteMatcher,
   secret: Arc<Vec<u8>>,
-  log_fn: Arc<F>,
+  log: Arc<F>,
+  cancel: CancellationToken,
+  tracker: TaskTracker,
 ) -> Result<Response, hyper::Error> {
-  let Some(remote_auth) = req.uri().authority() else {
-    log_fn(
-      "proxy::error",
-      &format!("CONNECT host is not socket addr: {:?}", req.uri()),
-    );
-    return Ok(
-      (
-        StatusCode::BAD_REQUEST,
-        "CONNECT must be to a socket address",
-      )
-        .into_response(),
-    );
+  let Some(authority) = req.uri().authority() else {
+    return Ok((StatusCode::BAD_REQUEST, "CONNECT requires a host and port").into_response());
   };
-  let remote_host = remote_auth.host().to_owned();
-  let remote_port = remote_auth.port_u16().unwrap_or(80);
-
-  tokio::spawn(async move {
-    match hyper::upgrade::on(req).await {
-      Ok(upgraded) => match router.match_domain(&remote_host).await {
-        MatchType::Deny => {
-          drop(upgraded);
+  let host = authority
+    .host()
+    .trim_start_matches('[')
+    .trim_end_matches(']')
+    .to_owned();
+  let Some(port) = authority.port_u16().filter(|port| *port != 0) else {
+    return Ok((StatusCode::BAD_REQUEST, "CONNECT requires a valid port").into_response());
+  };
+  let route = router.match_domain(&host).await;
+  if matches!(route, MatchType::Deny) {
+    return Ok(StatusCode::FORBIDDEN.into_response());
+  }
+  tracker.spawn(async move {
+    tokio::select! {
+      biased;
+      _ = cancel.cancelled() => {},
+      result = async {
+        let upgraded = hyper::upgrade::on(req).await.map_err(std::io::Error::other)?;
+        match route {
+          MatchType::Proxy => proxy_tunnel(upgraded, server, host, port, secret, log.clone()).await,
+          MatchType::Direct => proxy_direct(upgraded, host, port, log.clone()).await,
+          MatchType::Deny => Ok(()),
         }
-        MatchType::Proxy => {
-          match proxy_tunnel(
-            upgraded,
-            server_addr,
-            remote_host,
-            remote_port,
-            secret,
-            log_fn.clone(),
-          )
-          .await
-          {
-            Ok(_) => (),
-            Err(err) => {
-              log_fn("proxy::error", &format!("proxy tunnel error: {}", err));
-            }
-          }
-        }
-        MatchType::Direct => {
-          match proxy_direct(upgraded, remote_host, remote_port, log_fn.clone()).await {
-            Ok(_) => (),
-            Err(err) => {
-              log_fn("proxy::error", &format!("proxy direct error: {}", err));
-            }
-          }
-        }
-      },
-      Err(e) => log_fn("proxy::error", &format!("upgrade error: {}", e)),
+      } => {
+        if let Err(error) = result { log("proxy::error", &format!("tunnel closed: {error}")); }
+      }
     }
   });
   Ok(Response::new(Body::empty()))
@@ -76,20 +57,18 @@ pub async fn proxy_request<F: Fn(&str, &str) + Send + Sync + 'static>(
 
 async fn proxy_direct<F: Fn(&str, &str) + Send + Sync + 'static>(
   upgraded: Upgraded,
-  remote_host: String,
-  remote_port: u16,
-  log_fn: Arc<F>,
+  host: String,
+  port: u16,
+  log: Arc<F>,
 ) -> std::io::Result<()> {
-  log_fn("proxy::info", &format!("Direct ==> {remote_host}"));
-  let mut remote_server = TcpStream::connect((remote_host, remote_port)).await?;
-  let mut upgraded = TokioIo::new(upgraded);
-
-  let _ = tokio::io::copy_bidirectional(&mut upgraded, &mut remote_server).await?;
-
-  // println!(
-  //   "client wrote {} bytes and received {} bytes",
-  //   from_client, from_server
-  // );
-
+  log("proxy::info", &format!("Direct ==> {host}:{port}"));
+  let mut remote = tokio::time::timeout(
+    cloudtun_common::proxy::CONNECT_TIMEOUT,
+    TcpStream::connect((host, port)),
+  )
+  .await??;
+  remote.set_nodelay(true)?;
+  let mut local = TokioIo::new(upgraded);
+  tokio::io::copy_bidirectional(&mut local, &mut remote).await?;
   Ok(())
 }

@@ -21,7 +21,7 @@ pub fn build_dns_response(
 
   // We must indicate that this message is a response. Otherwise, implementations may not
   // recognize it.
-  request.set_message_type(MessageType::Response);
+  request.metadata.message_type = MessageType::Response;
 
   request.add_answer(record);
   Ok(request)
@@ -60,7 +60,7 @@ pub fn build_dns_response(
 
 pub fn extract_domain_from_dns_message(message: &Message) -> anyhow::Result<String> {
   let query = message
-    .queries()
+    .queries
     .first()
     .ok_or(anyhow!("DnsRequest no query body"))?;
   let name = query.name().to_string();

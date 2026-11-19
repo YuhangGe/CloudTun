@@ -1,4 +1,7 @@
-use std::{sync::Arc, time};
+use std::{
+  sync::Arc,
+  time::{Duration, Instant},
+};
 
 use cloudtun_common::tencent::TencentCloudClient;
 use futures_util::lock::Mutex;
@@ -8,15 +11,8 @@ pub struct Context {
   pub token: String,
   pub password: Arc<Vec<u8>>,
   pub cvm_name: String,
-  last_ping_ts: Mutex<u64>,
+  last_ping_ts: Mutex<Instant>,
   pub tx: TencentCloudClient,
-}
-
-pub fn now_ts() -> u64 {
-  time::SystemTime::now()
-    .duration_since(time::UNIX_EPOCH)
-    .unwrap()
-    .as_secs()
 }
 
 impl Context {
@@ -25,23 +21,37 @@ impl Context {
       token,
       password: Arc::new(password),
       cvm_name,
-      last_ping_ts: Mutex::new(now_ts()),
+      last_ping_ts: Mutex::new(Instant::now()),
       tx,
     }
   }
 
   pub async fn touch_ping_ts(&self) {
     let mut x = self.last_ping_ts.lock().await;
-    *x = now_ts();
+    *x = Instant::now();
   }
 
   /// 检查最近一次 ping 是否已经过期。10分钟过期。
   pub async fn is_ping_expired(&self) -> bool {
-    let now = now_ts();
-    let x = self.last_ping_ts.lock().await;
-    let diff = now - *x;
-    println!("ping check {diff}");
-    // diff > 10
-    diff > 60 * 10
+    self.last_ping_ts.lock().await.elapsed() > Duration::from_secs(60 * 10)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  #[tokio::test]
+  async fn proxy_activity_resets_the_idle_reclamation_timer() {
+    let ctx = Context::new(
+      "token".into(),
+      vec![0; 16],
+      "unused".into(),
+      TencentCloudClient::new("unused".into(), "unused".into(), "unused".into()),
+    );
+    assert!(!ctx.is_ping_expired().await);
+    *ctx.last_ping_ts.lock().await = Instant::now() - Duration::from_secs(601);
+    assert!(ctx.is_ping_expired().await);
+    ctx.touch_ping_ts().await;
+    assert!(!ctx.is_ping_expired().await);
   }
 }
