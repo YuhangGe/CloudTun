@@ -5,7 +5,8 @@ import path from 'node:path';
 import { defineConfig } from 'vite';
 import imagemin from 'vite-plugin-minipic';
 
-import { TailwindThemePlugin } from './vite-plugin';
+import { TailwindThemePlugin } from './vite-plugin.ts';
+const __dirname = import.meta.dirname;
 
 let IPv4 = '';
 Object.entries(networkInterfaces()).some(([, nets]) => {

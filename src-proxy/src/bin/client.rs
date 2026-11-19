@@ -1,5 +1,3 @@
-use std::process;
-
 use clap::Parser;
 use cloudtun_common::constant::{LOCAL_HTTP_PROXY_PORT, REMOTE_PROXY_PORT};
 use cloudtun_proxy::{MatchType, ProxyArgs, run_proxy_loop};
@@ -22,25 +20,38 @@ struct Args {
   #[arg(long)]
   local_ip: Option<String>,
 
-  /// 本地客户端监听 PORT，默认 7892
+  /// 本地客户端监听 PORT，默认 7893
   #[arg(long, default_value_t = LOCAL_HTTP_PROXY_PORT)]
   local_port: u16,
 
   /// 代理规则文件路径
   #[arg(short, long)]
   config: Option<String>,
-  // /// 和服务端传递数据的密码
-  // #[arg(long)]
-  // token: String,
+  /// 独立随机访问凭据（64 位十六进制）
+  #[arg(long, env = "CLOUDTUN_ACCESS_TOKEN", hide_env_values = true)]
+  token: String,
+  #[arg(long)]
+  instance_id: String,
+  #[arg(long, default_value = ".cloudtun-trust")]
+  trust_dir: std::path::PathBuf,
 }
 
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
   let args = Args::parse();
 
-  // let token = args.token.to_string();
-  let token = "1763984578365785".to_string();
-  let password = get_password(&token);
+  let token = args.token;
+  if token.is_empty() {
+    return Err("token is required".into());
+  }
+  let server = cloudtun_common::tls::CloudEndpoint::new(
+    args.server_ip.clone(),
+    args.server_port,
+    args.instance_id,
+    token,
+    args.trust_dir,
+  )?;
+  let ping_server = server.clone();
 
   let proxy_rules = if let Some(rules_config_file) = &args.config {
     let mut f = File::open(rules_config_file).await?;
@@ -52,18 +63,26 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
   };
 
   let proxy_args = ProxyArgs {
-    server_addr: (args.server_ip, args.server_port, token),
+    server,
     local_addr: (
       args.local_ip.unwrap_or("0.0.0.0".to_string()),
       args.local_port,
     ),
     default_rule: MatchType::Proxy,
-    password,
     proxy_rules,
   };
 
   let shutdown_token = CancellationToken::new();
   let shutdown_token2 = shutdown_token.clone();
+  let ping_cancel = shutdown_token.clone();
+  let ping_handle = tokio::spawn(async move {
+    let mut ticks = tokio::time::interval(std::time::Duration::from_secs(30));
+    loop {
+      tokio::select! { biased; _ = ping_cancel.cancelled() => break, _ = ticks.tick() => {} }
+      tokio::select! { biased; _ = ping_cancel.cancelled() => break,
+      _ = cloudtun_common::ping::ping_cloudtun_proxy_server(&ping_server) => {} }
+    }
+  });
   let log_fn = |log_type: &str, log_message: &str| {
     println!("{log_type} ==> {log_message}");
   };
@@ -72,23 +91,20 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
       eprintln!("error occur: {e}");
     }
   });
+  let ctrlc_cancel = shutdown_token.clone();
   let ctrlc_handle = ctrlc2::AsyncCtrlC::new(move || {
-    shutdown_token.cancel();
+    ctrlc_cancel.cancel();
     true
   })?;
-  let _ = tokio::join!(proxy_handle, ctrlc_handle);
+  let mut proxy_handle = proxy_handle;
+  tokio::select! {
+    _ = &mut proxy_handle => {},
+    _ = ctrlc_handle => { shutdown_token.cancel(); let _ = proxy_handle.await; }
+  }
+  shutdown_token.cancel();
+  let _ = ping_handle.await;
 
   println!("Bye!");
 
   Ok(())
-}
-
-fn get_password(token: &str) -> Vec<u8> {
-  let token_bytes = token.as_bytes();
-  let len = token_bytes.len();
-  let mut buf = Vec::with_capacity(16);
-  for i in 0..16 {
-    buf.push(token_bytes[i % len]);
-  }
-  buf
 }

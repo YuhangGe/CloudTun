@@ -1,7 +1,6 @@
-use cloudtun_vpn::start_run_vpn;
+use cloudtunvpn::start_run_vpn;
 use tokio::spawn;
 use tokio_util::sync::CancellationToken;
-use tun::AbstractDevice;
 
 const MTU: u16 = 1500;
 
@@ -26,15 +25,15 @@ pub async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
   let device = tun::create_as_async(&config)?;
   println!("after create");
 
-  let server_addr = (
-    // "127.0.0.1".to_string(),
-    "43.128.208.38".to_string(),
+  let server_addr = cloudtun_common::tls::CloudEndpoint::new(
+    std::env::var("CLOUDTUN_SERVER_IP")?,
     24816,
-    "8542623f-450a-40f5-93f2-5e40843b6f30".to_string(),
-    // "666".to_string(),
-  );
-
-  let password: Vec<u8> = vec![0; 16];
+    std::env::var("CLOUDTUN_INSTANCE_ID")?,
+    std::env::var("CLOUDTUN_ACCESS_TOKEN")?,
+    std::env::var("CLOUDTUN_TRUST_DIR")
+      .unwrap_or_else(|_| ".cloudtun-trust".into())
+      .into(),
+  )?;
 
   let log_fn = |log_type: &str, log_message: &str| {
     println!("{log_type} ==> {log_message}");
@@ -42,9 +41,8 @@ pub async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
   let shutdown_token = CancellationToken::new();
   let shutdown_token2 = shutdown_token.clone();
-  let run_handle = spawn(async move {
-    start_run_vpn(device, MTU, server_addr, password, shutdown_token2, log_fn).await
-  });
+  let run_handle =
+    spawn(async move { start_run_vpn(device, MTU, server_addr, shutdown_token2, log_fn).await });
   let ctrlc_handle = ctrlc2::AsyncCtrlC::new(move || {
     shutdown_token.cancel();
     true

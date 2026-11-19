@@ -2,6 +2,7 @@ import { getTailwindThemeCss } from 'jinge-antd/colors';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { type PluginOption } from 'vite';
+const __dirname = import.meta.dirname;
 
 export function Base64LoaderPlugin(): PluginOption {
   return {

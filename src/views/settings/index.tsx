@@ -3,33 +3,34 @@ import { Tabs, message } from 'jinge-antd';
 
 import { globalSettings } from '@/store/settings';
 
-import { CommonSettingsForm } from './Common';
 import { InstanceConfigForm } from './Instance';
 import { SecretTokenForm } from './Secret';
 
 const TabOptions = [
   {
-    label: '密钥参数',
+    label: '腾讯云密钥',
     key: 'secret',
+    content: '',
   },
   {
-    label: '主机参数',
+    label: '主机配置',
     key: 'instance',
+    content: '',
   },
-  { label: '通用配置', key: 'common' },
 ];
 
-export function SettingsView() {
+export function CloudSettings() {
   const state = vm({
-    tab: globalSettings.secretKey ? 'instance' : 'secret',
+    tab: !globalSettings.secretKey || !globalSettings.secretId ? 'secret' : 'instance',
   });
 
   return (
     <>
       <Tabs
+        className="max-sm:[&_.ja-tab-item]:text-xs! max-sm:[&_.ja-tab-list]:gap-2!"
         activeKey={state.tab}
         on:change={(t) => {
-          if (t !== 'secret' && !globalSettings.secretKey) {
+          if (t === 'instance' && !globalSettings.secretKey) {
             void message.error('请先填写密钥信息');
           } else {
             state.tab = t;
@@ -40,7 +41,6 @@ export function SettingsView() {
 
       {state.tab === 'secret' && <SecretTokenForm />}
       {state.tab === 'instance' && <InstanceConfigForm />}
-      {state.tab === 'common' && <CommonSettingsForm />}
     </>
   );
 }

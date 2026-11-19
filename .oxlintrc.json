@@ -15,7 +15,9 @@
         "fixStyle": "inline-type-imports",
         "disallowTypeAnnotations": true
       }
-    ]
+    ],
+    "react/immutability": "off",
+    "react/refs": "off"
   },
   "ignorePatterns": [
     "intl/",

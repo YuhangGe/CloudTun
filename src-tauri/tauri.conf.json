@@ -12,10 +12,12 @@
   "app": {
     "windows": [
       {
-        "title": "CloudTun - 基于云的网络代理方案",
-        "width": 640,
-        "height": 640,
-        "center": true
+        "title": "CloudTun",
+        "width": 1060,
+        "height": 760,
+        "center": true,
+        "minWidth": 320,
+        "minHeight": 480
       }
     ],
     "security": {

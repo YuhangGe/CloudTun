@@ -5,11 +5,9 @@ use uuid::Uuid;
 
 pub fn emit_log<R: Runtime>(h: &AppHandle<R>, log_type: &str, log_message: &str) {
   println!("[{}] {}", log_type, log_message);
+  crate::logs::record(h, &format!("[{log_type}] {log_message}"));
   let _ = h.emit(log_type, log_message);
 }
-
-#[cfg(desktop)]
-use std::process;
 
 #[tauri::command]
 pub fn tauri_generate_uuid() -> TAResult<String> {
@@ -19,8 +17,13 @@ pub fn tauri_generate_uuid() -> TAResult<String> {
 
 #[cfg(desktop)]
 #[tauri::command]
-pub async fn tauri_exit_process() -> TAResult<()> {
-  process::exit(0);
+pub async fn tauri_exit_process<R: Runtime>(
+  handle: AppHandle<R>,
+  state: tauri::State<'_, crate::proxy::ProxyLoop>,
+) -> TAResult<()> {
+  crate::proxy::stop_proxy_client(state).await;
+  handle.exit(0);
+  Ok(())
 }
 
 #[tauri::command]

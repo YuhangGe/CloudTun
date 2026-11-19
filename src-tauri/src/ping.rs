@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use anyhow_tauri::TAResult;
+use anyhow_tauri::{IntoTAResult, TAResult};
 use cloudtun_common::ping::ping_cloudtun_proxy_server;
 use tauri::{AppHandle, Manager, Runtime, State};
 use tokio::{sync::Mutex, time::interval};
@@ -17,7 +17,7 @@ impl Ping {
 }
 
 #[cfg(desktop)]
-use crate::notify::{show_notify_window, NotifyWindow};
+use crate::notify::{NotifyWindow, show_notify_window};
 
 #[tauri::command]
 pub async fn tauri_interval_ping_start<R: Runtime>(
@@ -26,45 +26,47 @@ pub async fn tauri_interval_ping_start<R: Runtime>(
   h: AppHandle<R>,
   state: State<'_, Ping>,
 ) -> TAResult<()> {
-  if let Some(prev_cancel_token) = state.0.lock().await.take() {
-    prev_cancel_token.cancel();
+  let server = h
+    .state::<crate::cloud_access::CloudAccess>()
+    .endpoint(ip, token)
+    .into_ta_result()?;
+  let cancel_token = CancellationToken::new();
+  if let Some(previous) = state.0.lock().await.replace(cancel_token.clone()) {
+    previous.cancel();
   }
 
-  let ip = ip.to_string();
-  let token = token.to_string();
-  let cancel_token = CancellationToken::new();
-  state.0.lock().await.replace(cancel_token.clone());
-
   tokio::spawn(async move {
-    let mut interval = interval(Duration::from_secs(60));
-    println!("XXX ping interval started");
+    let mut interval = interval(Duration::from_secs(30));
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut failures = 0u32;
     loop {
-      interval.tick().await;
-      if cancel_token.is_cancelled() {
-        // println!("xxx cancelled 22");
-        break;
-      }
-      let success = ping_cloudtun_proxy_server(&ip, &token).await;
-      if cancel_token.is_cancelled() {
-        // println!("xxx cancelled 33");
-        break;
-      }
+      tokio::select! { biased; _ = cancel_token.cancelled() => break, _ = interval.tick() => {} }
+      let success = tokio::select! {
+        biased;
+        _ = cancel_token.cancelled() => break,
+        result = ping_cloudtun_proxy_server(&server) => result.unwrap_or(false),
+      };
       if !success {
-        #[cfg(desktop)]
-        {
-          let h2 = h.clone();
-          let h3 = h2.clone();
-          let w = h3.state::<NotifyWindow<R>>();
-          let _ = show_notify_window("error", "V2Ray 远程主机失联！", h2, w).await;
+        failures = failures.saturating_add(1);
+        if failures == 3 {
+          #[cfg(desktop)]
+          {
+            let h2 = h.clone();
+            let h3 = h2.clone();
+            let w = h3.state::<NotifyWindow<R>>();
+            let _ = show_notify_window("error", "代理服务器连续失联，正在重试", h2, w).await;
+          }
+          emit_log(
+            &h,
+            "log::disconnected",
+            "代理服务器连续失联，可能已被回收；将继续重试。",
+          );
         }
-        emit_log(
-          &h,
-          "log::disconnected",
-          "远程 V2Ray 响应异常，可能是竞价实例被回收，请刷新后重新购买！",
-        );
-        break;
       } else {
-        emit_log(&h, "log::ping", "远程 V2Ray 运行中，服务器正常响应！");
+        if failures >= 3 {
+          emit_log(&h, "log::ping", "代理服务器连接已恢复。");
+        }
+        failures = 0;
       }
     }
     println!("XXX ping interval stopped");

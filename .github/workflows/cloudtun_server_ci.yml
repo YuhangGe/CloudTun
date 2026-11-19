@@ -1,0 +1,112 @@
+name: build_and_publish_server
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudtun-server-release
+  cancel-in-progress: false
+
+jobs:
+  build_and_publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: src-server
+        shell: bash
+    env:
+      CARGO_TERM_COLOR: always
+      CC_x86_64_unknown_linux_musl: musl-gcc
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Read Rust release version
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+
+          version = tomllib.loads(Path('Cargo.toml').read_text())['package']['version']
+          if not re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', version):
+              raise SystemExit('Use a stable major.minor.patch version in src-server/Cargo.toml')
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write(f'RELEASE_VERSION={version}\nRELEASE_TAG=server-v{version}\n')
+          PY
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y build-essential cmake musl-tools binutils file
+
+      - name: Set up Rust nightly
+        run: |
+          rustup toolchain install nightly --profile minimal --target x86_64-unknown-linux-musl
+          rustup override set nightly
+
+      - name: Test Rust server
+        run: cargo test --locked
+
+      - name: Build Linux x64 executable
+        run: |
+          cargo build --release --locked --target x86_64-unknown-linux-musl
+          mkdir -p dist
+          install -m 755 target/x86_64-unknown-linux-musl/release/cloudtun-server dist/cloudtun-server-linux-x64
+          strip dist/cloudtun-server-linux-x64
+
+      - name: Verify executable and generate checksum
+        run: |
+          file dist/cloudtun-server-linux-x64
+          readelf -l dist/cloudtun-server-linux-x64 > dist/program-headers.txt
+          if grep -q INTERP dist/program-headers.txt; then
+            echo '::error::Expected a statically linked executable without a dynamic loader.'
+            exit 1
+          fi
+          test "$(dist/cloudtun-server-linux-x64 --version)" = "cloudtun-server $RELEASE_VERSION"
+          dist/cloudtun-server-linux-x64 --help
+          cd dist
+          sha256sum cloudtun-server-linux-x64 > cloudtun-server-linux-x64.sha256
+          sha256sum --check cloudtun-server-linux-x64.sha256
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          notes_file="$RUNNER_TEMP/cloudtun-server-release-notes.txt"
+          cat > "$notes_file" <<EOF_NOTES
+          CloudTun server $RELEASE_VERSION for Linux x64 (x86_64-unknown-linux-musl).
+          Static executable; no Node.js or Rust installation is required on the cloud host.
+          Source commit: $GITHUB_SHA
+          Verify the executable with the attached SHA-256 checksum before running it.
+          EOF_NOTES
+
+          if existing=$(gh release view "$RELEASE_TAG" --json isDraft,targetCommitish); then
+            if [[ "$(jq -r '.isDraft' <<< "$existing")" != true || "$(jq -r '.targetCommitish' <<< "$existing")" != "$GITHUB_SHA" ]]; then
+              echo '::error::This version already has a release or belongs to a different commit. Bump src-server/Cargo.toml and update Cargo.lock.'
+              exit 1
+            fi
+            # Resume an interrupted upload only for a draft of this exact commit.
+            gh release upload "$RELEASE_TAG" dist/cloudtun-server-linux-x64 dist/cloudtun-server-linux-x64.sha256 --clobber
+          else
+            gh release create "$RELEASE_TAG" \
+              dist/cloudtun-server-linux-x64 \
+              dist/cloudtun-server-linux-x64.sha256 \
+              --target "$GITHUB_SHA" \
+              --title "CloudTun Server v$RELEASE_VERSION" \
+              --notes-file "$notes_file" \
+              --draft
+          fi
+          # Expose latest only after both assets are uploaded.
+          gh release edit "$RELEASE_TAG" --draft=false --latest

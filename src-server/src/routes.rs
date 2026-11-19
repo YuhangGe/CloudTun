@@ -22,23 +22,3 @@ pub async fn ping_handler(
   context.touch_ping_ts().await;
   Ok("pong!")
 }
-
-pub async fn test_handler(State(ctx): State<Arc<Context>>) -> Result<&'static str, StatusCode> {
-  let ret = match ctx.tx.describe_instances().await {
-    Err(e) => {
-      eprintln!("{e}");
-      return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    }
-    Ok(ret) => ret,
-  };
-  let Some(inst) = ret.iter().find(|inst| inst.name.eq("cloudtun")) else {
-    return Err(StatusCode::NOT_FOUND);
-  };
-  match ctx.tx.desroy_instance(&inst.id).await {
-    Err(e) => {
-      eprintln!("{e}");
-      Err(StatusCode::INTERNAL_SERVER_ERROR)
-    }
-    Ok(_) => Ok("success!"),
-  }
-}

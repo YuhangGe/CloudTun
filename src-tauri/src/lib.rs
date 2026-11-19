@@ -1,22 +1,34 @@
+#[cfg(desktop)]
+mod geodata;
+mod logs;
+use logs::{tauri_append_log, tauri_get_logs};
 #[cfg(target_os = "android")]
 mod android;
+#[cfg(all(desktop, debug_assertions))]
+mod dev_bridge;
 #[cfg(desktop)]
 mod notify;
 #[cfg(desktop)]
 mod ping;
 #[cfg(desktop)]
 mod proxy;
+#[cfg(desktop)]
+mod proxy_config;
+#[cfg(desktop)]
+mod system_proxy;
+mod cloud_access;
+use cloud_access::*;
 mod tencent;
 mod util;
 
 use log::info;
 #[cfg(desktop)]
-use proxy::{tauri_start_proxy_client, tauri_stop_proxy_client};
+use proxy::*;
 #[cfg(desktop)]
 use tauri::{
+  AppHandle, Manager, Runtime, WebviewWindowBuilder, Wry,
   menu::{Menu, MenuItem},
   tray::TrayIconBuilder,
-  AppHandle, Manager, Runtime, WebviewWindowBuilder, Wry,
 };
 
 #[cfg(desktop)]
@@ -40,6 +52,10 @@ fn open_main_window<R: Runtime>(app: &AppHandle<R>) {
     )
     .title(cfg.title.clone())
     .inner_size(cfg.width, cfg.height)
+    .min_inner_size(
+      cfg.min_width.unwrap_or(320.0),
+      cfg.min_height.unwrap_or(480.0),
+    )
     .build()
     .unwrap();
   }
@@ -88,13 +104,31 @@ pub fn run() {
         let _ = win.set_focus();
       }))
       .invoke_handler(tauri::generate_handler![
+        tauri_get_logs,
+        tauri_append_log,
         tauri_generate_uuid,
+        tauri_new_cloud_access_token,
+        tauri_ping_cloud_server,
+        tauri_has_cloud_access,
+        tauri_remember_cloud_access,
         tauri_exit_process,
+        tauri_call_tencent_api,
         tauri_open_devtools,
         tauri_calc_tencent_cloud_api_signature,
         tauri_base64_covert,
         tauri_start_proxy_client,
         tauri_stop_proxy_client,
+        tauri_proxy_status,
+        tauri_geo_status,
+        tauri_update_geo,
+        tauri_get_proxy_config,
+        tauri_set_proxy_config,
+        tauri_get_subscription,
+        tauri_update_subscription,
+        tauri_ping_subscription_nodes,
+        tauri_connect_subscription,
+        tauri_set_system_proxy,
+        tauri_set_routing_mode,
         tauri_show_notify_window,
         tauri_close_notify_window,
         tauri_interval_ping_start,
@@ -113,7 +147,13 @@ pub fn run() {
     builder = builder
       .plugin(tauri_android_init_plugin())
       .invoke_handler(tauri::generate_handler![
+        tauri_get_logs,
+        tauri_append_log,
         tauri_generate_uuid,
+        tauri_new_cloud_access_token,
+        tauri_ping_cloud_server,
+        tauri_has_cloud_access,
+        tauri_remember_cloud_access,
         tauri_base64_covert,
         tauri_android_request_notification_permission,
         tauri_calc_tencent_cloud_api_signature,
@@ -131,7 +171,13 @@ pub fn run() {
     builder = builder
       .plugin(init())
       .invoke_handler(tauri::generate_handler![
+        tauri_get_logs,
+        tauri_append_log,
         tauri_generate_uuid,
+        tauri_new_cloud_access_token,
+        tauri_ping_cloud_server,
+        tauri_has_cloud_access,
+        tauri_remember_cloud_access,
         tauri_base64_covert,
         tauri_calc_tencent_cloud_api_signature,
       ]);
@@ -139,18 +185,24 @@ pub fn run() {
 
   builder
     .setup(|_app| {
+      use tauri::Manager;
+      _app.manage(logs::Logs::new());
+      _app.manage(CloudAccess::new(_app.path().app_data_dir()?)?);
+      crate::util::emit_log(_app.handle(), "log::info", "CloudTun 后台已启动");
       #[cfg(desktop)]
       {
         use crate::proxy::ProxyLoop;
 
-        _app.manage(ProxyLoop::new());
+        let proxy_loop = ProxyLoop::new(_app.path().app_data_dir()?)?;
+        proxy_loop.log_geo_status(_app.handle());
+        _app.manage(proxy_loop);
 
         let quit_i = MenuItem::with_id(_app, "quit", "退出CloudTun", true, None::<&str>).unwrap();
         let menu = Menu::with_items(_app, &[&quit_i]).unwrap();
         let _ = TrayIconBuilder::new()
           .icon(_app.default_window_icon().unwrap().clone())
           .menu(&menu)
-          .tooltip("CloudTun - 基于云计算的网络代理方案")
+          .tooltip("CloudTun - 自用网络代理方案")
           .show_menu_on_left_click(false)
           .on_tray_icon_event(|ic, event| {
             use tauri::tray::TrayIconEvent;
@@ -178,6 +230,8 @@ pub fn run() {
           .unwrap();
         _app.manage(NotifyWindow::<Wry>::new());
         _app.manage(Ping::new());
+        #[cfg(debug_assertions)]
+        crate::dev_bridge::start(_app.handle().clone());
       }
 
       Ok(())
@@ -199,7 +253,7 @@ pub fn run() {
           if code.is_none() {
             api.prevent_exit();
           } else {
-            //
+            tauri::async_runtime::block_on(crate::proxy::stop_proxy_client(_app.state()));
           }
         }
         #[cfg(target_os = "macos")]

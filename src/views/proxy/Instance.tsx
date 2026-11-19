@@ -10,6 +10,7 @@ export function Instance() {
   }>({});
 
   function getStatus() {
+    if (globalInst.error) return '连接失败';
     const inst = globalInst.data;
     if (!inst) return '未创建';
     if (inst.InstanceState === 'PENDING') {
@@ -30,6 +31,10 @@ export function Instance() {
     { immediate: true },
   );
 
+  watch(globalInst, 'error', () => {
+    state.status = getStatus();
+  });
+
   return (
     <>
       {/* {globalInst.state >= 3 && (
@@ -43,15 +48,6 @@ export function Instance() {
           </div>
         </div>
       )} */}
-      {globalInst.state === 4 && (
-        <div className="flex items-center">
-          <span className="mr-1 whitespace-nowrap">本地代理：</span>
-          <div className="flex items-center">
-            <Tag className="mr-2 overflow-x-auto font-mono">http://127.0.0.1:7892</Tag>
-            <CopyButton text="http://127.0.0.1:7892" />
-          </div>
-        </div>
-      )}
       <div className="flex items-center">
         <span className="mr-1 whitespace-nowrap">当前主机：</span>
 
@@ -61,13 +57,18 @@ export function Instance() {
         <Button
           loading={globalInst.loading}
           on:click={() => {
-            void loadGlobalInst(globalInst.data?.InstanceId);
+            void loadGlobalInst(globalInst.data?.InstanceId).catch(() => {});
           }}
           slot:icon={<span className="icon-[ant-design--reload-outlined] text-base"></span>}
           size="sm"
           type="link"
         ></Button>
       </div>
+      {globalInst.error && (
+        <p className="text-xs wrap-break-word text-error" role="alert">
+          {globalInst.error}
+        </p>
+      )}
       {globalInst.ip && (
         <div className="flex items-center">
           <span className="mr-1 whitespace-nowrap">公网地址：</span>

@@ -1,157 +1,151 @@
-use anyhow::bail;
-use hashlink::{LruCache, linked_hash_map::RawEntryMut};
-use std::{
-  collections::HashMap,
-  convert::TryInto,
-  net::{IpAddr, Ipv4Addr, Ipv6Addr},
-  time::{Duration, Instant},
+use hickory_proto::{
+  op::{MessageType, OpCode, ResponseCode},
+  rr::{DNSClass, RecordType},
 };
+use std::{collections::HashMap, net::IpAddr};
 use tproxy_config::IpCidr;
 
-const MAPPING_TIMEOUT: u64 = 60; // Mapping timeout in seconds
-
-struct NameCacheEntry {
-  name: String,
-  expiry: Instant,
-}
-
-/// A virtual DNS server which allocates IP addresses to clients.
-/// The IP addresses are in the range of private IP addresses.
-/// The DNS server is implemented as a LRU cache.
+/// Mappings are stable for the lifetime of a VPN session. Applications may cache
+/// addresses beyond DNS TTL; recycling them can silently connect to another host.
 pub struct VirtualDns {
-  trailing_dot: bool,
-  lru_cache: LruCache<IpAddr, NameCacheEntry>,
-  name_to_ip: HashMap<String, IpAddr>,
-  network_addr: IpAddr,
-  broadcast_addr: IpAddr,
-  next_addr: IpAddr,
+  names: HashMap<String, IpAddr>,
+  addresses: HashMap<IpAddr, String>,
+  next: u128,
+  last: u128,
+  ipv4: bool,
+}
+impl VirtualDns {
+  pub fn new(pool: IpCidr) -> Self {
+    let first = pool.first_address();
+    let last = pool.last_address();
+    Self {
+      names: HashMap::new(),
+      addresses: HashMap::new(),
+      ipv4: first.is_ipv4(),
+      next: match first {
+        IpAddr::V4(v) => u32::from(v) as u128,
+        IpAddr::V6(v) => u128::from(v),
+      } + 1,
+      last: match last {
+        IpAddr::V4(v) => u32::from(v) as u128,
+        IpAddr::V6(v) => u128::from(v),
+      },
+    }
+  }
+  pub fn is_fake_ip(ip: &IpAddr) -> bool {
+    matches!(ip,IpAddr::V4(v) if v.octets()[0]==198 && (v.octets()[1]==18 || v.octets()[1]==19))
+  }
+  pub fn resolve_ip(&self, ip: &IpAddr) -> Option<&String> {
+    self.addresses.get(ip)
+  }
+  pub fn generate_query(
+    &mut self,
+    data: &[u8],
+  ) -> anyhow::Result<(Vec<u8>, String, Option<IpAddr>)> {
+    let mut request = crate::dns::parse_data_to_dns_message(data, false)?;
+    anyhow::ensure!(
+      request.metadata.message_type == MessageType::Query,
+      "expected DNS query"
+    );
+    let name = crate::dns::extract_domain_from_dns_message(&request).unwrap_or_default();
+    request.answers.clear();
+    request.authorities.clear();
+    request.additionals.clear();
+    request.metadata.message_type = MessageType::Response;
+    request.metadata.recursion_available = true;
+    request.metadata.authoritative = false;
+    request.metadata.authentic_data = false;
+    request.metadata.truncation = false;
+    request.metadata.response_code = ResponseCode::NoError;
+    if request.queries.len() != 1 {
+      request.metadata.response_code = ResponseCode::FormErr;
+    } else if request.metadata.op_code != OpCode::Query {
+      request.metadata.response_code = ResponseCode::NotImp;
+    } else if request.queries[0].query_class() != DNSClass::IN {
+      request.metadata.response_code = ResponseCode::Refused;
+    } else if request.queries[0].query_type() == RecordType::A {
+      match self.allocate(&name) {
+        Ok(ip) => {
+          let reply = crate::dns::build_dns_response(request, &name, ip, 60)?;
+          return Ok((reply.to_vec()?, name, Some(ip)));
+        }
+        Err(_) => request.metadata.response_code = ResponseCode::ServFail,
+      }
+    }
+    // IPv4-only pool: AAAA/HTTPS/SVCB and unsupported types receive NODATA.
+    Ok((request.to_vec()?, name, None))
+  }
+  fn allocate(&mut self, name: &str) -> anyhow::Result<IpAddr> {
+    let name = name.trim_end_matches('.').to_ascii_lowercase();
+    if let Some(ip) = self.names.get(&name) {
+      return Ok(*ip);
+    }
+    anyhow::ensure!(self.next < self.last, "virtual DNS address pool exhausted");
+    let ip = if self.ipv4 {
+      IpAddr::V4((self.next as u32).into())
+    } else {
+      IpAddr::V6(self.next.into())
+    };
+    self.next += 1;
+    self.names.insert(name.clone(), ip);
+    self.addresses.insert(ip, name);
+    Ok(ip)
+  }
 }
 
-impl VirtualDns {
-  pub fn new(ip_pool: IpCidr) -> Self {
-    Self {
-      trailing_dot: false,
-      next_addr: ip_pool.first_address(),
-      name_to_ip: HashMap::default(),
-      network_addr: ip_pool.first_address(),
-      broadcast_addr: ip_pool.last_address(),
-      lru_cache: LruCache::new_unbounded(),
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use hickory_proto::{
+    op::{Message, Query},
+    rr::Name,
+  };
+  fn query(name: &str, kind: RecordType) -> Vec<u8> {
+    let mut msg = Message::query();
+    msg.add_query(Query::query(Name::from_ascii(name).unwrap(), kind));
+    msg.to_vec().unwrap()
+  }
+  #[test]
+  fn only_a_queries_receive_ipv4_answers() {
+    let mut dns = VirtualDns::new("198.18.0.0/15".parse().unwrap());
+    for kind in [RecordType::AAAA, RecordType::HTTPS, RecordType::TXT] {
+      let (data, _, ip) = dns.generate_query(&query("example.com.", kind)).unwrap();
+      let reply = Message::from_vec(&data).unwrap();
+      assert!(reply.answers.is_empty());
+      assert!(ip.is_none());
+      assert_eq!(reply.metadata.response_code, ResponseCode::NoError);
     }
   }
-
-  /// Returns the DNS response to send back to the client.
-  pub fn generate_query(&mut self, data: &[u8]) -> anyhow::Result<(Vec<u8>, String, IpAddr)> {
-    use crate::dns;
-    let message = dns::parse_data_to_dns_message(data, false)?;
-    let qname = dns::extract_domain_from_dns_message(&message)?;
-    let ip = self.find_or_allocate_ip(qname.clone())?;
-    let message = dns::build_dns_response(message, &qname, ip, 5)?;
-    Ok((message.to_vec()?, qname, ip))
+  #[test]
+  fn mappings_stay_stable_and_normalize_case() {
+    let mut dns = VirtualDns::new("198.18.0.0/15".parse().unwrap());
+    let (_, _, a) = dns
+      .generate_query(&query("EXAMPLE.com.", RecordType::A))
+      .unwrap();
+    let (_, _, b) = dns
+      .generate_query(&query("example.com.", RecordType::A))
+      .unwrap();
+    assert_eq!(a, b);
+    assert_eq!(dns.resolve_ip(&a.unwrap()).unwrap(), "example.com");
+    assert_eq!(a.unwrap(), "198.18.0.1".parse::<IpAddr>().unwrap());
   }
-
-  fn increment_ip(addr: IpAddr) -> anyhow::Result<IpAddr> {
-    let mut ip_bytes = match addr as IpAddr {
-      IpAddr::V4(ip) => Vec::<u8>::from(ip.octets()),
-      IpAddr::V6(ip) => Vec::<u8>::from(ip.octets()),
-    };
-
-    // Traverse bytes from right to left and stop when we can add one.
-    for j in 0..ip_bytes.len() {
-      let i = ip_bytes.len() - 1 - j;
-      if ip_bytes[i] != 255 {
-        // We can add 1 without carry and are done.
-        ip_bytes[i] += 1;
-        break;
-      } else {
-        // Zero this byte and carry over to the next one.
-        ip_bytes[i] = 0;
-      }
-    }
-    let addr = if addr.is_ipv4() {
-      let bytes: [u8; 4] = ip_bytes.as_slice().try_into()?;
-      IpAddr::V4(Ipv4Addr::from(bytes))
-    } else {
-      let bytes: [u8; 16] = ip_bytes.as_slice().try_into()?;
-      IpAddr::V6(Ipv6Addr::from(bytes))
-    };
-    Ok(addr)
-  }
-
-  // This is to be called whenever we receive or send a packet on the socket
-  // which connects the tun interface to the client, so existing IP address to name
-  // mappings to not expire as long as the connection is active.
-  pub fn touch_ip(&mut self, addr: &IpAddr) {
-    _ = self.lru_cache.get_mut(addr).map(|entry| {
-      entry.expiry = Instant::now() + Duration::from_secs(MAPPING_TIMEOUT);
-    });
-  }
-
-  pub fn resolve_ip(&mut self, addr: &IpAddr) -> Option<&String> {
-    self.lru_cache.get(addr).map(|entry| &entry.name)
-  }
-
-  fn find_or_allocate_ip(&mut self, name: String) -> anyhow::Result<IpAddr> {
-    // This function is a search and creation function.
-    // Thus, it is sufficient to canonicalize the name here.
-    let insert_name = if name.ends_with('.') && !self.trailing_dot {
-      String::from(name.trim_end_matches('.'))
-    } else {
-      name
-    };
-
-    let now = Instant::now();
-
-    // Iterate through all entries of the LRU cache and remove those that have expired.
-    loop {
-      let (ip, entry) = match self.lru_cache.iter().next() {
-        None => break,
-        Some((ip, entry)) => (ip, entry),
-      };
-
-      // The entry has expired.
-      if now > entry.expiry {
-        let name = entry.name.clone();
-        self.lru_cache.remove(&ip.clone());
-        self.name_to_ip.remove(&name);
-        continue; // There might be another expired entry after this one.
-      }
-
-      break; // The entry has not expired and all following entries are newer.
-    }
-
-    // Return the IP if it is stored inside our LRU cache.
-    if let Some(ip) = self.name_to_ip.get(&insert_name) {
-      let ip = *ip;
-      self.touch_ip(&ip);
-      return Ok(ip);
-    }
-
-    // Otherwise, store name and IP pair inside the LRU cache.
-    let started_at = self.next_addr;
-
-    loop {
-      if let RawEntryMut::Vacant(vacant) = self.lru_cache.raw_entry_mut().from_key(&self.next_addr)
-      {
-        let expiry = Instant::now() + Duration::from_secs(MAPPING_TIMEOUT);
-        let name0 = insert_name.clone();
-        vacant.insert(
-          self.next_addr,
-          NameCacheEntry {
-            name: insert_name,
-            expiry,
-          },
-        );
-        self.name_to_ip.insert(name0, self.next_addr);
-        return Ok(self.next_addr);
-      }
-      self.next_addr = Self::increment_ip(self.next_addr)?;
-      if self.next_addr == self.broadcast_addr {
-        // Wrap around.
-        self.next_addr = self.network_addr;
-      }
-      if self.next_addr == started_at {
-        bail!("Virtual IP space for DNS exhausted");
-      }
-    }
+  #[test]
+  fn exhausted_pool_returns_servfail_without_reusing_addresses() {
+    let mut dns = VirtualDns::new("198.18.0.0/30".parse().unwrap());
+    let (_, _, first) = dns
+      .generate_query(&query("one.test.", RecordType::A))
+      .unwrap();
+    dns
+      .generate_query(&query("two.test.", RecordType::A))
+      .unwrap();
+    let (data, _, ip) = dns
+      .generate_query(&query("three.test.", RecordType::A))
+      .unwrap();
+    assert!(ip.is_none());
+    assert_eq!(
+      Message::from_vec(&data).unwrap().metadata.response_code,
+      ResponseCode::ServFail
+    );
+    assert_eq!(dns.resolve_ip(&first.unwrap()).unwrap(), "one.test");
   }
 }

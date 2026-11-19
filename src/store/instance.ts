@@ -1,19 +1,20 @@
-import { invoke } from '@tauri-apps/api/core';
 import { vm } from 'jinge';
 import { type MessageInstance, type MessageUpdateOptions, message } from 'jinge-antd';
 
 import { loadInstanceDependentResources } from '@/service/instance';
-// import { appendLog } from './log';
 import { showNotifyWindow } from '@/service/notify';
 import { type CVMInstance, CreateInstance } from '@/service/tencent';
-import { IS_MOBILE, IS_REOPEN } from '@/service/util';
-import { loadInstance, pingServerOnce, startProxyClient } from '@/views/proxy/helper';
+import { IS_MOBILE } from '@/service/util';
+import { loadInstance, pingServerOnce } from '@/views/proxy/helper';
 
-import { globalSettings } from './settings';
+import { connectCloudProxy, disconnectProxy } from './desktop';
+import { appendLog } from './log';
 
 export interface InstanceState {
   data?: CVMInstance;
   loading?: boolean;
+  error?: string;
+  purchasing?: boolean;
   ip?: string;
   id?: string;
   /**
@@ -30,6 +31,7 @@ let msg: MessageInstance | undefined = undefined;
 
 export const globalInst = vm<InstanceState>({
   loading: true,
+  purchasing: false,
   state: 0,
 });
 
@@ -47,11 +49,24 @@ function showMsg(content: string, type?: MessageUpdateOptions['type']) {
   }
 }
 
-export async function loadGlobalInst(id?: string) {
+export async function loadGlobalInst(id?: string, autoConnect = false) {
+  const generation = cloudGeneration;
+  if (autoConnect) cloudAutoConnect = true;
   globalInst.loading = true;
-  const [err, res] = await loadInstance(id);
-  globalInst.loading = false;
-  await updateInst(err ? undefined : res.InstanceSet[0]);
+  globalInst.error = '';
+  try {
+    const [err, res] = await loadInstance(id);
+    if (err) throw err;
+    if (generation === cloudGeneration)
+      await updateInst(res.InstanceSet[0], autoConnect, generation);
+  } catch (cause) {
+    const error = cause instanceof Error ? cause : new Error(String(cause));
+    globalInst.error = error.message;
+    appendLog(`[log::cloud] 加载云主机失败：${error.message}`);
+    throw error;
+  } finally {
+    globalInst.loading = false;
+  }
 }
 
 const S1 = '正在创建主机...';
@@ -59,45 +74,57 @@ const E1 = '创建失败！';
 const S2 = '启动远程代理服务...';
 
 export async function createGlobalInst() {
-  msg?.close();
-  msg = undefined;
-
-  if (globalInst.data) {
-    showMsg('实例已创建？？', 'error');
-    return;
-  }
-  if (IS_MOBILE) {
-    showMsg(S1, 'loading');
-  } else {
-    void showNotifyWindow({ notifyType: 'processing', notifyMessage: S1 });
-  }
-  const deps = await loadInstanceDependentResources();
-  if (!deps) {
-    if (IS_MOBILE) {
-      showMsg(E1, 'error');
-    } else {
-      void showNotifyWindow({ notifyType: 'error', notifyMessage: E1 });
+  if (globalInst.purchasing || globalInst.data) return false;
+  globalInst.purchasing = true;
+  let purchased = false;
+  try {
+    msg?.close();
+    msg = undefined;
+    if (!(await disconnectProxy())) return false;
+    const generation = cloudGeneration;
+    cloudAutoConnect = true;
+    cloudAutoNotify = true;
+    if (IS_MOBILE) showMsg(S1, 'loading');
+    else void showNotifyWindow({ notifyType: 'processing', notifyMessage: S1 });
+    const deps = await loadInstanceDependentResources();
+    if (!deps) {
+      if (IS_MOBILE) showMsg(E1, 'error');
+      else void showNotifyWindow({ notifyType: 'error', notifyMessage: E1 });
+      return false;
     }
-    return false;
-  }
-  const [err, res] = await CreateInstance(deps);
-
-  if (err) {
-    if (IS_MOBILE) {
-      showMsg(E1, 'error');
-    } else {
-      void showNotifyWindow({ notifyType: 'error', notifyMessage: E1 });
+    const [err, res] = await CreateInstance(deps);
+    if (err) {
+      if (IS_MOBILE) showMsg(E1, 'error');
+      else void showNotifyWindow({ notifyType: 'error', notifyMessage: E1 });
+      return false;
     }
-    return false;
-  } else {
-    await loadGlobalInst(res.InstanceId);
+    purchased = true;
+    await loadGlobalInst(res.InstanceId, generation === cloudGeneration);
+    return true;
+  } finally {
+    globalInst.purchasing = false;
+    if (!purchased) cloudAutoConnect = false;
   }
-
-  return true;
 }
 
 let tm = 0;
-async function updateInst(inst?: CVMInstance) {
+let cloudGeneration = 0;
+let cloudAutoConnect = false;
+let cloudAutoNotify = true;
+export async function resumeExistingCloud(instance: CVMInstance) {
+  const generation = cloudGeneration;
+  cloudAutoConnect = true;
+  cloudAutoNotify = false;
+  await updateInst(instance, true, generation);
+}
+export function pauseCloudProxy() {
+  cloudAutoConnect = false;
+  ++cloudGeneration;
+  if (tm) clearTimeout(tm);
+  tm = 0;
+}
+async function updateInst(inst: CVMInstance | undefined, autoConnect: boolean, generation: number) {
+  autoConnect = autoConnect || cloudAutoConnect;
   globalInst.data = inst;
   if (!inst) {
     globalInst.ip = undefined;
@@ -113,61 +140,67 @@ async function updateInst(inst?: CVMInstance) {
   }
 
   if (!globalInst.ip) {
+    if (!['PENDING', 'RUNNING'].includes(inst.InstanceState)) {
+      cloudAutoConnect = false;
+      appendLog(`[log::startup] 云主机状态为 ${inst.InstanceState}，暂不能连接`);
+      return;
+    }
     if (tm) clearTimeout(tm);
     tm = window.setTimeout(() => {
-      void loadGlobalInst(inst?.InstanceId);
+      if (generation === cloudGeneration)
+        void loadGlobalInst(inst?.InstanceId, autoConnect).catch(() => {});
     }, 2000);
   } else {
-    if (!IS_REOPEN) {
+    if (autoConnect && cloudAutoNotify) {
       if (IS_MOBILE) {
         showMsg(S2, 'loading');
       } else {
         void showNotifyWindow({ notifyType: 'processing', notifyMessage: S2 });
       }
     }
-    await updateConnect();
+    // Render the instance as soon as its metadata arrives; readiness probes run separately.
+    if (autoConnect) await updateConnect(autoConnect, generation);
+    else void updateConnect(false, generation);
   }
 }
 
-async function updateConnect() {
+async function updateConnect(autoConnect: boolean, generation: number) {
   globalInst.state = 2;
-  const ret = await pingServerOnce(globalInst.ip!, globalInst.data!.InstanceId);
+  let ret: boolean;
+  try {
+    ret = await pingServerOnce(globalInst.ip!, globalInst.data!.InstanceId);
+  } catch (error) {
+    if (generation !== cloudGeneration) return;
+    globalInst.error = error instanceof Error ? error.message : String(error);
+    cloudAutoConnect = false;
+    appendLog(`[log::cloud] ${globalInst.error}`);
+    return;
+  }
+  if (generation !== cloudGeneration) return;
   if (ret) {
     globalInst.state = 3;
-    if (!IS_REOPEN) {
-      if (!IS_MOBILE) {
-        await invoke('tauri_interval_ping_start', {
-          ip: globalInst.ip!,
-          token: globalInst.data!.InstanceId!,
-        });
-        await enableProxy();
-      } else {
-        showMsg('远程 CloudTun 服务已就绪，可启动本地 VPN！', 'success');
-      }
-    } else {
-      globalInst.state = 4;
+    if (autoConnect && cloudAutoConnect) {
+      cloudAutoConnect = false;
+      if (!IS_MOBILE) await connectGlobalProxy(cloudAutoNotify);
+      else showMsg('远程 CloudTun 服务已就绪，可启动本地 VPN！', 'success');
     }
   } else {
     if (tm) clearTimeout(tm);
     tm = window.setTimeout(() => {
-      void updateConnect();
+      if (generation === cloudGeneration) void updateConnect(autoConnect, generation);
     }, 2000);
   }
 }
 
-async function enableProxy() {
-  const r = await startProxyClient(
-    globalInst.ip!,
-    globalInst.data!.InstanceId,
-    globalSettings.proxyRules,
-  );
-  if (!r) {
-    showMsg('远程 CloudTun 服务启动失败！', 'error');
-  } else {
+export async function connectGlobalProxy(notify = true) {
+  if (!globalInst.ip || !globalInst.data) return;
+  pauseCloudProxy();
+  const connected = await connectCloudProxy(globalInst.ip, globalInst.data.InstanceId);
+  if (connected) {
     globalInst.state = 4;
-    await showNotifyWindow({
-      notifyType: 'success',
-      notifyMessage: 'CloudTun 代理启动成功！',
-    });
+    if (notify)
+      await showNotifyWindow({ notifyType: 'success', notifyMessage: 'CloudTun 代理启动成功！' });
+  } else {
+    showMsg('云上主机代理连接失败，请查看错误信息', 'error');
   }
 }

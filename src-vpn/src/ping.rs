@@ -1,30 +1,18 @@
-use std::time::Duration;
-
 use cloudtun_common::ping::ping_cloudtun_proxy_server;
-use tokio::time::interval;
+use std::time::Duration;
+use tokio::time::{MissedTickBehavior, interval};
 use tokio_util::sync::CancellationToken;
-
-pub async fn start_ping_interval(ip: &str, token: &str, cancel_token: &CancellationToken) {
-  let mut interval = interval(Duration::from_secs(60));
-  println!("cloudtun server ping started");
+pub async fn start_ping_interval(
+  server: &cloudtun_common::tls::CloudEndpoint,
+  cancel: &CancellationToken,
+) {
+  let mut ticks = interval(Duration::from_secs(30));
+  ticks.set_missed_tick_behavior(MissedTickBehavior::Skip);
   loop {
-    interval.tick().await;
-    if cancel_token.is_cancelled() {
-      // println!("xxx cancelled 22");
-      break;
-    }
-    let success = ping_cloudtun_proxy_server(&ip, &token).await;
-    if cancel_token.is_cancelled() {
-      // println!("xxx cancelled 33");
-      break;
-    }
+    tokio::select! {biased;_=cancel.cancelled()=>break,_=ticks.tick()=>{}}
+    let success = tokio::select! {biased;_=cancel.cancelled()=>break,result=ping_cloudtun_proxy_server(server)=>result.unwrap_or(false)};
     if !success {
-      // TODO：通过 kotlin/swift 层把广播传递出去
-      eprintln!("cloudtun server ping failed! {} {}", ip, token);
-    } else {
-      println!("cloudtun server ping success!");
-      // emit_log(&h, "log::ping", "远程 V2Ray 运行中，服务器正常响应！");
+      log::warn!("cloudtun server ping failed");
     }
   }
-  println!("cloudtun server ping stopped");
 }

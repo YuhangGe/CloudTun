@@ -1,12 +1,11 @@
-import { invoke } from '@tauri-apps/api/core';
-import { fetch } from '@tauri-apps/plugin-http';
-
+import { desktopInvoke } from '@/service/desktop';
 import {
   type CVMInstance,
   CreateCommand,
   DescribeAutomationAgentStatus,
   DescribeCommands,
   DescribeInstances,
+  DescribeInstancesUserData,
   ModifyCommand,
 } from '@/service/tencent';
 import { appendLog } from '@/store/log';
@@ -115,40 +114,32 @@ export async function createOrUpdateCommand(shellContent: string) {
 //   return false; // timeout
 // }
 
-export async function pingServerOnce(ip: string, token: string) {
+const accessRequests = new Map<string, Promise<void>>();
+async function ensureCloudAccess(instanceId: string) {
+  if (await desktopInvoke<boolean>('tauri_has_cloud_access', { instanceId })) return;
+  let pending = accessRequests.get(instanceId);
+  if (!pending) {
+    pending = (async () => {
+      const [error, data] = await DescribeInstancesUserData(instanceId);
+      if (error) throw error;
+      const encoded = data.InstanceSet.find((item) => item.InstanceId === instanceId)?.Attributes
+        .UserData;
+      const token =
+        encoded &&
+        /(?:^|\n)export CLOUDTUN_ACCESS_TOKEN=([a-f0-9]{64})(?:\r?\n|$)/.exec(atob(encoded))?.[1];
+      if (!token) throw new Error('此云主机使用旧版协议；请发布新版服务端后升级或重建主机');
+      await desktopInvoke('tauri_remember_cloud_access', { instanceId, token });
+      appendLog('[log::cloud] 已从腾讯云实例配置恢复 WSS 访问凭据');
+    })();
+    accessRequests.set(instanceId, pending);
+  }
   try {
-    const url = `http://${ip}:24816/ping`;
-    appendLog(`[log::info] Ping ${url}`);
-    const res = await fetch(url, {
-      connectTimeout: 5000,
-      headers: {
-        'x-token': token,
-      },
-    });
-    if (res.status !== 200) throw new Error(`bad response status: ${res.status}`);
-    const txt = await res.text();
-    if (txt === 'pong!') {
-      appendLog('[log::info] 远程代理服务服务器正常响应！');
-      return true;
-    } else {
-      return false;
-    }
-  } catch (ex) {
-    console.error(ex);
-    return false;
+    await pending;
+  } finally {
+    accessRequests.delete(instanceId);
   }
 }
-
-export async function startProxyClient(ip: string, instanceId: string, proxyRules: string) {
-  try {
-    await invoke('tauri_start_proxy_client', {
-      serverIp: ip,
-      cvmId: instanceId,
-      proxyRules,
-    });
-    return true;
-  } catch (ex) {
-    console.error(ex);
-    return false;
-  }
+export async function pingServerOnce(ip: string, token: string) {
+  await ensureCloudAccess(token);
+  return await desktopInvoke<boolean>('tauri_ping_cloud_server', { ip, token });
 }

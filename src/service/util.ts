@@ -2,7 +2,7 @@ import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { platform } from '@tauri-apps/plugin-os';
 import { message } from 'jinge-antd';
 
-export const currentPlatform = platform();
+export const currentPlatform = '__TAURI_INTERNALS__' in window ? platform() : 'webmock';
 /**
  * 当前是否在纯浏览器的 web 模拟环境。比如没有启动 rust 后端时直接通过浏览器访问。
  */
@@ -25,7 +25,9 @@ export function generateStrongPassword() {
     .join('');
 }
 export const copyToClipboard = (textToCopy: string) => {
-  return writeText(textToCopy);
+  return '__TAURI_INTERNALS__' in window
+    ? writeText(textToCopy)
+    : navigator.clipboard.writeText(textToCopy);
 };
 export function uid() {
   return Date.now().toString(32) + Math.floor(Math.random() * 0xffffff).toString(32);

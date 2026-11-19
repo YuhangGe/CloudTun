@@ -116,12 +116,13 @@ export async function loadInstanceDependentResources(): Promise<InstanceDeps | u
   };
 }
 
-export async function getInstanceAgentShell() {
+export async function getInstanceAgentShell(accessToken: string) {
   const tpl = renderTpl(shellTpl, {
     SECRET_KEY: globalSettings.secretKey,
     SECRET_ID: globalSettings.secretId,
     CVM_NAME: globalSettings.resourceName,
     REGION: globalSettings.region,
+    ACCESS_TOKEN: accessToken,
   });
   const x = await invoke<string>('tauri_base64_covert', { content: tpl });
   return x;

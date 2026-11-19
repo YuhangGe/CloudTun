@@ -24,8 +24,13 @@ export async function loadGlobalSettings() {
   if (isString(cnt)) {
     try {
       const data = JSON.parse(cnt);
+      delete data.autoProxy;
+      delete data.proxyRules;
+      if (data.routingMode === undefined && data.subscriptionRoutingMode !== undefined)
+        data.routingMode = data.subscriptionRoutingMode;
+      delete data.subscriptionRoutingMode;
       Object.assign(globalSettings, data);
-      appendLog(`load setting: ${cnt}`);
+      appendLog('已加载本地设置');
     } catch (ex) {
       console.error(ex);
     }

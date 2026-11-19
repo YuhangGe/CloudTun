@@ -1,4 +1,7 @@
 export interface Settings {
+  subscriptionSelectedId: string;
+  routingMode: 'global' | 'bypassChina';
+  subscriptionSystemProxy: boolean;
   resourceName: string;
   instanceType: string;
   imageId: string;
@@ -10,19 +13,15 @@ export interface Settings {
   secretId: string;
   loginPwd: string;
   bandWidth: number;
-  autoProxy: boolean;
   autoStartApp: boolean;
-  proxyRules: string;
   mobileProxyApps: string;
   mobileProxyMode: 'global' | 'app';
 }
 
-const DEFAULT_PROXY_RULES = `tencent.com: direct
-.cn: direct
-qcloud.com: direct
-npmmirror.com: direct`;
-
 export const DefaultSettings: Settings = {
+  subscriptionSelectedId: '',
+  routingMode: 'bypassChina',
+  subscriptionSystemProxy: false,
   region: import.meta.env.VITE_SETTING_REGION ?? 'ap-singapore',
   instanceType: import.meta.env.VITE_SETTING_INSTANCETYPE ?? '',
   loginPwd: import.meta.env.VITE_SETTING_PASSWORD ?? '',
@@ -34,9 +33,7 @@ export const DefaultSettings: Settings = {
   bandWidth: 200,
   secretKey: import.meta.env.VITE_SECRET_KEY ?? '',
   secretId: import.meta.env.VITE_SECRET_ID ?? '',
-  autoProxy: false,
   autoStartApp: false,
-  proxyRules: DEFAULT_PROXY_RULES,
   mobileProxyApps: 'com.android.chrome',
   mobileProxyMode: 'app',
 };

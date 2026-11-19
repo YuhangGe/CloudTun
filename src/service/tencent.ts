@@ -2,6 +2,9 @@ import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
 import { message } from 'jinge-antd';
 
+import { desktopInvoke } from '@/service/desktop';
+import { IS_MOBILE } from '@/service/util';
+import { appendLog } from '@/store/log';
 import { globalSettings } from '@/store/settings';
 
 import { type InstanceDeps, getInstanceAgentShell } from './instance';
@@ -25,61 +28,64 @@ async function callTencentApi<T>({
   action: string;
   data?: Record<string, unknown>;
 }): Promise<ApiResult<T>> {
-  const timestamp = Math.floor(Date.now() / 1000);
-  const body = data ? JSON.stringify(data) : '{}';
-  const host = `${service}.tencentcloudapi.com`;
-  const sign = await invoke<string>('tauri_calc_tencent_cloud_api_signature', {
-    secretId: globalSettings.secretId,
-    secretKey: globalSettings.secretKey,
-    serviceHost: host,
-    serviceName: service,
-    timestamp,
-    body,
-  });
-  const headers = {
-    authorization: sign,
-    ['content-type']: 'application/json',
-    host: host,
-    'X-TC-Action': action,
-    'X-TC-Version': ServiceVersionMap[service],
-    'X-TC-Timestamp': timestamp.toString(),
-    'X-TC-Region': region ?? globalSettings.region,
-  };
-  const res = await fetch(`https://${host}`, {
-    method: 'POST',
-    headers,
-    body,
-    connectTimeout: 5000,
-  });
-  if (res.status !== 200) {
-    throw new Error(`bad status code: ${res.status}`);
+  try {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const body = data ? JSON.stringify(data) : '{}';
+    const host = `${service}.tencentcloudapi.com`;
+    let resData: { Response: { Error?: { Code: string; Message: string }; RequestId: string } };
+    if (!IS_MOBILE) {
+      resData = await desktopInvoke('tauri_call_tencent_api', {
+        secretId: globalSettings.secretId,
+        secretKey: globalSettings.secretKey,
+        service,
+        region: region ?? globalSettings.region,
+        action,
+        body,
+      });
+    } else {
+      const sign = await invoke<string>('tauri_calc_tencent_cloud_api_signature', {
+        secretId: globalSettings.secretId,
+        secretKey: globalSettings.secretKey,
+        serviceHost: host,
+        serviceName: service,
+        timestamp,
+        body,
+      });
+      const headers = {
+        authorization: sign,
+        ['content-type']: 'application/json',
+        host: host,
+        'X-TC-Action': action,
+        'X-TC-Version': ServiceVersionMap[service],
+        'X-TC-Timestamp': timestamp.toString(),
+        'X-TC-Region': region ?? globalSettings.region,
+      };
+      const res = await fetch(`https://${host}`, {
+        method: 'POST',
+        headers,
+        body,
+        connectTimeout: 5000,
+        signal: AbortSignal.timeout(20000),
+      });
+      if (res.status !== 200) {
+        throw new Error(`bad status code: ${res.status}`);
+      }
+      resData = await res.json();
+    }
+    const Err = resData.Response.Error;
+    if (Err) {
+      const err = new Error(Err.Message);
+      err.name = Err.Code;
+      message.error(`${Err.Code}::${Err.Message}`);
+      return [err];
+    }
+    return [undefined, resData.Response as T];
+  } catch (cause) {
+    const error = cause instanceof Error ? cause : new Error(String(cause));
+    appendLog(`[log::cloud] ${action} 失败：${error.message}`);
+    message.error(error.message);
+    return [error];
   }
-  // console.log('start call api...');
-  // const res = await invoke<string>('tauri_call_tencent_cloud_api', {
-  //   service,
-  //   version: ServiceVersionMap[service],
-  //   region: region ?? params.region,
-  //   action,
-  //   body,
-  //   auth: sign,
-  //   timestamp,
-  // });
-  const resData = (await res.json()) as {
-    Response: {
-      Error?: { Code: string; Message: string };
-      RequestId: string;
-    };
-  };
-  // eslint-disable-next-line no-console
-  console.log(`-- Tecent Clound Api -- `, action, resData);
-  const Err = resData.Response.Error;
-  if (Err) {
-    const err = new Error(Err.Message);
-    err.name = Err.Code;
-    message.error(`${Err.Code}::${Err.Message}`);
-    return [err];
-  }
-  return [undefined, resData.Response as T];
 }
 export interface ApiFilter {
   Name: string;
@@ -176,7 +182,8 @@ function getInstanceApiParams() {
 }
 
 export async function CreateInstance(deps: InstanceDeps) {
-  const userData = await getInstanceAgentShell();
+  const accessToken = await desktopInvoke<string>('tauri_new_cloud_access_token');
+  const userData = await getInstanceAgentShell(accessToken);
   const data = {
     ...getInstanceApiParams(),
     UserData: userData,
@@ -194,8 +201,16 @@ export async function CreateInstance(deps: InstanceDeps) {
     service: 'cvm',
     action: 'RunInstances',
     data,
-  }).then((res) => {
+  }).then(async (res) => {
     if (res[0]) return res;
+    try {
+      await desktopInvoke('tauri_remember_cloud_access', {
+        instanceId: res[1].InstanceIdSet[0],
+        token: accessToken,
+      });
+    } catch {
+      appendLog('[log::cloud] 主机已创建，访问凭据缓存失败；将从实例初始化配置恢复');
+    }
     return [
       undefined,
       {
@@ -207,6 +222,15 @@ export async function CreateInstance(deps: InstanceDeps) {
   });
 }
 
+export function DescribeInstancesUserData(instanceId: string) {
+  return callTencentApi<{
+    InstanceSet: { InstanceId: string; Attributes: { UserData: string } }[];
+  }>({
+    service: 'cvm',
+    action: 'DescribeInstancesAttributes',
+    data: { InstanceIds: [instanceId], Attributes: ['UserData'] },
+  });
+}
 export async function TerminateInstance(id: string) {
   return await callTencentApi({
     service: 'cvm',

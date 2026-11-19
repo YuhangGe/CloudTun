@@ -1,4 +1,4 @@
-use anyhow_tauri::TAResult;
+use anyhow_tauri::{IntoTAResult, TAResult};
 use serde::{Deserialize, Serialize};
 // use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::plugin::{Builder, PluginHandle, TauriPlugin};
@@ -11,6 +11,8 @@ use crate::util::emit_log;
 pub struct StartVpnArgs {
   pub server_ip: String,
   pub cvm_id: String,
+  pub access_token: String,
+  pub trust_dir: String,
   pub proxy_apps: String,
 }
 
@@ -90,12 +92,18 @@ impl<R: Runtime> Vpn<R> {
     cvm_id: String,
     proxy_apps: String,
   ) -> TAResult<bool> {
+    let endpoint = h
+      .state::<crate::cloud_access::CloudAccess>()
+      .endpoint(&server_ip, &cvm_id)
+      .into_ta_result()?;
     let ret = self.0.run_mobile_plugin::<StartVpnResponse>(
       "startVpn",
       StartVpnArgs {
         proxy_apps,
         server_ip,
         cvm_id,
+        access_token: endpoint.token,
+        trust_dir: endpoint.trust_dir.to_string_lossy().into_owned(),
       },
     );
 

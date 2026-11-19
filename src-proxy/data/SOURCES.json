@@ -1,0 +1,14 @@
+{
+  "delivery": "Downloaded after proxy connection; no rule data bundled",
+  "domains": {
+    "source": "https://github.com/felixonmars/dnsmasq-china-list",
+    "file": "accelerated-domains.china.conf",
+    "license": "CHINA-DOMAINS-LICENSE"
+  },
+  "addresses": {
+    "source": "https://github.com/gaoyifan/china-operator-ip",
+    "branch": "ip-lists",
+    "files": ["china.txt", "china6.txt"],
+    "license": "CHINA-IP-LICENSE"
+  }
+}

@@ -1,4 +1,3 @@
-
 pub fn hex2str(hex: &[u8]) -> String {
   hex
     .iter()

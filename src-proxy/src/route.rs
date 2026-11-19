@@ -50,36 +50,26 @@ impl Trie {
   pub async fn insert(&mut self, url: &str, match_type: MatchType) {
     let trie = &mut self.root.write().await;
     let rules_count = &mut self.rules_count.lock().await;
-    let mut cnext: &mut HashMap<u8, TrieNode> = &mut trie.next;
-    let len = url.len() - 1;
-    for (index, data) in url.as_bytes().iter().rev().enumerate() {
-      if index == len {
-        cnext
-          .entry(*data)
-          .and_modify(|_| {
-            panic!("duplicated rule domain: {}", url);
-          })
-          .or_insert(TrieNode {
-            match_type: Some(match_type),
-            next: HashMap::new(),
-          });
-        *rules_count.deref_mut() = rules_count.add(1);
-        // println!("insert new rule: {}, {}", url, match_type);
-      } else {
-        let x = cnext.entry(*data).or_default();
-        cnext = &mut x.next;
-      }
+    let mut node = &mut **trie;
+    for data in url.as_bytes().iter().rev() {
+      node = node.next.entry(*data).or_default();
+    }
+    // Existing nodes may already have child rules. Preserve them.
+    if node.match_type.replace(match_type).is_none() {
+      *rules_count.deref_mut() = rules_count.add(1);
     }
   }
 
   pub async fn search(&self, url: &str) -> Option<MatchType> {
     let mut ret = None;
     let mut cnext = &self.root.read().await.next;
-    for data in url.as_bytes().iter().rev() {
+    for (index, data) in url.as_bytes().iter().rev().enumerate() {
       match cnext.get(data) {
         Some(x) => {
           if let Some(match_type) = x.match_type {
-            ret.replace(match_type);
+            if index + 1 == url.len() || url.as_bytes()[url.len() - index - 2] == b'.' {
+              ret.replace(match_type);
+            }
           }
           cnext = &x.next;
         }
@@ -137,12 +127,18 @@ async fn load_rules(proxy_rules: &str, trie: &mut Trie) -> std::io::Result<()> {
         continue;
       }
     };
-    trie.insert(domain, match_type).await;
+    trie
+      .insert(
+        &domain.trim_end_matches('.').to_ascii_lowercase(),
+        match_type,
+      )
+      .await;
   }
   Ok(())
 }
 
 impl RouteMatcher {
+  #[cfg(test)]
   pub async fn get_count(&self) -> usize {
     *self.trie.rules_count.lock().await
   }
@@ -159,6 +155,51 @@ impl RouteMatcher {
   }
 
   pub async fn match_domain(&self, domain: &str) -> MatchType {
-    self.trie.search(domain).await.unwrap_or(self.default_rule)
+    self
+      .trie
+      .search(&domain.trim_end_matches('.').to_ascii_lowercase())
+      .await
+      .unwrap_or(self.default_rule)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  #[tokio::test]
+  async fn matches_labels_and_normalizes_names() {
+    let router = RouteMatcher::load(MatchType::Proxy, Some("example.com:direct".into()))
+      .await
+      .unwrap();
+    assert!(matches!(
+      router.match_domain("EXAMPLE.COM.").await,
+      MatchType::Direct
+    ));
+    assert!(matches!(
+      router.match_domain("www.example.com").await,
+      MatchType::Direct
+    ));
+    assert!(matches!(
+      router.match_domain("notexample.com").await,
+      MatchType::Proxy
+    ));
+  }
+  #[tokio::test]
+  async fn preserves_children_when_parent_is_added_later() {
+    let router = RouteMatcher::load(
+      MatchType::Deny,
+      Some("www.example.com:proxy\nexample.com:direct\nexample.com:direct".into()),
+    )
+    .await
+    .unwrap();
+    assert!(matches!(
+      router.match_domain("www.example.com").await,
+      MatchType::Proxy
+    ));
+    assert!(matches!(
+      router.match_domain("example.com").await,
+      MatchType::Direct
+    ));
+    assert_eq!(router.get_count().await, 2);
   }
 }

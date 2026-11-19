@@ -4,7 +4,13 @@ import { Button, Popconfirm } from 'jinge-antd';
 
 import { TerminateInstance } from '@/service/tencent';
 import { IS_ANDROID, IS_MOBILE } from '@/service/util';
-import { createGlobalInst, globalInst } from '@/store/instance';
+import { desktop, disconnectProxy } from '@/store/desktop';
+import {
+  createGlobalInst,
+  globalInst,
+  connectGlobalProxy,
+  pauseCloudProxy,
+} from '@/store/instance';
 import { globalSettings } from '@/store/settings';
 
 export function Control(
@@ -41,14 +47,18 @@ export function Control(
           await invoke('tauri_android_stop_vpn');
         }
       } else {
-        await invoke('tauri_stop_proxy_client');
+        pauseCloudProxy();
+        if (desktop.status.source === 'cloud') await disconnectProxy();
       }
     }
   }
   async function create() {
     state.creating = true;
-    await createGlobalInst();
-    state.creating = false;
+    try {
+      await createGlobalInst();
+    } finally {
+      state.creating = false;
+    }
   }
   async function toggleVpn() {
     if (state.vpnConnected) {
@@ -85,7 +95,8 @@ export function Control(
         </Popconfirm>
       ) : (
         <Button
-          loading={state.creating}
+          loading={state.creating || globalInst.purchasing}
+          disabled={desktop.connecting || desktop.updating}
           on:click={() => {
             void create();
           }}
@@ -93,7 +104,36 @@ export function Control(
           size="sm"
           className="text-xs"
         >
-          创建主机
+          购买主机
+        </Button>
+      )}
+      {!globalInst.data && (
+        <span className="text-xs text-secondary-text">
+          购买时停止当前代理，主机就绪后自动连接。
+        </span>
+      )}
+      {!IS_MOBILE && desktop.error && (
+        <p className="w-full text-xs text-error" role="alert">
+          {desktop.error}
+        </p>
+      )}
+      {!IS_MOBILE && globalInst.data && (
+        <Button
+          type={desktop.status.source === 'cloud' && desktop.status.running ? 'default' : 'primary'}
+          size="sm"
+          loading={desktop.connecting}
+          disabled={
+            state.creating ||
+            state.destroing ||
+            desktop.updating ||
+            (globalInst.state < 3 && desktop.status.source !== 'cloud')
+          }
+          on:click={() => {
+            if (desktop.status.source === 'cloud' && desktop.status.running) void disconnectProxy();
+            else void connectGlobalProxy();
+          }}
+        >
+          {desktop.status.source === 'cloud' && desktop.status.running ? '断开代理' : '连接代理'}
         </Button>
       )}
       {IS_MOBILE && globalInst.state >= 3 && (

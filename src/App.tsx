@@ -2,6 +2,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { cx, onMount } from 'jinge';
 import { message } from 'jinge-antd';
 
+import type { StartupView } from './store/startup';
+
 import { ContextMenu } from './ContextMenu';
 import { Layout } from './Layout';
 import { IS_ANDROID } from './service/util';
@@ -14,7 +16,7 @@ if (IS_ANDROID) {
   });
 }
 
-function App() {
+function App(props: { initialView: StartupView }) {
   onMount(() => {
     if (IS_ANDROID) {
       void invoke('tauri_android_request_notification_permission');
@@ -22,7 +24,7 @@ function App() {
   });
   return (
     <div className={cx('flex size-full overflow-hidden bg-background', IS_ANDROID && 'pt-8')}>
-      <Layout />
+      <Layout initialView={props.initialView} />
       <ContextMenu />
     </div>
   );
