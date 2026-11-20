@@ -29,6 +29,20 @@ export async function loadGlobalSettings() {
       if (data.routingMode === undefined && data.subscriptionRoutingMode !== undefined)
         data.routingMode = data.subscriptionRoutingMode;
       delete data.subscriptionRoutingMode;
+      if (data.region === 'ap-singapore') {
+        data.region = DefaultSettings.region;
+        data.zone = DefaultSettings.zone;
+        data.instanceType = DefaultSettings.instanceType;
+        data.imageId = DefaultSettings.imageId;
+      }
+      if (
+        (!data.secretId || !data.secretKey) &&
+        DefaultSettings.secretId &&
+        DefaultSettings.secretKey
+      ) {
+        data.secretId = DefaultSettings.secretId;
+        data.secretKey = DefaultSettings.secretKey;
+      }
       Object.assign(globalSettings, data);
       appendLog('已加载本地设置');
     } catch (ex) {

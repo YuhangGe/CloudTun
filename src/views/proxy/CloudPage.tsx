@@ -1,16 +1,19 @@
 import { vm, watch } from 'jinge';
 import { Button, Modal } from 'jinge-antd';
 
-import { validateSettings } from '@/service/settings';
+import { validateCloudCredentials } from '@/service/settings';
 import { globalSettings } from '@/store/settings';
 import { CloudSettings } from '@/views/settings';
 
 import { ProxyView } from './index';
 
 export function CloudPage() {
-  const state = vm({ settingsOpen: false, cloudError: validateSettings(globalSettings) ?? '' });
+  const state = vm({
+    settingsOpen: false,
+    cloudError: validateCloudCredentials(globalSettings) ?? '',
+  });
   watch(globalSettings, () => {
-    state.cloudError = validateSettings(globalSettings) ?? '';
+    state.cloudError = validateCloudCredentials(globalSettings) ?? '';
   });
   return (
     <div className="mx-auto max-w-[1100px] [&_h1]:my-1.5 [&_h1]:text-2xl [&_h1]:font-semibold [&_h1]:tracking-tight">
@@ -31,7 +34,7 @@ export function CloudPage() {
       {state.cloudError ? (
         <section className="rounded-xl border border-dashed border-border p-5 sm:p-7.5 [&_h2]:font-semibold [&_p]:mt-3 [&_p]:mb-5 [&_p]:text-xs [&_p]:text-secondary-text">
           <h2>首次使用，请先设置云主机</h2>
-          <p>{state.cloudError}。配置腾讯云密钥和主机参数后，即可创建临时主机。</p>
+          <p>{state.cloudError}。保存腾讯云密钥后即可查看云上主机。</p>
           <Button
             type="primary"
             on:click={() => {

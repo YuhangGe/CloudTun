@@ -3,12 +3,14 @@ import { type MessageInstance, type MessageUpdateOptions, message } from 'jinge-
 
 import { loadInstanceDependentResources } from '@/service/instance';
 import { showNotifyWindow } from '@/service/notify';
+import { validateSettings } from '@/service/settings';
 import { type CVMInstance, CreateInstance } from '@/service/tencent';
-import { IS_MOBILE } from '@/service/util';
+import { IS_MOBILE, generateStrongPassword } from '@/service/util';
 import { loadInstance, pingServerOnce } from '@/views/proxy/helper';
 
 import { connectCloudProxy, disconnectProxy } from './desktop';
 import { appendLog } from './log';
+import { globalSettings } from './settings';
 
 export interface InstanceState {
   data?: CVMInstance;
@@ -75,6 +77,13 @@ const S2 = '启动远程代理服务...';
 
 export async function createGlobalInst() {
   if (globalInst.purchasing || globalInst.data) return false;
+  const loginPwd = globalSettings.loginPwd || generateStrongPassword();
+  const settingsError = validateSettings({ ...globalSettings, loginPwd });
+  if (settingsError) {
+    message.error(settingsError);
+    return false;
+  }
+  globalSettings.loginPwd = loginPwd;
   globalInst.purchasing = true;
   let purchased = false;
   try {

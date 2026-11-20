@@ -2,6 +2,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
 import { message } from 'jinge-antd';
 
+import type { Settings } from '@/service/settings';
+
 import { desktopInvoke } from '@/service/desktop';
 import { IS_MOBILE } from '@/service/util';
 import { appendLog } from '@/store/log';
@@ -12,6 +14,7 @@ import { type InstanceDeps, getInstanceAgentShell } from './instance';
 export type ApiResult<T> = [Error] | [undefined, T];
 const ServiceVersionMap = {
   cvm: '2017-03-12',
+  cbs: '2017-03-12',
   tat: '2020-10-28',
   vpc: '2017-03-12',
   billing: '2018-07-09',
@@ -23,7 +26,7 @@ async function callTencentApi<T>({
   action,
   data,
 }: {
-  service: 'cvm' | 'tat' | 'vpc' | 'billing';
+  service: keyof typeof ServiceVersionMap;
   region?: string;
   action: string;
   data?: Record<string, unknown>;
@@ -126,6 +129,7 @@ export function DescribeInstances({
 
 export interface CVMInstanceType {
   InstanceType: string;
+  InstanceFamily: string;
   Cpu: number;
   Memory: number;
   Status: 'SELL' | 'SOLD_OUT';
@@ -146,34 +150,96 @@ export function DescribeInstanceTypes({
     data,
   });
 }
-function getInstanceApiParams() {
-  if (!globalSettings.zone || !globalSettings.imageId) throw new Error('settings missing');
+type InstanceQuoteConfig = Pick<
+  Settings,
+  'region' | 'zone' | 'instanceType' | 'diskType' | 'imageId' | 'bandWidth'
+>;
+
+const systemDiskSize = 20;
+
+export function canQuoteInstance(
+  config: Partial<InstanceQuoteConfig>,
+): config is InstanceQuoteConfig {
+  return !!(
+    config.region &&
+    config.zone &&
+    config.instanceType &&
+    config.diskType &&
+    config.imageId &&
+    config.bandWidth &&
+    Number.isFinite(config.bandWidth) &&
+    config.bandWidth >= 1
+  );
+}
+
+export async function describeSystemDiskTypes({
+  region,
+  zone,
+  instanceType,
+}: Pick<Settings, 'region' | 'zone' | 'instanceType'>): Promise<ApiResult<string[]>> {
+  const [modelError, models] = await DescribeInstanceTypes({
+    region,
+    Filters: [
+      { Name: 'zone', Values: [zone] },
+      { Name: 'instance-charge-type', Values: ['SPOTPAID'] },
+    ],
+  });
+  if (modelError) return [modelError];
+  const model = models.InstanceTypeQuotaSet.find((item) => item.InstanceType === instanceType);
+  if (!model) return [undefined, []];
+
+  const [diskError, disks] = await callTencentApi<{
+    DiskConfigSet: {
+      Available: boolean;
+      DiskType: string;
+      MinDiskSize: number;
+      MaxDiskSize: number;
+      StepSize: number;
+    }[];
+  }>({
+    service: 'cbs',
+    region,
+    action: 'DescribeDiskConfigQuota',
+    data: {
+      InquiryType: 'INQUIRY_CVM_CONFIG',
+      Zones: [zone],
+      InstanceFamilies: [model.InstanceFamily],
+      CPU: model.Cpu,
+      Memory: model.Memory,
+      DiskUsage: 'SYSTEM_DISK',
+      DiskChargeType: 'POSTPAID_BY_HOUR',
+    },
+  });
+  if (diskError) return [diskError];
+  return [
+    undefined,
+    [
+      ...new Set(
+        disks.DiskConfigSet.filter(
+          (disk) =>
+            disk.Available &&
+            disk.MinDiskSize <= systemDiskSize &&
+            systemDiskSize <= disk.MaxDiskSize &&
+            (!disk.StepSize || (systemDiskSize - disk.MinDiskSize) % disk.StepSize === 0),
+        ).map(({ DiskType }) => DiskType),
+      ),
+    ],
+  ];
+}
+
+function getInstanceApiParams(config: InstanceQuoteConfig) {
   return {
     InstanceChargeType: 'SPOTPAID',
-    InstanceType: globalSettings.instanceType,
+    InstanceType: config.instanceType,
     InstanceCount: 1,
-    LoginSettings: { Password: globalSettings.loginPwd },
-    Placement: { Zone: globalSettings.zone, ProjectId: 0 },
+    Placement: { Zone: config.zone, ProjectId: 0 },
     SystemDisk: {
-      DiskSize: 20,
-      // DiskType: 'CLOUD_BSSD', // 'CLOUD_BSSD'
-      DiskType: globalSettings.diskType,
+      DiskSize: systemDiskSize,
+      DiskType: config.diskType,
     },
-    ImageId: globalSettings.imageId,
-    InstanceName: globalSettings.resourceName,
-    HostName: 'cloudtun',
-    EnhancedService: {
-      AutomationService: { Enabled: true },
-      MonitorService: { Enabled: true },
-      SecurityService: { Enabled: true },
-    },
-
-    // InternetAccessible: {
-    //   InternetMaxBandwidthOut: 0,
-    //   PublicIpAssigned: false,
-    // },
+    ImageId: config.imageId,
     InternetAccessible: {
-      InternetMaxBandwidthOut: globalSettings.bandWidth,
+      InternetMaxBandwidthOut: config.bandWidth,
       PublicIpAssigned: true,
       InternetChargeType: 'TRAFFIC_POSTPAID_BY_HOUR',
       InternetServiceProvider: 'BGP',
@@ -185,7 +251,15 @@ export async function CreateInstance(deps: InstanceDeps) {
   const accessToken = await desktopInvoke<string>('tauri_new_cloud_access_token');
   const userData = await getInstanceAgentShell(accessToken);
   const data = {
-    ...getInstanceApiParams(),
+    ...getInstanceApiParams(globalSettings),
+    LoginSettings: { Password: globalSettings.loginPwd },
+    InstanceName: globalSettings.resourceName,
+    HostName: 'cloudtun',
+    EnhancedService: {
+      AutomationService: { Enabled: true },
+      MonitorService: { Enabled: true },
+      SecurityService: { Enabled: true },
+    },
     UserData: userData,
     SecurityGroupIds: [deps.sgId],
     VirtualPrivateCloud: {
@@ -244,13 +318,14 @@ export interface CVMPrice {
   InstancePrice: { ChargeUnit: string; UnitPriceDiscount: number };
   BandwidthPrice: { ChargeUnit: string; UnitPriceDiscount: number };
 }
-export function InquiryPriceRunInstances() {
+export function InquiryPriceRunInstances(config: InstanceQuoteConfig = globalSettings) {
   return callTencentApi<{
     Price: CVMPrice;
   }>({
     service: 'cvm',
+    region: config.region,
     action: 'InquiryPriceRunInstances',
-    data: getInstanceApiParams(),
+    data: getInstanceApiParams(config),
   });
 }
 

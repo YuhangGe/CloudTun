@@ -14,6 +14,15 @@ const instance = {
 };
 let readFailure: Error | undefined;
 let readiness: (() => Promise<boolean>) | undefined;
+const globalSettings = {
+  secretId: 'test-id',
+  secretKey: 'test-key',
+  imageId: 'test-image',
+  zone: 'test-zone',
+  instanceType: 'test-type',
+  diskType: 'test-disk',
+  loginPwd: 'test-password',
+};
 const message = { close() {}, update() {} };
 Object.assign(globalThis, { window: globalThis });
 mock.module('jinge', () => ({ vm: <T>(value: T) => value }));
@@ -29,7 +38,10 @@ mock.module('@/service/tencent', () => ({
     return purchase();
   },
 }));
-mock.module('@/service/util', () => ({ IS_MOBILE: false }));
+mock.module('@/service/util', () => ({
+  IS_MOBILE: false,
+  generateStrongPassword: () => 'generated-password',
+}));
 mock.module('@/views/proxy/helper', () => ({
   loadInstance: async () => {
     events.push('read');
@@ -41,7 +53,7 @@ mock.module('@/views/proxy/helper', () => ({
     return readiness ? readiness() : true;
   },
 }));
-mock.module('@/store/settings', () => ({ globalSettings: { proxyRules: '' } }));
+mock.module('@/store/settings', () => ({ globalSettings }));
 mock.module('@/store/desktop', () => ({
   disconnectProxy: async () => {
     events.push('stop');
@@ -67,13 +79,29 @@ beforeEach(() => {
   stopAllowed = true;
   readFailure = undefined;
   readiness = undefined;
+  globalSettings.imageId = 'test-image';
+  globalSettings.diskType = 'test-disk';
+  globalSettings.loginPwd = 'test-password';
   purchase = async () => [null, { InstanceId: instance.InstanceId }];
 });
 
 test('viewing or refreshing an existing machine never stops or connects a proxy', async () => {
+  globalSettings.imageId = '';
   await cloud.loadGlobalInst();
   expect(events).toEqual(['read', 'ready']);
   expect(cloud.globalInst.state).toBe(3);
+});
+
+test('missing image prevents a purchase before stopping the current proxy', async () => {
+  globalSettings.imageId = '';
+  expect(await cloud.createGlobalInst()).toBe(false);
+  expect(events).toEqual([]);
+});
+
+test('missing system disk prevents a purchase before stopping the current proxy', async () => {
+  globalSettings.diskType = '';
+  expect(await cloud.createGlobalInst()).toBe(false);
+  expect(events).toEqual([]);
 });
 
 test('buying stops the current proxy first and connects automatically after readiness', async () => {
@@ -81,6 +109,15 @@ test('buying stops the current proxy first and connects automatically after read
   expect(events).toEqual(['stop', 'purchase', 'read', 'ready', 'connect']);
   expect(cloud.globalInst.state).toBe(4);
   expect(cloud.globalInst.purchasing).toBe(false);
+});
+
+test('buying with no saved login password generates one before ordering', async () => {
+  globalSettings.loginPwd = '';
+  purchase = async () => {
+    expect(globalSettings.loginPwd).toBe('generated-password');
+    return [null, { InstanceId: instance.InstanceId }];
+  };
+  expect(await cloud.createGlobalInst()).toBe(true);
 });
 
 test('failed stop prevents a purchase', async () => {

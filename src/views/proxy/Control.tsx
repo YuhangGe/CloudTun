@@ -16,6 +16,7 @@ import { globalSettings } from '@/store/settings';
 export function Control(
   props: {
     vpnConnected?: boolean;
+    diskLoading: boolean;
   } & WithExpose<{
     create: () => void;
   }> &
@@ -53,6 +54,7 @@ export function Control(
     }
   }
   async function create() {
+    if (props.diskLoading) return;
     state.creating = true;
     try {
       await createGlobalInst();
@@ -96,7 +98,7 @@ export function Control(
       ) : (
         <Button
           loading={state.creating || globalInst.purchasing}
-          disabled={desktop.connecting || desktop.updating}
+          disabled={props.diskLoading || desktop.connecting || desktop.updating}
           on:click={() => {
             void create();
           }}
@@ -106,11 +108,6 @@ export function Control(
         >
           购买主机
         </Button>
-      )}
-      {!globalInst.data && (
-        <span className="text-xs text-secondary-text">
-          购买时停止当前代理，主机就绪后自动连接。
-        </span>
       )}
       {!IS_MOBILE && desktop.error && (
         <p className="w-full text-xs text-error" role="alert">

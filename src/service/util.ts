@@ -8,21 +8,10 @@ export const currentPlatform = '__TAURI_INTERNALS__' in window ? platform() : 'w
  */
 export const currentInWebMock = (currentPlatform as string) === 'webmock';
 
-const pwd = [
-  'abcdefghijklmnopqrstuvwxyz', // lower chars
-  'ABCDEFGHIJKLMNOPQRSTUVWXYZ', // upper chars
-  '0123456789', // number
-  '@$%',
-  // "`!?$?%^&*()_-+={[}]:;@'~#|\\<>.?/];", //special chars
-];
 export function generateStrongPassword() {
-  return Array.from({ length: 20 })
-    .fill(0)
-    .map(() => {
-      const c = pwd[Math.floor(Math.random() * pwd.length)];
-      return c[Math.floor(Math.random() * c.length)];
-    })
-    .join('');
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  const random = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `Aa1@${random}`;
 }
 export const copyToClipboard = (textToCopy: string) => {
   return '__TAURI_INTERNALS__' in window

@@ -44,7 +44,7 @@ function BandwidthEditModal(props: { bw: number; instanceId: string }) {
               noRoundedR
               value={state.bw}
               on:change={(v) => {
-                state.bw = v;
+                if (v !== undefined) state.bw = v;
               }}
               min={1}
               max={1000}
@@ -93,7 +93,7 @@ export function Bandwidth(props: { price?: CVMPrice; inst?: CVMInstance }) {
               void openModal();
             }}
             className="translate-y-[1.5px] text-lg"
-            slot:icon={<span className="icon-[tdesign--arrow-up-down-3] text-base"></span>}
+            slot:icon={<span className="text-base icon-[tdesign--arrow-up-down-3]"></span>}
             type="link"
             size="sm"
           />

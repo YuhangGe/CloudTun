@@ -1,9 +1,13 @@
 import { invoke } from '@tauri-apps/api/core';
-import { onMount, ref, vm, watch } from 'jinge';
+import { onMount, onUnmount, ref, vm, watch } from 'jinge';
 import { Button, Spin, Tag } from 'jinge-antd';
 
-import { validateSettings } from '@/service/settings';
-import { type CVMPrice, InquiryPriceRunInstances } from '@/service/tencent';
+import {
+  type CVMPrice,
+  InquiryPriceRunInstances,
+  canQuoteInstance,
+  describeSystemDiskTypes,
+} from '@/service/tencent';
 import { IS_ANDROID, IS_MOBILE } from '@/service/util';
 import { globalInst, loadGlobalInst } from '@/store/instance';
 import { globalSettings } from '@/store/settings';
@@ -18,38 +22,71 @@ export function ProxyView() {
   const state = vm<{
     loading?: boolean;
     error: string;
+    diskError: string;
+    diskLoading: boolean;
     price?: CVMPrice;
     vpnConnected?: boolean;
   }>({
     loading: true,
     error: '',
+    diskError: '',
+    diskLoading: false,
   });
 
   const ctrl = ref<typeof Control>();
+  let active = true;
+  let priceRequest = 0;
+  let priceTimer = 0;
+  let diskRequest = 0;
 
-  async function loadPrice() {
-    if (validateSettings(globalSettings) != null) {
-      return;
-    }
-    const [err, res] = await InquiryPriceRunInstances();
-    if (!err) {
-      state.price = res.Price;
-    }
+  function schedulePrice() {
+    clearTimeout(priceTimer);
+    const request = ++priceRequest;
+    const config = { ...globalSettings };
+    state.price = undefined;
+    if (!canQuoteInstance(config)) return;
+    priceTimer = window.setTimeout(async () => {
+      const [err, res] = await InquiryPriceRunInstances(config);
+      if (active && request === priceRequest && !err) state.price = res.Price;
+    }, 250);
   }
 
-  watch(globalSettings, 'instanceType', () => {
-    void loadPrice();
-  });
-  watch(
-    globalSettings,
+  for (const field of [
+    'region',
+    'zone',
+    'instanceType',
+    'diskType',
     'imageId',
-    () => {
-      void loadPrice();
-    },
-    {
-      immediate: true,
-    },
-  );
+    'bandWidth',
+  ] as const) {
+    watch(globalSettings, field, schedulePrice);
+  }
+
+  async function ensureDiskType() {
+    const request = ++diskRequest;
+    const { region, zone, instanceType, diskType } = globalSettings;
+    state.diskError = '';
+    state.diskLoading = false;
+    if (!region || !zone || !instanceType || (diskType && diskType !== 'CLOUD_PREMIUM')) return;
+
+    state.diskLoading = true;
+    const [error, diskTypes] = await describeSystemDiskTypes({ region, zone, instanceType });
+    if (!active || request !== diskRequest) return;
+    state.diskLoading = false;
+    if (
+      region !== globalSettings.region ||
+      zone !== globalSettings.zone ||
+      instanceType !== globalSettings.instanceType ||
+      diskType !== globalSettings.diskType
+    )
+      return;
+    if (error) {
+      state.diskError = '查询磁盘类型失败';
+      return;
+    }
+    if (!diskTypes.includes(diskType)) globalSettings.diskType = diskTypes[0] ?? '';
+    if (!diskTypes.length) state.diskError = '当前规格没有可用的 20 GiB 系统盘';
+  }
 
   async function load() {
     state.loading = !globalInst.data;
@@ -64,6 +101,9 @@ export function ProxyView() {
   }
 
   onMount(() => {
+    void ensureDiskType().then(() => {
+      if (active) schedulePrice();
+    });
     if (IS_ANDROID) {
       invoke<boolean>('tauri_android_get_vpn_connected').then(
         (v) => {
@@ -79,6 +119,10 @@ export function ProxyView() {
     } else {
       state.loading = false;
     }
+  });
+  onUnmount(() => {
+    active = false;
+    clearTimeout(priceTimer);
   });
 
   return state.loading ? (
@@ -112,9 +156,19 @@ export function ProxyView() {
           )}
         </div>
         <Bandwidth price={state.price} />
+        {state.diskError && (
+          <div className="flex items-center gap-2 text-sm text-error" role="alert">
+            {state.diskError}
+            <Button size="sm" on:click={() => void ensureDiskType()}>
+              重试
+            </Button>
+          </div>
+        )}
+        {state.diskLoading && <p className="text-sm text-secondary-text">正在查询磁盘类型…</p>}
       </div>
       <Control
         ref={ctrl}
+        diskLoading={state.diskLoading}
         vpnConnected={state.vpnConnected}
         on:vpnConnectChanged={(v) => {
           state.vpnConnected = v;

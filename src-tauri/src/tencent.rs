@@ -38,6 +38,7 @@ pub async fn tauri_call_tencent_api<R: tauri::Runtime>(
   let result = async {
     let version = match service.as_str() {
       "cvm" => "2017-03-12",
+      "cbs" => "2017-03-12",
       "tat" => "2020-10-28",
       "vpc" => "2017-03-12",
       "billing" => "2018-07-09",

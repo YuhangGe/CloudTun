@@ -1,4 +1,4 @@
-import { onMount, vm, watch } from 'jinge';
+import { onMount, onUnmount, vm, watch } from 'jinge';
 import {
   Button,
   Controller,
@@ -6,7 +6,6 @@ import {
   InputAddon,
   InputNumber,
   InputWrapper,
-  type MenuOption,
   Select,
   message,
   useForm,
@@ -14,7 +13,15 @@ import {
 import { z } from 'zod';
 
 import { RegionOptions } from '@/service/region';
-import { DescribeImages, DescribeInstanceTypes, DescribeZones } from '@/service/tencent';
+import {
+  type CVMPrice,
+  DescribeImages,
+  DescribeInstanceTypes,
+  DescribeZones,
+  InquiryPriceRunInstances,
+  canQuoteInstance,
+  describeSystemDiskTypes,
+} from '@/service/tencent';
 import { copyToClipboard, generateStrongPassword } from '@/service/util';
 import { globalSettings } from '@/store/settings';
 
@@ -31,20 +38,15 @@ import { FormItem } from './FormItem';
 //   },
 // ];
 
-const DiskTypeOpts = [
-  {
-    label: '普通盘',
-    value: 'CLOUD_PREMIUM',
-  },
-  {
-    label: '通用型SSD',
-    value: 'CLOUD_BSSD',
-  },
-  {
-    label: '性能型SSD',
-    value: 'CLOUD_HSSD',
-  },
-];
+const diskLabels: Record<string, string> = {
+  CLOUD_BASIC: '普通云硬盘',
+  CLOUD_PREMIUM: '高性能云硬盘',
+  CLOUD_BSSD: '通用型 SSD',
+  CLOUD_SSD: 'SSD 云硬盘',
+  CLOUD_HSSD: '增强型 SSD',
+  CLOUD_TSSD: '极速型 SSD',
+};
+type SelectOption = { label: string; value: string };
 
 export function InstanceConfigForm() {
   const { formErrors, formState, control, validate } = useForm(
@@ -53,7 +55,7 @@ export function InstanceConfigForm() {
       zone: z.string(),
       instanceType: z.string(),
       // imageType: z.string(),
-      diskType: z.string(),
+      diskType: z.string().min(1, '请选择磁盘类型'),
       imageId: z.string(),
       loginPwd: z.string(),
       resourceName: z.string(),
@@ -65,13 +67,93 @@ export function InstanceConfigForm() {
   );
 
   const state = vm<{
-    imageOpts: MenuOption<string>[];
-    zoneOpts: MenuOption<string>[];
-    instTypeOpts: MenuOption<string>[];
+    imageOpts: SelectOption[];
+    zoneOpts: SelectOption[];
+    instTypeOpts: SelectOption[];
+    diskOpts: SelectOption[];
+    diskLoading: boolean;
+    diskError: string;
+    price?: CVMPrice;
+    priceLoading: boolean;
+    priceError: string;
   }>({
     imageOpts: [],
     zoneOpts: [],
     instTypeOpts: [],
+    diskOpts: [],
+    diskLoading: false,
+    diskError: '',
+    priceLoading: false,
+    priceError: '',
+  });
+  let active = true;
+  let diskRequest = 0;
+  let priceRequest = 0;
+  let priceTimer = 0;
+  let lastDiskKey: string | undefined;
+
+  async function loadDiskTypes() {
+    const { region, zone, instanceType } = formState;
+    const key = JSON.stringify([region, zone, instanceType]);
+    if (key === lastDiskKey) return;
+    const isInitial = lastDiskKey === undefined;
+    lastDiskKey = key;
+    const request = ++diskRequest;
+    const savedDisk = isInitial ? formState.diskType : undefined;
+    state.diskOpts = [];
+    state.diskError = '';
+    state.diskLoading = !!(region && zone && instanceType);
+    formState.diskType = undefined;
+    if (!region || !zone || !instanceType) return;
+
+    const [error, diskTypes] = await describeSystemDiskTypes({ region, zone, instanceType });
+    if (!active || request !== diskRequest) return;
+    state.diskLoading = false;
+    if (error) {
+      state.diskError = '查询磁盘类型失败';
+      return;
+    }
+    state.diskOpts = diskTypes.map((value) => ({ value, label: diskLabels[value] ?? value }));
+    if (!diskTypes.length) state.diskError = '当前规格没有可用的 20 GiB 系统盘';
+    formState.diskType = savedDisk && diskTypes.includes(savedDisk) ? savedDisk : diskTypes[0];
+  }
+
+  function schedulePrice() {
+    clearTimeout(priceTimer);
+    const request = ++priceRequest;
+    const config = { ...formState };
+    state.price = undefined;
+    state.priceError = '';
+    state.priceLoading = !state.diskLoading && canQuoteInstance(config);
+    if (state.diskLoading || !canQuoteInstance(config)) return;
+    priceTimer = window.setTimeout(async () => {
+      const [error, result] = await InquiryPriceRunInstances(config);
+      if (!active || request !== priceRequest) return;
+      state.priceLoading = false;
+      if (error) state.priceError = `询价失败：${error.message}`;
+      else state.price = result.Price;
+    }, 250);
+  }
+
+  for (const field of ['region', 'zone', 'instanceType'] as const) {
+    watch(formState, field, () => void loadDiskTypes());
+  }
+  for (const field of [
+    'region',
+    'zone',
+    'instanceType',
+    'diskType',
+    'imageId',
+    'bandWidth',
+  ] as const) {
+    watch(formState, field, schedulePrice);
+  }
+  onMount(() => {
+    void loadDiskTypes();
+  });
+  onUnmount(() => {
+    active = false;
+    clearTimeout(priceTimer);
   });
 
   async function updateInstanceTypes(region?: string, zone?: string) {
@@ -89,7 +171,7 @@ export function InstanceConfigForm() {
         },
       ],
     });
-    if (err) return;
+    if (err || !active || region !== formState.region || zone !== formState.zone) return;
     const arr = res.InstanceTypeQuotaSet.filter(
       (t) => t.Cpu === 2 && t.Memory === 2 && t.Status === 'SELL',
     );
@@ -107,17 +189,21 @@ export function InstanceConfigForm() {
   }
 
   async function onRegionChange() {
-    if (!formState.region) return;
+    const region = formState.region;
+    if (!region) return;
     const [err, res] = await DescribeZones({
-      region: formState.region,
+      region,
     });
-    if (err) return;
+    if (err || !active || region !== formState.region) return;
     state.zoneOpts = res.ZoneSet.map((zone) => ({
       label: zone.ZoneName,
       value: zone.Zone,
     }));
-    if (res.TotalCount == 0) return;
-    formState.zone ??= res.ZoneSet[0].Zone;
+    if (!res.ZoneSet.length) return;
+    if (!res.ZoneSet.some(({ Zone }) => Zone === formState.zone)) {
+      formState.zone = res.ZoneSet[0].Zone;
+      return;
+    }
     await updateInstanceTypes(formState.region, formState.zone);
   }
 
@@ -154,7 +240,8 @@ export function InstanceConfigForm() {
       Filters,
       InstanceType: instanceType,
     });
-    if (err) return;
+    if (err || !active || region !== formState.region || instanceType !== formState.instanceType)
+      return;
     if (res.TotalCount > 0) {
       state.imageOpts = res.ImageSet.map((image) => ({
         label: image.ImageName,
@@ -195,7 +282,7 @@ export function InstanceConfigForm() {
   });
 
   return (
-    <div className="mt-6 flex max-w-md flex-col gap-6 text-sm max-sm:max-w-full">
+    <div className="mt-3 flex max-w-md flex-col gap-6 text-sm max-sm:max-w-full">
       <FormItem label="区域：" required error={formErrors.region}>
         <Controller control={control} name="region">
           {(field) => (
@@ -241,7 +328,8 @@ export function InstanceConfigForm() {
                 on:change={field['on:change']}
                 on:blur={field['on:blur']}
                 on:focus={(evt) => {
-                  setTimeout(() => evt.target.select());
+                  const input = evt.currentTarget;
+                  if (input instanceof HTMLInputElement) setTimeout(() => input.select());
                 }}
               />
               <InputAddon>
@@ -278,10 +366,15 @@ export function InstanceConfigForm() {
           )}
         </Controller>
       </FormItem>
-      <FormItem label="磁盘类型：" required error={formErrors.diskType}>
+      <FormItem label="磁盘类型：" required error={state.diskError || formErrors.diskType}>
         <Controller control={control} name="diskType">
           {(field) => (
-            <Select options={DiskTypeOpts} value={field.value} on:change={field['on:change']} />
+            <Select
+              options={state.diskOpts}
+              value={field.value}
+              disabled={state.diskLoading || !state.diskOpts.length}
+              on:change={field['on:change']}
+            />
           )}
         </Controller>
       </FormItem>
@@ -317,15 +410,26 @@ export function InstanceConfigForm() {
         </Controller>
       </FormItem>
 
-      <div className="my-4 flex items-center gap-8">
+      <div className="my-4 flex items-center gap-3">
         <Button
+          className="shrink-0"
           type="primary"
+          disabled={state.diskLoading || !state.diskOpts.length}
           on:click={() => {
             void save();
           }}
         >
           保存
         </Button>
+        <div className="flex min-w-0 flex-wrap gap-x-2 text-xs text-secondary-text" role="status">
+          {state.price?.InstancePrice && (
+            <span>主机 ¥{state.price.InstancePrice.UnitPriceDiscount}/小时</span>
+          )}
+          {state.price?.BandwidthPrice && (
+            <span>流量 ¥{state.price.BandwidthPrice.UnitPriceDiscount}/GB</span>
+          )}
+          {state.priceLoading || state.diskLoading ? '询价中…' : state.priceError}
+        </div>
       </div>
     </div>
   );
