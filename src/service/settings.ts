@@ -19,8 +19,6 @@ export interface Settings {
   loginPwd: string;
   bandWidth: number;
   autoStartApp: boolean;
-  mobileProxyApps: string;
-  mobileProxyMode: 'global' | 'app';
 }
 
 const configuredRegion = import.meta.env.VITE_SETTING_REGION;
@@ -51,8 +49,6 @@ export const DefaultSettings: Settings = {
   secretKey: import.meta.env.VITE_SECRET_KEY ?? '',
   secretId: import.meta.env.VITE_SECRET_ID ?? '',
   autoStartApp: false,
-  mobileProxyApps: 'com.android.chrome',
-  mobileProxyMode: 'app',
 };
 
 export function validateCloudCredentials(s: Settings) {
@@ -73,14 +69,11 @@ export function validateSettings(s: Settings) {
   if (!s.diskType) return '请先选择磁盘类型';
   if (!s.loginPwd) return '请先配置主机登录密码';
   if (
-    Object.keys(s).some((k) => {
-      const v = s[k as keyof Settings];
-      if (v == null || typeof v === 'undefined') {
-        return true;
-      } else {
-        return false;
-      }
-    })
+    !s.region ||
+    !s.resourceName ||
+    !Number.isFinite(s.bandWidth) ||
+    s.bandWidth < 1 ||
+    s.bandWidth > 200
   ) {
     return '请完成全部主机参数配置';
   }

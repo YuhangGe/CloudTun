@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 
 export function desktopInvoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
   if ('__TAURI_INTERNALS__' in window) return invoke<T>(command, args);
-  if (!import.meta.env.DEV) return Promise.reject(new Error('请在 CloudTun 桌面应用中运行'));
+  if (!import.meta.env.DEV) return Promise.reject(new Error('请在 CloudTun 应用中运行'));
   // Debug-only loopback bridge calls the same Rust command handlers as Tauri IPC.
   return fetch('http://127.0.0.1:1422/command', {
     method: 'POST',

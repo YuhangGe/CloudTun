@@ -24,7 +24,7 @@ struct TrafficSession {
   bytes: AtomicU64,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrafficSnapshot {
   pub session_id: u64,
@@ -49,7 +49,7 @@ impl TrafficCounter {
     }
   }
 
-  fn add(&self, bytes: usize) {
+  pub(crate) fn add(&self, bytes: usize) {
     if bytes != 0 {
       self.0.bytes.fetch_add(bytes as u64, Ordering::Relaxed);
     }
@@ -57,9 +57,9 @@ impl TrafficCounter {
 }
 
 // Count at the client socket so HTTP bodies and upgraded tunnels use the same counter.
-pub(crate) struct MeteredStream(pub TcpStream, pub TrafficCounter);
+pub(crate) struct MeteredStream<S = TcpStream>(pub S, pub TrafficCounter);
 
-impl AsyncRead for MeteredStream {
+impl<S: AsyncRead + Unpin> AsyncRead for MeteredStream<S> {
   fn poll_read(
     mut self: Pin<&mut Self>,
     cx: &mut Context<'_>,
@@ -74,7 +74,7 @@ impl AsyncRead for MeteredStream {
   }
 }
 
-impl AsyncWrite for MeteredStream {
+impl<S: AsyncWrite + Unpin> AsyncWrite for MeteredStream<S> {
   fn poll_write(
     mut self: Pin<&mut Self>,
     cx: &mut Context<'_>,

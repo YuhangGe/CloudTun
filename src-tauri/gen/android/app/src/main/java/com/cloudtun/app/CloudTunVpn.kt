@@ -1,21 +1,16 @@
 package com.cloudtun.app
 
+import androidx.annotation.Keep
+
+@Keep
 class CloudTunVpn {
-
   companion object {
-    init {
-      System.loadLibrary("cloudtunvpn")
-    }
+    init { System.loadLibrary("cloudtunvpn") }
   }
-
-  private external fun run(tunFd: Int, mtu: Int, serverIp: String, cvmId: String, accessToken: String, trustDir: String): Int
-  private external fun stop()
- 
-  fun startVpn(tunFd: Int, mtu: Int, serverIp: String, cvmId: String, accessToken: String, trustDir: String) {
-    run(tunFd, mtu, serverIp, cvmId, accessToken, trustDir);
-  }
-  
-  fun stopVpn() {
-    stop()
-  }
+  external fun start(tunFd: Int, mtu: Int, config: String): Int
+  external fun stop()
+  external fun updateRouting(config: String): Int
+  external fun stats(): String
+  external fun status(): String
+  external fun updateFailover(config: String): Int
 }

@@ -29,6 +29,8 @@ export async function loadGlobalSettings() {
       if (data.routingMode === undefined && data.subscriptionRoutingMode !== undefined)
         data.routingMode = data.subscriptionRoutingMode;
       delete data.subscriptionRoutingMode;
+      delete data.mobileProxyMode;
+      delete data.mobileProxyApps;
       if (data.region === 'ap-singapore') {
         data.region = DefaultSettings.region;
         data.zone = DefaultSettings.zone;

@@ -146,12 +146,10 @@ mod tests {
     let snapshot = logs.snapshot();
     assert_eq!(snapshot.logs.len(), 1000);
     assert_eq!(snapshot.logs[0].id, 601);
-    assert!(
-      snapshot
-        .logs
-        .windows(2)
-        .all(|pair| pair[1].id == pair[0].id + 1)
-    );
+    assert!(snapshot
+      .logs
+      .windows(2)
+      .all(|pair| pair[1].id == pair[0].id + 1));
   }
   #[test]
   fn limits_large_messages_on_unicode_boundaries() {

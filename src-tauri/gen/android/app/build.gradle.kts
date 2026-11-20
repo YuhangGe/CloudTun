@@ -1,7 +1,6 @@
 import java.util.Properties
 
 plugins {
-    id("org.mozilla.rust-android-gradle.rust-android")
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("rust")
@@ -14,16 +13,11 @@ val tauriProperties = Properties().apply {
     }
 }
 
-cargo {
-  module  = "../../../../src-vpn"       // Cargo.toml路径
-  libname = "cloudtunvpn"          // Cargo.toml 中 [package] 中 name
-  targets = listOf("arm64","x86_64")
-  profile = "release"
-}
 
 android {
     compileSdk = 36
     namespace = "com.cloudtun.app"
+    ndkVersion = System.getenv("ANDROID_NDK_HOME")?.let { file(it).name } ?: "29.0.14206865"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "true"
         applicationId = "com.cloudtun.app"
@@ -38,7 +32,7 @@ android {
             isDebuggable = true
             isJniDebuggable = true
             isMinifyEnabled = false
-            packaging {               
+            packaging {
                 jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")
                 jniLibs.keepDebugSymbols.add("*/armeabi-v7a/*.so")
                 jniLibs.keepDebugSymbols.add("*/x86/*.so")
@@ -77,3 +71,22 @@ dependencies {
 }
 
 apply(from = "tauri.build.gradle.kts")
+
+// Build the standalone VPN JNI library with the same ABI/profile as Tauri.
+val vpnTargets = mapOf(
+    "Arm64" to ("aarch64-linux-android" to "arm64-v8a"),
+    "Arm" to ("armv7-linux-androideabi" to "armeabi-v7a"),
+    "X86" to ("i686-linux-android" to "x86"),
+    "X86_64" to ("x86_64-linux-android" to "x86_64"),
+)
+val vpnJni = layout.buildDirectory.dir("generated/vpnJni")
+android.sourceSets.getByName("main").jniLibs.srcDir(vpnJni)
+for ((arch, targetAbi) in vpnTargets) {
+    for (profile in listOf("Debug", "Release")) {
+        val vpnBuild = tasks.register<Exec>("vpnBuild$arch$profile") {
+            workingDir(rootProject.projectDir.resolve("../../.."))
+            commandLine("bash", "scripts/build-android-vpn.sh", targetAbi.first, profile.lowercase(), vpnJni.get().dir(targetAbi.second).asFile.absolutePath, android.ndkDirectory.absolutePath)
+        }
+        tasks.matching { it.name == "rustBuild$arch$profile" }.configureEach { dependsOn(vpnBuild) }
+    }
+}

@@ -1,187 +1,183 @@
 package com.cloudtun.app
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.VpnService
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.os.PowerManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import java.io.IOException
+import org.json.JSONObject
+import java.util.Locale
 
-
-const val CHANNEL_ID: String = "vpn_service_channel"
-const val NOTIFICATION_ID = 1;
 class CloudTunVpnService : VpnService() {
   companion object {
-    var isVpnConnected = false
+    var instance: CloudTunVpnService? = null
+    @Volatile var isVpnConnected = false
+    var startCallback: ((String?) -> Unit)? = null
+    private const val RUNNING_CHANNEL = "vpn_service_channel"
+    private const val EVENT_CHANNEL = "vpn_events"
+    private const val RUNNING_ID = 1
+    private const val EVENT_ID = 2
   }
-  
   private var vpnInterface: ParcelFileDescriptor? = null
-  private var isRunning = false
-  
   private val vpn = CloudTunVpn()
-
-  private fun createStopAction(): NotificationCompat.Action {
-    // 创建停止 VPN 的 Intent
-    val stopIntent = Intent(this, CloudTunVpnService::class.java).apply {
-      action = "STOP"
-    }
-
-    val stopPendingIntent = PendingIntent.getService(
-      this,
-      0,
-      stopIntent,
-      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
-
-    return NotificationCompat.Action(
-      R.drawable.ic_launcher_foreground, // 停止图标
-      "关闭VPN", // Action 文字
-      stopPendingIntent
-    )
-  }
-
-  private fun startForeground() {
-//    val intent = Intent(this, MainActivity::class.java) // 点击通知时跳转的界面
-//    val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT)
-    val channel = NotificationChannel(
-      CHANNEL_ID,
-      "CloudTun Notification",
-      NotificationManager.IMPORTANCE_DEFAULT
-    ).apply {
-      description = "CloudTun Notification"
-      setShowBadge(false)   
-    }
-    val manager = getSystemService<NotificationManager?>(NotificationManager::class.java)
-    manager?.createNotificationChannel(channel)
-    
-    val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-      .setContentTitle("CloudTun")
-      .setSmallIcon(R.mipmap.ic_launcher)
-       //      .setContentIntent(pendingIntent)
-      .setContentText("VPN 代理已连接...")
-      .setOngoing(true)
-      .addAction(createStopAction())
-      .setPriority(NotificationCompat.PRIORITY_HIGH)
-      .build()
-    ServiceCompat.startForeground(this, NOTIFICATION_ID, notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-  }
-
-
-  override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-  
-    if (intent != null && intent.action == "STOP") {
-      stopForeground(STOP_FOREGROUND_REMOVE)
-      stopProxyLoop()
-      stopSelf()
-      return START_STICKY;
-    }
-    
-    startForeground()
-    
-    // 初始化 VPN 配置
-    val builder = Builder()
-    builder.setSession("CloudTun VPN Service")  // 设置 VPN 会话名称
-      .addAddress("10.0.0.2", 24)  // 为虚拟网络接口分配 IP 地址
-      .addRoute("0.0.0.0", 0)
-       .setMtu(1500)
-//      .addDnsServer("8.8.8.8")
-      .addDnsServer("198.18.0.2")
-    
-    val proxyApps = intent?.getStringExtra("proxyApps")
-    if (proxyApps != null && proxyApps.isNotEmpty()) {
+  private val handler = Handler(Looper.getMainLooper())
+  private var wakeLock: PowerManager.WakeLock? = null
+  private var lastEventId = 0L
+  private var lastNotification = ""
+  private val traffic = VpnTrafficDisplay()
+  private val healthCheck = object : Runnable {
+    override fun run() {
+      if (!isVpnConnected) return
       try {
-        proxyApps.split("\n").forEach { pkg ->
-          builder.addAllowedApplication(pkg)
-          println("XXX add allowed app: $pkg")
+        val raw = vpn.status()
+        if (raw == "null") {
+          disconnect()
+          showEvent("VPN 已停止", "代理内核已退出，请重新连接")
+          return
         }
-      } catch (e: Exception) {
-        e.printStackTrace()
+        val status = JSONObject(raw)
+        updateWakeLock(status.optBoolean("autoSwitch"))
+        val sample = vpn.stats()
+        val trafficText = if (sample == "null") "速率 0 B/s · 累计 0 B" else JSONObject(sample).let {
+          traffic.update(it.optLong("sessionId"), it.optLong("elapsedMs"), it.optLong("totalBytes"))
+        }
+        val name = connectionName(status)
+        val state = when {
+          status.optBoolean("switching") -> "正在检测并切换节点…"
+          !status.isNull("error") -> status.optString("error")
+          else -> "VPN 运行中"
+        }
+        val fingerprint = "$name|$trafficText|$state"
+        if (fingerprint != lastNotification && manager().areNotificationsEnabled()) {
+          manager().notify(RUNNING_ID, runningNotification(name, trafficText, state))
+          lastNotification = fingerprint
+        }
+        val eventId = status.optLong("eventId")
+        if (eventId > lastEventId) {
+          lastEventId = eventId
+          val kind = status.optString("eventKind")
+          val title = if (kind == "unavailable") "暂无可用节点" else if (kind == "recovered") "连接已恢复" else "已自动切换节点"
+          showEvent(title, status.optString("eventMessage"))
+          Log.i("CloudTunVpnService", "$title: ${status.optString("eventMessage")}")
+        }
+      } catch (error: Exception) {
+        Log.w("CloudTunVpnService", "Cannot refresh VPN notification", error)
       }
-    } else {
-      try {
-        val selfName = applicationContext.packageName;
-        builder.addDisallowedApplication(selfName)
-        println("addDisallowedApplication $selfName")
-      } catch (e: Exception) {
-        e.printStackTrace()
-      }
+      if (isVpnConnected) handler.postDelayed(this, 2000)
     }
-   
-    builder.setSession("CloudTun: IPv4 / Global")
-
-    val serverIp = intent?.getStringExtra("serverIp")
-    val cvmId = intent?.getStringExtra("cvmId")
-    val accessToken = intent?.getStringExtra("accessToken")
-    val trustDir = intent?.getStringExtra("trustDir")
-    if (serverIp == null || cvmId == null || accessToken == null || trustDir == null) {
-      return START_STICKY
-    }
-    
-//    println("XXX: builder2 $serverIp $token")
+  }
+  private fun manager() = getSystemService(NotificationManager::class.java)
+  private fun openIntent(): PendingIntent = PendingIntent.getActivity(this, 0,
+    Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+  private fun connectionName(status: JSONObject): String =
+    if (status.optString("source") == "cloud") "云主机：${status.optString("name")}" else "节点：${status.optString("name")}"
+  private fun runningNotification(name: String, traffic: String, state: String): Notification {
+    val stop = PendingIntent.getService(this, 0, Intent(this, CloudTunVpnService::class.java).setAction("STOP"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    return NotificationCompat.Builder(this, RUNNING_CHANNEL)
+      .setContentTitle("CloudTun · $name")
+      .setContentText(traffic)
+      .setStyle(NotificationCompat.BigTextStyle().bigText("$name\n$traffic\n$state"))
+      .setSubText(state)
+      .setSmallIcon(R.drawable.ic_stat_vpn)
+      .setContentIntent(openIntent())
+      .setOngoing(true)
+      .setOnlyAlertOnce(true)
+      .setShowWhen(false)
+      .setCategory(NotificationCompat.CATEGORY_SERVICE)
+      .addAction(R.drawable.ic_stat_vpn, "断开连接", stop)
+      .build()
+  }
+  private fun showEvent(title: String, message: String) {
+    if (!manager().areNotificationsEnabled()) return
     try {
-//      println("XXX: builder3")
-      vpnInterface = builder.establish()
-      if (vpnInterface == null) {
-        stopSelf()
-      } else {
-//        println("XXX: builder4")
-        isRunning = true
-        isVpnConnected = true
-        startProxyLoop(vpnInterface!!.fd, serverIp, cvmId, accessToken, trustDir)
+      manager().notify(EVENT_ID, NotificationCompat.Builder(this, EVENT_CHANNEL)
+        .setContentTitle("CloudTun · $title").setContentText(message)
+        .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+        .setSmallIcon(R.drawable.ic_stat_vpn).setContentIntent(openIntent())
+        .setAutoCancel(true).build())
+    } catch (error: SecurityException) { Log.w("CloudTunVpnService", "Notification permission unavailable") }
+  }
+  private fun updateWakeLock(enabled: Boolean) {
+    if (enabled && wakeLock?.isHeld != true) {
+      wakeLock = getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "CloudTun:Failover").apply {
+        setReferenceCounted(false)
+        acquire()
       }
-
-    } catch (e: IOException) {
-//      println("XXX: builder err $e")
-      e.printStackTrace()
-      stopProxyLoop()
+    } else if (!enabled && wakeLock?.isHeld == true) {
+      wakeLock?.release()
+      wakeLock = null
     }
-//    
-    return START_STICKY  // 启动服务
   }
- 
- 
-  private fun startProxyLoop(fd: Int, serverIp: String, cvmId: String, accessToken: String, trustDir: String) {
-      Thread {
-         try {
-           vpn.startVpn(
-             fd,
-             1500,
-             serverIp,
-             cvmId,
-             accessToken,
-             trustDir
-           )
-         } catch (ex: Exception) {
-           println("failed vpn thread: $ex")
-         }
-        println("vpn thread exited")
-      }.start()
- 
+  override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    if (intent?.action != "START") { disconnect(); return START_NOT_STICKY }
+    try {
+      instance = this
+      check(vpnInterface == null) { "VPN 服务已启动" }
+      manager().createNotificationChannel(NotificationChannel(RUNNING_CHANNEL, "CloudTun VPN", NotificationManager.IMPORTANCE_LOW))
+      manager().createNotificationChannel(NotificationChannel(EVENT_CHANNEL, "CloudTun 连接状态", NotificationManager.IMPORTANCE_DEFAULT))
+      traffic.reset()
+      lastEventId = 0
+      lastNotification = ""
+      manager().cancel(EVENT_ID)
+      ServiceCompat.startForeground(this, RUNNING_ID, runningNotification("正在连接", "速率 0 B/s · 累计 0 B", "启动 VPN…"), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+      val builder = Builder().setSession("CloudTun").addAddress("10.0.0.2", 24)
+        .addRoute("0.0.0.0", 0).addDnsServer("198.18.0.2").setMtu(1500)
+      builder.addDisallowedApplication(packageName)
+      vpnInterface = checkNotNull(builder.establish()) { "未获得 VPN 授权" }
+      val result = vpn.start(vpnInterface!!.fd, 1500, checkNotNull(intent.getStringExtra("config")) { "缺少 VPN 配置" })
+      check(result == 0) { "启动 VPN 内核失败 ($result)" }
+      isVpnConnected = true
+      handler.post(healthCheck)
+      finishStart(null)
+    } catch (error: Exception) {
+      Log.e("CloudTunVpnService", "VPN startup failed", error)
+      closeVpn()
+      finishStart(error.message ?: "启动 VPN 失败")
+      stopSelf()
+    }
+    return START_NOT_STICKY
   }
-  
-  private fun stopProxyLoop() {
-    isRunning = false
+  private fun finishStart(error: String?) { val callback = startCallback; startCallback = null; callback?.invoke(error) }
+  fun disconnect() { closeVpn(); manager().cancel(EVENT_ID); stopSelf() }
+  private fun closeVpn() {
+    handler.removeCallbacks(healthCheck)
     isVpnConnected = false
-    try {
-      vpn.stopVpn()
-    } catch (e: Exception) {
-      e.printStackTrace()
-    }
-
-    try {
-      vpnInterface?.close()
-    } catch (e: IOException) {
-      e.printStackTrace()
-    }
-  }
- 
-  override fun onDestroy() {
-    super.onDestroy()
+    updateWakeLock(false)
+    if (vpnInterface != null) vpn.stop()
+    vpnInterface?.close()
+    vpnInterface = null
     stopForeground(STOP_FOREGROUND_REMOVE)
-    stopProxyLoop()
+  }
+  override fun onRevoke() { disconnect(); super.onRevoke() }
+  override fun onDestroy() { closeVpn(); if (instance === this) instance = null; finishStart("VPN 服务已停止"); super.onDestroy() }
+}
+
+/** Combined upload/download payload bytes, sampled once every two seconds. */
+internal class VpnTrafficDisplay {
+  private var session = -1L
+  private var elapsed = 0L
+  private var bytes = 0L
+  fun reset() { session = -1; elapsed = 0; bytes = 0 }
+  fun update(nextSession: Long, nextElapsed: Long, totalBytes: Long): String {
+    val nextBytes = totalBytes.coerceAtLeast(0)
+    val rate = if (nextSession == session && nextElapsed > elapsed && nextBytes >= bytes)
+      (nextBytes - bytes).toDouble() * 1000 / (nextElapsed - elapsed) else 0.0
+    session = nextSession; elapsed = nextElapsed; bytes = nextBytes
+    return "速率 ${format(rate)}/s · 累计 ${format(nextBytes.toDouble())}"
+  }
+  private fun format(value: Double): String {
+    val units = arrayOf("B", "KB", "MB", "GB", "TB")
+    var amount = value; var index = 0
+    while (amount >= 1000 && index < units.lastIndex) { amount /= 1000; index++ }
+    return if (index == 0) "${amount.toLong()} ${units[index]}" else String.format(Locale.US, "%.1f %s", amount, units[index])
   }
 }

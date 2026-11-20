@@ -42,6 +42,12 @@ impl Routing {
       ..Self::mode(RoutingMode::Global)
     }
   }
+  pub fn current_mode(&self) -> RoutingMode {
+    *self.mode.read().unwrap_or_else(|e| e.into_inner())
+  }
+  pub fn rules(&self) -> Arc<ChinaRulesStore> {
+    self.rules.clone()
+  }
   pub fn set_mode(&self, mode: RoutingMode) {
     *self.mode.write().unwrap_or_else(|e| e.into_inner()) = mode;
   }

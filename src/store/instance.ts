@@ -5,7 +5,7 @@ import { loadInstanceDependentResources } from '@/service/instance';
 import { showNotifyWindow } from '@/service/notify';
 import { validateSettings } from '@/service/settings';
 import { type CVMInstance, CreateInstance } from '@/service/tencent';
-import { IS_MOBILE, generateStrongPassword } from '@/service/util';
+import { IS_MOBILE, IS_IOS, generateStrongPassword } from '@/service/util';
 import { loadInstance, pingServerOnce } from '@/views/proxy/helper';
 
 import { connectCloudProxy, disconnectProxy } from './desktop';
@@ -196,7 +196,7 @@ async function updateConnect(autoConnect: boolean, generation: number) {
     if (globalInst.state < 3) globalInst.state = 3;
     if (autoConnect && cloudAutoConnect) {
       cloudAutoConnect = false;
-      if (!IS_MOBILE) await connectGlobalProxy(cloudAutoNotify);
+      if (!IS_IOS) await connectGlobalProxy(cloudAutoNotify);
       else showMsg('远程 CloudTun 服务已就绪，可启动本地 VPN！', 'success');
     }
   } else {

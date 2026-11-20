@@ -15,6 +15,10 @@ const instance = {
 let readFailure: Error | undefined;
 let readiness: (() => Promise<boolean>) | undefined;
 const globalSettings = {
+  region: 'test-region',
+  resourceName: 'test-cloud',
+  bandWidth: 200,
+  subscriptionCandidates: null,
   secretId: 'test-id',
   secretKey: 'test-key',
   imageId: 'test-image',
@@ -40,6 +44,7 @@ mock.module('@/service/tencent', () => ({
 }));
 mock.module('@/service/util', () => ({
   IS_MOBILE: false,
+  IS_IOS: false,
   generateStrongPassword: () => 'generated-password',
 }));
 mock.module('@/views/proxy/helper', () => ({
@@ -79,6 +84,7 @@ beforeEach(() => {
   stopAllowed = true;
   readFailure = undefined;
   readiness = undefined;
+  globalSettings.bandWidth = 200;
   globalSettings.imageId = 'test-image';
   globalSettings.diskType = 'test-disk';
   globalSettings.loginPwd = 'test-password';
@@ -118,6 +124,18 @@ test('buying with no saved login password generates one before ordering', async 
     return [null, { InstanceId: instance.InstanceId }];
   };
   expect(await cloud.createGlobalInst()).toBe(true);
+});
+
+test('unset subscription candidates do not block a valid cloud purchase', async () => {
+  expect(globalSettings.subscriptionCandidates).toBeNull();
+  expect(await cloud.createGlobalInst()).toBe(true);
+  expect(events).toContain('purchase');
+});
+
+test('invalid cloud bandwidth prevents a purchase before stopping the proxy', async () => {
+  globalSettings.bandWidth = NaN;
+  expect(await cloud.createGlobalInst()).toBe(false);
+  expect(events).toEqual([]);
 });
 
 test('failed stop prevents a purchase', async () => {

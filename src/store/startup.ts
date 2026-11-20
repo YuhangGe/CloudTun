@@ -1,6 +1,6 @@
 import type { CVMInstance } from '@/service/tencent';
 
-import { IS_MOBILE } from '@/service/util';
+import { IS_IOS, IS_ANDROID } from '@/service/util';
 import { loadInstance } from '@/views/proxy/helper';
 
 import {
@@ -24,7 +24,7 @@ export function initializeStartup(): Promise<StartupTarget> {
   startup ??= (async () => {
     await initializeDesktop();
     if (
-      !IS_MOBILE &&
+      !IS_IOS &&
       globalSettings.secretId &&
       globalSettings.secretKey &&
       globalSettings.region &&
@@ -56,7 +56,10 @@ export function initializeStartup(): Promise<StartupTarget> {
 export function activateInitialSubscription() {
   subscriptionActivation ??= (async () => {
     const target = await initializeStartup();
-    if (IS_MOBILE) return;
+    if (IS_IOS) return;
+    // A recreated Android WebView observes the Service's live session. Refreshing
+    // the subscription here would stop that VPN and reset its failure history.
+    if (IS_ANDROID && desktop.status.running) return;
     const url = desktop.subscriptionUrl.trim();
     if (!url) {
       if (desktop.nodes.length) await testNodes();

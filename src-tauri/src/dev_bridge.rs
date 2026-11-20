@@ -2,14 +2,14 @@
 //! Requests execute the real Tauri command handlers and never expose node credentials.
 use crate::proxy::*;
 use axum::{
-  Json, Router,
   extract::State,
   http::{HeaderMap, HeaderValue, StatusCode},
   response::{IntoResponse, Response},
   routing::{get, post},
+  Json, Router,
 };
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, Runtime};
 
 #[derive(Deserialize)]
@@ -133,8 +133,8 @@ async fn command<R: Runtime>(
       )
       .await,
     ),
-    "tauri_proxy_status" => result(tauri_proxy_status(app.state()).await),
-    "tauri_proxy_traffic" => result(tauri_proxy_traffic(app.state()).await),
+    "tauri_proxy_status" => result(tauri_proxy_status(app.clone(), app.state()).await),
+    "tauri_proxy_traffic" => result(tauri_proxy_traffic(app.clone(), app.state()).await),
     "tauri_get_subscription" => result(tauri_get_subscription(app.state()).await),
     "tauri_update_subscription" => result(
       tauri_update_subscription(

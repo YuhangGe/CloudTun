@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use std::time::{Duration, Instant};
 use tokio::time::timeout;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubscriptionNode {
   pub id: String,
@@ -21,7 +21,7 @@ pub struct SubscriptionNode {
 }
 
 // Kept in the backend; node credentials are never sent to the node-list UI.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VmessConfig {
   pub uuid: String,
   pub cipher: String,
@@ -218,7 +218,7 @@ pub async fn fetch_subscription(url: &str) -> anyhow::Result<Vec<SubscriptionNod
     matches!(uri.scheme(), "http" | "https"),
     "订阅链接必须是 HTTP 或 HTTPS"
   );
-  let client = reqwest::Client::builder()
+  let client = crate::http_client_builder()?
     .no_proxy()
     .connect_timeout(Duration::from_secs(10))
     .timeout(Duration::from_secs(30))

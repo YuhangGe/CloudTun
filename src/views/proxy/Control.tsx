@@ -1,9 +1,8 @@
-import { invoke } from '@tauri-apps/api/core';
-import { type WithEvents, type WithExpose, expose, vm } from 'jinge';
+import { type WithExpose, expose, vm } from 'jinge';
 import { Button, Popconfirm } from 'jinge-antd';
 
 import { TerminateInstance } from '@/service/tencent';
-import { IS_ANDROID, IS_MOBILE } from '@/service/util';
+import { IS_IOS } from '@/service/util';
 import { desktop, disconnectProxy } from '@/store/desktop';
 import {
   createGlobalInst,
@@ -11,31 +10,20 @@ import {
   connectGlobalProxy,
   pauseCloudProxy,
 } from '@/store/instance';
-import { globalSettings } from '@/store/settings';
 
 export function Control(
   props: {
-    vpnConnected?: boolean;
     diskLoading: boolean;
   } & WithExpose<{
     create: () => void;
-  }> &
-    WithEvents<{
-      vpnConnectChanged(v: boolean): void;
-    }>,
+  }>,
 ) {
   const state = vm<{
     creating?: boolean;
     destroing?: boolean;
-    vpnConnected?: boolean;
-  }>({
-    vpnConnected: props.vpnConnected,
-  });
+  }>({});
   async function destroy() {
     if (!globalInst.data) return;
-    if (props.vpnConnected) {
-      //
-    }
     state.destroing = true;
     const [err] = await TerminateInstance(globalInst.data!.InstanceId);
     state.destroing = false;
@@ -43,14 +31,8 @@ export function Control(
       globalInst.data = undefined;
       globalInst.state = 0;
       globalInst.ip = undefined;
-      if (IS_MOBILE) {
-        if (IS_ANDROID) {
-          await invoke('tauri_android_stop_vpn');
-        }
-      } else {
-        pauseCloudProxy();
-        if (desktop.status.source === 'cloud') await disconnectProxy();
-      }
+      pauseCloudProxy();
+      if (desktop.status.source === 'cloud') await disconnectProxy();
     }
   }
   async function create() {
@@ -61,19 +43,6 @@ export function Control(
     } finally {
       state.creating = false;
     }
-  }
-  async function toggleVpn() {
-    if (state.vpnConnected) {
-      await invoke('tauri_android_stop_vpn');
-    } else {
-      await invoke('tauri_android_start_vpn', {
-        serverIp: globalInst.ip,
-        cvmId: globalInst.data!.InstanceId,
-        proxyApps: globalSettings.mobileProxyMode === 'app' ? globalSettings.mobileProxyApps : '',
-      });
-    }
-    state.vpnConnected = !state.vpnConnected;
-    props['on:vpnConnectChanged'](state.vpnConnected);
   }
 
   expose({
@@ -109,12 +78,12 @@ export function Control(
           购买主机
         </Button>
       )}
-      {!IS_MOBILE && desktop.error && (
+      {!IS_IOS && desktop.error && (
         <p className="w-full text-xs text-error" role="alert">
           {desktop.error}
         </p>
       )}
-      {!IS_MOBILE && globalInst.data && (
+      {!IS_IOS && globalInst.data && (
         <Button
           type={desktop.status.source === 'cloud' && desktop.status.running ? 'default' : 'primary'}
           size="sm"
@@ -131,16 +100,6 @@ export function Control(
           }}
         >
           {desktop.status.source === 'cloud' && desktop.status.running ? '断开代理' : '连接代理'}
-        </Button>
-      )}
-      {IS_MOBILE && globalInst.state >= 3 && (
-        <Button
-          size="sm"
-          on:click={() => {
-            void toggleVpn();
-          }}
-        >
-          {state.vpnConnected ? '关闭 VPN' : '开启 VPN'}
         </Button>
       )}
     </div>

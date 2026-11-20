@@ -17,7 +17,7 @@ impl Ping {
 }
 
 #[cfg(desktop)]
-use crate::notify::{NotifyWindow, show_notify_window};
+use crate::notify::{show_notify_window, NotifyWindow};
 
 #[tauri::command]
 pub async fn tauri_interval_ping_start<R: Runtime>(

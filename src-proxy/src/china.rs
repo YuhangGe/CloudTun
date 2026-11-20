@@ -5,6 +5,7 @@ use std::{
 };
 
 /// Immutable mainland-only rules, shared by all proxy connections.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ChinaRules {
   ipv4: Box<[(u32, u32)]>,
   ipv6: Box<[(u128, u128)]>,

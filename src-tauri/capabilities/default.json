@@ -15,6 +15,7 @@
       "identifier": "http:default",
       "allow": ["https://*.tencentcloudapi.com", "http://*:24816"]
     },
+    "clipboard-manager:allow-write-text",
     "os:default"
   ]
 }

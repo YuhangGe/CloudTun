@@ -1,5 +1,5 @@
 use anyhow_tauri::{IntoTAResult, TAResult};
-use cloudtun_common::tls::{CloudEndpoint, private_write};
+use cloudtun_common::tls::{private_write, CloudEndpoint};
 use std::{collections::BTreeMap, path::PathBuf, sync::Mutex};
 use tauri::State;
 pub struct CloudAccess {

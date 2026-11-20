@@ -5,4 +5,7 @@ mod virtual_dns;
 mod vpn;
 
 pub use ping::start_ping_interval;
-pub use vpn::start_run_vpn;
+pub use vpn::{start_run_vpn, start_run_vpn_with_connector};
+
+#[cfg(any(target_os = "android", test))]
+mod failover;

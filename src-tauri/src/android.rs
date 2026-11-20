@@ -9,11 +9,7 @@ use crate::util::emit_log;
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartVpnArgs {
-  pub server_ip: String,
-  pub cvm_id: String,
-  pub access_token: String,
-  pub trust_dir: String,
-  pub proxy_apps: String,
+  pub config: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -28,26 +24,23 @@ pub struct CheckVpnConnectedResponse {
   pub connected: bool,
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct ListAllAppsResponseItem {
-  pub name: String,
-  pub icon: String,
-  pub id: String,
-}
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct ListAllAppsResponse {
-  pub apps: Vec<ListAllAppsResponseItem>,
-}
-
 #[tauri::command]
 pub async fn tauri_android_start_vpn<R: Runtime>(
   server_ip: &str,
   cvm_id: &str,
-  proxy_apps: &str,
   h: AppHandle<R>,
   state: State<'_, Vpn<R>>,
 ) -> TAResult<bool> {
-  state.start_vpn(h, server_ip.into(), cvm_id.into(), proxy_apps.into())
+  let _ = state;
+  crate::proxy::tauri_start_proxy_client(
+    h.clone(),
+    h.state(),
+    server_ip.into(),
+    cvm_id.into(),
+    cloudtun_proxy::RoutingMode::default(),
+  )
+  .await?;
+  Ok(true)
 }
 
 #[tauri::command]
@@ -67,14 +60,6 @@ pub async fn tauri_android_request_notification_permission<R: Runtime>(
 }
 
 #[tauri::command]
-pub async fn tauri_android_list_all_apps<R: Runtime>(
-  h: AppHandle<R>,
-  state: State<'_, Vpn<R>>,
-) -> TAResult<Vec<ListAllAppsResponseItem>> {
-  state.list_all_apps(h)
-}
-
-#[tauri::command]
 pub async fn tauri_android_get_vpn_connected<R: Runtime>(
   h: AppHandle<R>,
   state: State<'_, Vpn<R>>,
@@ -82,30 +67,14 @@ pub async fn tauri_android_get_vpn_connected<R: Runtime>(
   state.get_vpn_connected(h)
 }
 
+#[derive(Clone)]
 pub struct Vpn<R: Runtime>(PluginHandle<R>);
 
 impl<R: Runtime> Vpn<R> {
-  pub fn start_vpn(
-    &self,
-    h: AppHandle<R>,
-    server_ip: String,
-    cvm_id: String,
-    proxy_apps: String,
-  ) -> TAResult<bool> {
-    let endpoint = h
-      .state::<crate::cloud_access::CloudAccess>()
-      .endpoint(&server_ip, &cvm_id)
-      .into_ta_result()?;
-    let ret = self.0.run_mobile_plugin::<StartVpnResponse>(
-      "startVpn",
-      StartVpnArgs {
-        proxy_apps,
-        server_ip,
-        cvm_id,
-        access_token: endpoint.token,
-        trust_dir: endpoint.trust_dir.to_string_lossy().into_owned(),
-      },
-    );
+  pub fn start_vpn(&self, h: AppHandle<R>, config: String) -> TAResult<bool> {
+    let ret = self
+      .0
+      .run_mobile_plugin::<StartVpnResponse>("startVpn", StartVpnArgs { config });
 
     match ret {
       Ok(x) => Ok(x.success),
@@ -117,18 +86,43 @@ impl<R: Runtime> Vpn<R> {
     }
   }
 
-  pub fn list_all_apps(&self, h: AppHandle<R>) -> TAResult<Vec<ListAllAppsResponseItem>> {
-    let ret = self
-      .0
-      .run_mobile_plugin::<ListAllAppsResponse>("listAllApps", ());
-    match ret {
-      Ok(x) => Ok(x.apps),
-      Err(e) => {
-        let msg = e.to_string();
-        emit_log(&h, "vpn", &format!("failed listAllApps due to: {}", &msg));
-        Ok(vec![])
-      }
+  pub fn update_routing(&self, config: String) -> anyhow::Result<()> {
+    self.0.run_mobile_plugin::<StartVpnResponse>(
+      "updateRouting",
+      serde_json::json!({ "config": config }),
+    )?;
+    Ok(())
+  }
+  pub fn update_failover(&self, config: String) -> anyhow::Result<()> {
+    self.0.run_mobile_plugin::<StartVpnResponse>(
+      "updateFailover",
+      serde_json::json!({ "config": config }),
+    )?;
+    Ok(())
+  }
+  pub fn status(&self) -> anyhow::Result<Option<crate::proxy::ProxyStatus>> {
+    #[derive(Deserialize)]
+    struct Response {
+      status: Option<crate::proxy::ProxyStatus>,
     }
+    Ok(
+      self
+        .0
+        .run_mobile_plugin::<Response>("getVpnStatus", ())?
+        .status,
+    )
+  }
+  pub fn traffic(&self) -> anyhow::Result<Option<cloudtun_proxy::TrafficSnapshot>> {
+    #[derive(Deserialize)]
+    struct Response {
+      traffic: Option<cloudtun_proxy::TrafficSnapshot>,
+    }
+    Ok(
+      self
+        .0
+        .run_mobile_plugin::<Response>("getVpnTraffic", ())?
+        .traffic,
+    )
   }
 
   pub fn get_vpn_connected(&self, h: AppHandle<R>) -> TAResult<bool> {

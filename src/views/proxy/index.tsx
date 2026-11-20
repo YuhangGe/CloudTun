@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
 import { onMount, onUnmount, ref, vm, watch } from 'jinge';
 import { Button, Spin, Tag } from 'jinge-antd';
 
@@ -8,7 +7,8 @@ import {
   canQuoteInstance,
   describeSystemDiskTypes,
 } from '@/service/tencent';
-import { IS_ANDROID, IS_MOBILE } from '@/service/util';
+import { IS_MOBILE } from '@/service/util';
+import { desktop } from '@/store/desktop';
 import { globalInst, loadGlobalInst } from '@/store/instance';
 import { globalSettings } from '@/store/settings';
 
@@ -25,7 +25,6 @@ export function ProxyView() {
     diskError: string;
     diskLoading: boolean;
     price?: CVMPrice;
-    vpnConnected?: boolean;
   }>({
     loading: true,
     error: '',
@@ -104,16 +103,6 @@ export function ProxyView() {
     void ensureDiskType().then(() => {
       if (active) schedulePrice();
     });
-    if (IS_ANDROID) {
-      invoke<boolean>('tauri_android_get_vpn_connected').then(
-        (v) => {
-          state.vpnConnected = v;
-        },
-        (err) => {
-          console.error(err);
-        },
-      );
-    }
     if (!IS_MOBILE || globalInst.state == 0) {
       void load();
     } else {
@@ -141,7 +130,7 @@ export function ProxyView() {
       <div className="flex flex-col gap-4">
         <div className="text-lg font-medium">代理信息</div>
         <Instance />
-        {IS_MOBILE && <Vpn connected={state.vpnConnected} />}
+        {IS_MOBILE && <Vpn connected={desktop.status.running} />}
         <Balance />
       </div>
       <div className="mt-6 flex flex-col gap-4">
@@ -166,14 +155,7 @@ export function ProxyView() {
         )}
         {state.diskLoading && <p className="text-sm text-secondary-text">正在查询磁盘类型…</p>}
       </div>
-      <Control
-        ref={ctrl}
-        diskLoading={state.diskLoading}
-        vpnConnected={state.vpnConnected}
-        on:vpnConnectChanged={(v) => {
-          state.vpnConnected = v;
-        }}
-      />
+      <Control ref={ctrl} diskLoading={state.diskLoading} />
     </div>
   );
 }

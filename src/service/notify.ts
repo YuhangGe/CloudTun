@@ -2,6 +2,9 @@
 // import { currentPlatform } from './util';
 // import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { invoke } from '@tauri-apps/api/core';
+import { message } from 'jinge-antd';
+
+import { IS_MOBILE } from './util';
 
 // const notifyWindow: Window | undefined = undefined;
 
@@ -65,6 +68,12 @@ export interface Notify {
 }
 
 export async function showNotifyWindow(notify: Notify) {
+  if (IS_MOBILE) {
+    message[notify.notifyType === 'processing' ? 'loading' : notify.notifyType](
+      notify.notifyMessage,
+    );
+    return;
+  }
   // if (!notifyWindow) {
   //   const screen = await currentMonitor();
   //   if (!screen) throw new Error('screen not found');

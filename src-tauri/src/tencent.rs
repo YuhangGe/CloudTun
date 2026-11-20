@@ -21,7 +21,7 @@ pub fn tauri_calc_tencent_cloud_api_signature(
 }
 
 /// Cloud control requests must not depend on the proxy they manage.
-#[cfg(desktop)]
+#[cfg(not(target_os = "ios"))]
 #[tauri::command]
 pub async fn tauri_call_tencent_api<R: tauri::Runtime>(
   handle: tauri::AppHandle<R>,
@@ -56,7 +56,7 @@ pub async fn tauri_call_tencent_api<R: tauri::Runtime>(
     let signature =
       tencent_cloud_api_signature(&secret_id, &secret_key, &host, &service, timestamp, &body);
     emit_log(&handle, "log::cloud", &format!("腾讯云 {action}：直连请求"));
-    let client = reqwest::Client::builder()
+    let client = cloudtun_proxy::http_client_builder()?
       .no_proxy()
       .redirect(reqwest::redirect::Policy::none())
       .connect_timeout(std::time::Duration::from_secs(5))

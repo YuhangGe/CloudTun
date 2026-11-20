@@ -1,119 +1,66 @@
 package com.cloudtun.app
 
+import androidx.annotation.Keep
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.drawable.BitmapDrawable
 import android.net.VpnService
 import android.os.Build
-import android.util.Base64
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import app.tauri.annotation.ActivityCallback
+import androidx.activity.result.ActivityResult
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
-import app.tauri.plugin.JSArray
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
-import java.io.ByteArrayOutputStream
 
+@Keep
 @InvokeArg
 class StartVpnArgs {
-  var serverIp: String? = null
-  var proxyApps: String? = null
-  
-  var cvmId: String? = null
-  var accessToken: String? = null
-  var trustDir: String? = null
+  var config: String? = null
 }
 
-data class AppInfo(
-  val appName: String,         // 应用名称
-  val appIcon: String,       // 应用图标
-  val applicationName: String  // applicationName
-)
-
-fun bitmapToBase64Src(bitmap: Bitmap): String {
-  val outputStream = ByteArrayOutputStream()
-  bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream) // 压缩成 PNG 格式
-  val byteArray = outputStream.toByteArray()
-  return "data:image/png;base64,${Base64.encodeToString(byteArray, Base64.DEFAULT)}"
-}
-
+@Keep
 @TauriPlugin
 class CloudTunPlugin(private val activity: Activity): Plugin(activity) {
 
-//  companion object {
-//    var activityResultCallback: ((requestCode: Int, resultCode: Int, data: Intent?) -> Unit)? = null
-//  }
-  
-  @Command
-  fun listAllApps(invoke: Invoke) {
-    val packageManager = activity.packageManager
-    val queryIntent = Intent(Intent.ACTION_MAIN, null)
-    queryIntent.addCategory(Intent.CATEGORY_LAUNCHER)
-    val activities = packageManager.queryIntentActivities(queryIntent, 0)
- 
-    val arr = JSArray()
-    
-     activities.forEach { k -> 
-      val info = k.activityInfo.applicationInfo 
-       val icon = (info.loadIcon(packageManager) as? BitmapDrawable)?.bitmap
-//      var icon = (packageManager.getApplicationIcon(info) as? BitmapDrawable)?.bitmap;
-//       if (icon == null) {
-//         icon = (packageManager.getApplicationLogo(info) as? BitmapDrawable)?.bitmap;
-//       }
-      val name = packageManager.getApplicationLabel(k.activityInfo.applicationInfo).toString()
-         val item = JSObject()
-       item.put("name", name)
-       item.put("icon", if (icon == null) "" else bitmapToBase64Src(icon) )
-       item.put("id", info.packageName)
-       arr.put(item)
-    }
-    val ret = JSObject()
-    ret.put("apps", arr)
-    invoke.resolve(ret)
-  }
-
-
   @Command
   fun startVpn(invoke: Invoke) {
-    val args = invoke.parseArgs(StartVpnArgs::class.java)
-    println("startVpn: ${args.serverIp}")
-//    val context = activity.applicationContext
-    val p = VpnService.prepare(activity)
-    if (p != null) {
-       
-      p.putExtra("serverIp", args.serverIp)
-      p.putExtra("cvmId", args.cvmId)
-      p.putExtra("accessToken", args.accessToken)
-      p.putExtra("trustDir", args.trustDir)
-      p.putExtra("proxyApps", args.proxyApps)
-      activity.startActivityForResult(p, 0x9999)
-      println("after startVpn")
-      val ret = JSObject()
-      ret.put("success", true)
-      invoke.resolve(ret)
+    val permission = VpnService.prepare(activity)
+    if (permission != null) {
+      startActivityForResult(invoke, permission, "vpnPermissionResult")
     } else {
-      val intent = Intent(activity, CloudTunVpnService::class.java).apply {
-        action = "START"
-        putExtra("serverIp", args.serverIp)
-        putExtra("cvmId", args.cvmId)
-        putExtra("accessToken", args.accessToken)
-        putExtra("trustDir", args.trustDir)
-        putExtra("proxyApps", args.proxyApps)
-      }
-      activity.startService(intent)
-      println("after startVpn")
-      val ret = JSObject()
-      ret.put("success", true)
-      invoke.resolve(ret)
+      launchVpn(invoke)
     }
   }
-  
+
+  @ActivityCallback
+  fun vpnPermissionResult(invoke: Invoke, result: ActivityResult) {
+    if (result.resultCode == Activity.RESULT_OK) launchVpn(invoke)
+    else invoke.reject("VPN 授权已取消")
+  }
+
+  private fun launchVpn(invoke: Invoke) {
+    val args = invoke.parseArgs(StartVpnArgs::class.java)
+    CloudTunVpnService.startCallback = { error ->
+      if (error != null) invoke.reject(error)
+      else invoke.resolve(JSObject().put("success", true))
+    }
+    try {
+      ContextCompat.startForegroundService(activity, Intent(activity, CloudTunVpnService::class.java).apply {
+        action = "START"
+        putExtra("config", args.config)
+      })
+    } catch (error: Exception) {
+      CloudTunVpnService.startCallback = null
+      invoke.reject(error.message ?: "启动 VPN 服务失败")
+    }
+  }
+
   @Command
   fun requestNotificationPermission(invoke: Invoke) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -134,19 +81,44 @@ class CloudTunPlugin(private val activity: Activity): Plugin(activity) {
   
   @Command
   fun stopVpn(invoke: Invoke) {
-    val intent = Intent(activity, CloudTunVpnService::class.java).apply {
-       action = "STOP"
-    }
-    activity.startService(intent)
+    CloudTunVpnService.instance?.disconnect()
     val ret = JSObject()
     ret.put("success", true)
     invoke.resolve(ret)
   }
   
   @Command
+  fun updateRouting(invoke: Invoke) {
+    val args = invoke.parseArgs(StartVpnArgs::class.java)
+    if (CloudTunVpn().updateRouting(args.config ?: "") == 0) invoke.resolve(JSObject().put("success", true))
+    else invoke.reject("VPN 分流设置更新失败")
+  }
+
+  @Command
+  fun updateFailover(invoke: Invoke) {
+    val args = invoke.parseArgs(StartVpnArgs::class.java)
+    if (CloudTunVpn().updateFailover(args.config ?: "") == 0) invoke.resolve(JSObject().put("success", true))
+    else invoke.reject("VPN 自动切换设置更新失败")
+  }
+
+  @Command
+  fun getVpnStatus(invoke: Invoke) {
+    val status = CloudTunVpn().status()
+    invoke.resolve(JSObject().put("status", if (status == "null") org.json.JSONObject.NULL else JSObject(status)))
+  }
+
+  @Command
+  fun getVpnTraffic(invoke: Invoke) {
+    val stats = CloudTunVpn().stats()
+    val ret = JSObject()
+    ret.put("traffic", if (stats == "null") org.json.JSONObject.NULL else JSObject(stats))
+    invoke.resolve(ret)
+  }
+
+  @Command
   fun getVpnConnected(invoke: Invoke) {
     val ret = JSObject()
-    ret.put("connected", CloudTunVpnService.isVpnConnected)
+    ret.put("connected", CloudTunVpnService.isVpnConnected && CloudTunVpn().stats() != "null")
     invoke.resolve(ret)
   }
  

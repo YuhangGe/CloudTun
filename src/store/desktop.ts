@@ -1,11 +1,10 @@
-import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { vm } from 'jinge';
 
 import { desktopInvoke } from '@/service/desktop';
 import { showNotifyWindow } from '@/service/notify';
-import { IS_MOBILE, IS_ANDROID } from '@/service/util';
+import { IS_MOBILE, IS_ANDROID, IS_IOS } from '@/service/util';
 
 import { pauseCloudProxy } from './instance';
 import { appendLog } from './log';
@@ -104,6 +103,7 @@ export function toggleAutoSwitch() {
   globalSettings.subscriptionAutoSwitch = !globalSettings.subscriptionAutoSwitch;
   ++failoverRevision;
   monitoredNode = null;
+  void syncAndroidFailover();
 }
 
 export function toggleAutoSwitchCandidate(id: string) {
@@ -113,6 +113,25 @@ export function toggleAutoSwitchCandidate(id: string) {
     : [...candidates, id];
   ++failoverRevision;
   monitoredNode = null;
+  void syncAndroidFailover();
+}
+
+async function syncAndroidFailover() {
+  if (!IS_ANDROID) return;
+  try {
+    await desktopInvoke('tauri_android_set_failover', {
+      enabled: globalSettings.subscriptionAutoSwitch,
+      nodeIds: globalSettings.subscriptionCandidates ?? [],
+    });
+  } catch (error) {
+    desktop.error = errorText(error);
+  }
+}
+
+function applyStatus(status: ProxyStatus) {
+  desktop.status = status;
+  if (IS_ANDROID && status.running && status.source === 'subscription' && status.nodeId)
+    globalSettings.subscriptionSelectedId = status.nodeId;
 }
 
 async function monitorSubscription() {
@@ -189,6 +208,7 @@ async function monitorSubscription() {
 }
 
 function scheduleSubscriptionMonitor() {
+  if (IS_ANDROID) return;
   window.setTimeout(async () => {
     try {
       await monitorSubscription();
@@ -200,11 +220,11 @@ function scheduleSubscriptionMonitor() {
   }, 15_000);
 }
 export async function refreshStatus() {
-  desktop.status = await desktopInvoke<ProxyStatus>('tauri_proxy_status');
+  applyStatus(await desktopInvoke<ProxyStatus>('tauri_proxy_status'));
 }
 export function initializeDesktop() {
   initialized ??= (async () => {
-    if (IS_MOBILE) {
+    if (IS_IOS) {
       desktop.ready = true;
       return;
     }
@@ -217,20 +237,27 @@ export function initializeDesktop() {
       desktop.config = network.config;
       desktop.addresses = network.addresses;
       useSubscription(subscription);
-      desktop.status = status;
+      applyStatus(status);
+      await syncAndroidFailover();
       desktop.error = '';
       if (status.running && status.source === 'subscription' && status.nodeId)
         globalSettings.subscriptionSelectedId = status.nodeId;
       if ('__TAURI_INTERNALS__' in window) {
         await listen<ProxyStatus>('proxy-status', (event) => {
-          desktop.status = event.payload;
+          applyStatus(event.payload);
         });
-        const mainWindow = getCurrentWindow();
-        await mainWindow.onCloseRequested((event) => {
-          if (!globalSettings.subscriptionAutoSwitch) return;
-          event.preventDefault();
-          void mainWindow.hide().catch((error) => appendLog(errorText(error)));
-        });
+        if (!IS_MOBILE) {
+          const mainWindow = getCurrentWindow();
+          await mainWindow.onCloseRequested((event) => {
+            if (!globalSettings.subscriptionAutoSwitch) return;
+            event.preventDefault();
+            void mainWindow.hide().catch((error) => appendLog(errorText(error)));
+          });
+        }
+        if (IS_ANDROID)
+          window.setInterval(() => {
+            void refreshStatus().catch(() => {});
+          }, 1500);
       } else if (import.meta.env.DEV) {
         window.setInterval(() => {
           void refreshStatus().catch(() => {});
@@ -267,7 +294,7 @@ export async function testNodes() {
   }
 }
 export async function updateSubscription(url: string) {
-  if (IS_MOBILE) return false;
+  if (IS_IOS) return false;
   if (desktop.updating || desktop.connecting || desktop.testing || desktop.testingNodeId)
     return false;
   desktop.updating = true;
@@ -275,6 +302,7 @@ export async function updateSubscription(url: string) {
   try {
     const data = await desktopInvoke<Subscription>('tauri_update_subscription', { url });
     useSubscription(data);
+    await syncAndroidFailover();
     await refreshStatus();
     appendLog(`订阅已更新，共 ${data.nodes.length} 个节点`);
     await testNodes();
@@ -288,14 +316,10 @@ export async function updateSubscription(url: string) {
 }
 export async function disconnectProxy() {
   pauseCloudProxy();
-  if (IS_MOBILE) {
-    if (IS_ANDROID) await invoke('tauri_android_stop_vpn');
-    return true;
-  }
   desktop.connecting = true;
   try {
     await desktopInvoke('tauri_stop_proxy_client');
-    await desktopInvoke('tauri_interval_ping_stop');
+    if (!IS_MOBILE) await desktopInvoke('tauri_interval_ping_stop');
     await refreshStatus();
     return true;
   } catch (error) {
@@ -306,7 +330,7 @@ export async function disconnectProxy() {
   }
 }
 export async function connectSelected(nodeId = globalSettings.subscriptionSelectedId) {
-  if (IS_MOBILE) return;
+  if (IS_IOS) return;
   if (desktop.connecting || !nodeId) return;
   pauseCloudProxy();
   desktop.connecting = true;
@@ -316,8 +340,8 @@ export async function connectSelected(nodeId = globalSettings.subscriptionSelect
       nodeId,
       mode: globalSettings.routingMode,
     });
-    await desktopInvoke('tauri_interval_ping_stop');
-    if (globalSettings.subscriptionSystemProxy)
+    if (!IS_MOBILE) await desktopInvoke('tauri_interval_ping_stop');
+    if (!IS_MOBILE && globalSettings.subscriptionSystemProxy)
       await desktopInvoke('tauri_set_system_proxy', { enabled: true });
     await refreshStatus();
     appendLog('订阅节点代理已连接');
@@ -375,7 +399,7 @@ export async function changeSystemProxy(enabled: boolean) {
 }
 
 export async function refreshProxyConfig() {
-  if (IS_MOBILE) return;
+  if (IS_IOS) return;
   const network = await desktopInvoke<ProxyConfigView>('tauri_get_proxy_config');
   desktop.config = network.config;
   desktop.addresses = network.addresses;
@@ -399,7 +423,8 @@ export async function connectCloudProxy(serverIp: string, cvmId: string) {
     desktop.status.source === 'cloud' &&
     desktop.status.name === serverIp
   ) {
-    await desktopInvoke('tauri_interval_ping_start', { ip: serverIp, token: cvmId });
+    if (!IS_MOBILE)
+      await desktopInvoke('tauri_interval_ping_start', { ip: serverIp, token: cvmId });
     return true;
   }
   desktop.connecting = true;
@@ -411,7 +436,8 @@ export async function connectCloudProxy(serverIp: string, cvmId: string) {
       mode: globalSettings.routingMode,
     });
     await refreshStatus();
-    await desktopInvoke('tauri_interval_ping_start', { ip: serverIp, token: cvmId });
+    if (!IS_MOBILE)
+      await desktopInvoke('tauri_interval_ping_start', { ip: serverIp, token: cvmId });
     appendLog('云上主机代理已连接');
     return true;
   } catch (error) {
@@ -424,13 +450,7 @@ export async function connectCloudProxy(serverIp: string, cvmId: string) {
 }
 
 export async function testNodeLatency(nodeId: string) {
-  if (
-    IS_MOBILE ||
-    desktop.testing ||
-    desktop.testingNodeId ||
-    desktop.updating ||
-    desktop.connecting
-  )
+  if (IS_IOS || desktop.testing || desktop.testingNodeId || desktop.updating || desktop.connecting)
     return;
   desktop.testingNodeId = nodeId;
   desktop.error = '';

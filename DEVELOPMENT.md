@@ -77,7 +77,7 @@ macOS Tauri 使用 WKWebView，Chrome CDP 不能直接控制原生窗口。联�
 
 自动系统代理始终指向本机地址及当前端口。系统代理恢复备份记录本次应用的端口，兼容旧版固定 7892 的备份，修改监听端口不影响原配置恢复。
 
-`desktop.css` 已删除，统一页面使用 Tailwind 工具类及断点，手机安全区使用 CSS env。移动端目前整合页面与云主机 VPN 入口；订阅连接内核仍待后续接入，界面有明确提示，不会向手机端调用尚未注册的桌面订阅命令。
+`desktop.css` 已删除，统一页面使用 Tailwind 工具类及断点，手机安全区使用 CSS env。Android 已接入订阅与云主机 VPN；iOS 订阅内核尚未接入，界面保留提示与禁用入口。
 
 ## 云上主机购买与代理切换
 
@@ -137,3 +137,70 @@ python3 scripts/test-wss-local.py
 附加回归测试：在 `src-server/` 执行 `cargo +nightly test --locked`，覆盖证书首次信任与复用、换证书拒绝、并发固定证书、错误凭据、完整 HTTP→WSS→SSE/WS、TCP 半关闭、大数据背压及 UDP 边界。
 
 **发布要求：** WSS v3 与已发布的旧明文 WS 服务端不兼容。先通过既有手动 CI 发布 `src-server/Cargo.toml` 的 `0.2.0`，再创建新实例。旧实例缺少新初始化凭据时会显示升级/重建提示，不会回退到旧协议。Android 的 Kotlin/JNI 参数已同步为实例 ID、随机访问凭据与私有信任目录；共享 VPN 层已通过 aarch64-apple-ios 编译检查，但本轮没有 Android/iOS 真机测试。
+
+
+# Android 构建与 VPN
+
+Android 保留两份原生库：Tauri 的 `libcloudtun_lib.so`，以及 VPN Service 单独加载的 `libcloudtunvpn.so`。调用链仍为前端 Tauri command → Rust mobile plugin → Kotlin `CloudTunPlugin` / `CloudTunVpnService` → JNI。VPN 内核自建 Tokio runtime，不依赖 Activity 或 WebView 保持活跃；前台服务通知负责维持 Android 服务生命周期。
+
+需要 JDK 21、Android SDK 36、NDK 与对应 Rust Android target。macOS 的 `scripts/android.ts` 自动查找 SDK、NDK 和 JDK 21，并设置 Leaf bindgen 所需的 NDK sysroot。可以用环境变量 `JAVA_HOME`、`ANDROID_HOME`、`NDK_HOME` / `ANDROID_NDK_HOME` 指定已有安装。
+
+```bash
+pnpm build-apk                         # arm64 release APK
+pnpm build-apk --debug                 # arm64 debug APK
+pnpm dev-android                      # Tauri Android 开发模式
+pnpm exec bun scripts/android.ts build --debug --apk --target x86_64
+```
+
+Gradle 的对应 `rustBuild<架构><配置>` 任务会先运行 `vpnBuild<架构><配置>`，调用 `scripts/build-android-vpn.sh` 编译并复制独立 VPN 库，再进行 JNI 合并与 APK 打包。两份库各自保留 Cargo 编译缓存，按本次构建的架构选择目标；不再要求手动先构建 `src-vpn`，也不再使用旧 `rust-android-gradle` 插件。Gradle wrapper 使用 LF 换行，避免 macOS/Linux 的 `sh\r` 启动错误；仓库内不固定个人本地代理端口。
+
+Android 支持云主机 WSS v3 与 VMess AEAD（TCP/WebSocket、可选 TLS）的 TUN TCP/UDP 转发，保留虚拟 DNS 及全局/绕过大陆分流模式，VPN 接管全部应用（排除 CloudTun 自身）。TUN 与本地 HTTP 入口复用 `src-proxy` 协议和分流实现。Tauri 将 VPN 配置原子写入私有目录 `vpn-config.json`（Unix 0600），仅通过插件和 Intent 传文件路径，避免把完整 GEO 数据塞进 Binder 消息；独立库通过 JNI 读取配置，更新规则与模式。应用自己的 UID 排除在 VPN 外，避免上游连接回环。HTTPS 校验证书与主机名，Android 的 Rust HTTP 请求使用 Mozilla 根证书，不依赖额外的 JVM 证书组件。
+
+首次连接由 Tauri `ActivityCallback` 接收系统 VPN 授权结果，保留原调用参数；授权被拒、TUN 创建或 JNI 启动失败时不报告连接成功。停止、系统撤销和内核退出会清理 TUN、独立 runtime 与前台通知。Android UI 定期读取真实服务状态，通知栏断开后会同步界面。
+
+Vite 的 `envDir` 是 `scripts/`。本地默认订阅写入 `scripts/.env.local` 的 `VITE_SUBSCRIPTION_URL`；该文件由 `*.local` 忽略。链接会嵌入生成的前端资源，适用于本地验证包；不要将带个人订阅的 APK 对外分发。未配置本地覆盖时仍可在订阅页面输入链接。
+
+
+本次 Android 模拟器验证范围：订阅自动拉取/测速、首次 VPN 授权、Chrome 在 CloudTun 退到后台后访问 `https://www.google.com.hk/`、切换订阅节点、切换分流和停止清理。未实连云主机。Google 香港最终复测返回 HTTP 200，Chrome 导航协议为 HTTP/3，已验证经 VPN 的 UDP/443；TCP/HTTPS 也通过实际页面访问验证。STUN/19302 探测未收到成功响应（同节点在宿主机直接测试也失败），不将该项算作通过。
+
+覆盖安装后的首次启动曾出现一次原生 `FORTIFY: pthread_mutex_lock called on a destroyed mutex` 退出；系统没有提供可定位的崩溃堆栈。重新启动以及强停后的冷启动复测均通过，原因尚未定位，不能据此保证真机稳定性。
+
+
+## Android 云主机实测（2026-11-20）
+
+从本机 Downloads 的 `secretkey.csv` 读取 SecretId/SecretKey，写入已忽略且权限为 0600 的 `scripts/.env.local`，使用现有 `VITE_SECRET_ID` / `VITE_SECRET_KEY` 默认配置入口。不在文档中记录密钥；本地验证 APK 会包含环境默认值。
+
+真实 Android UI 流程完成：使用既有 VPC/子网/安全组创建硅谷 `SA5.MEDIUM2` 临时竞价实例，cloud-init 下载 `server-v0.2.0` 并启动 WSS v3，安卓自动建立 VPN；CloudTun 退到后台后，Chrome 访问 Google 香港返回 HTTP 200 / HTTP/3，IP 查询结果与测试机公网 IP 一致。断开后运行状态关闭、流量快照为空、TUN 文件描述符释放、系统 VPN 不再活动。随后通过 Android UI 销毁测试机，并用腾讯云 API 确认实例列表为空；既有网络资源保留。
+
+实测修复：云主机校验只检查云资源相关必需字段，订阅候选列表的合法 null 值不再阻止购买；Android 与桌面共用主机就绪后的自动连接流程。增加空候选配置、非法带宽及 Android 购买/已有主机重连回归验证，前端共 27 项测试通过。
+
+后续已按用户确认将 Android 自动切换和连接通知迁入 VPN Service 管理的独立运行时，见下节。桌面端保留原有前端自动切换流程。
+
+
+## Android Service 自动切换、通知与流量
+
+启用自动切换后，`CloudTunVpnService` 持有的 `libcloudtunvpn.so` / Tokio runtime 负责检测，不依赖 WebView 定时器。每 15 秒对当前订阅节点作最长 5 秒的实际 VMess HTTPS 探测；连续三次失败后，按候选节点的 TCP 延迟排序（仍要求低于 800 ms），再逐一验证 Google 204 的 TLS/HTTP 响应，只有验证成功才切换。订阅候选完全不可用时保留当前连接配置、每轮继续检测，异常通知只在进入故障状态时发一次，恢复时另发一次。云主机保持原生心跳，不自动跨来源切到订阅。
+
+代理内核的动态出口在切换时取消旧出口会话，新连接使用新节点；不重建 TUN，虚拟 DNS 映射、会话编号和累计流量保留。候选策略更新带版本校验，关闭自动切换或替换策略后丢弃旧探测结果；相同策略的重复同步不会重置失败计数。手动停止/撤销 VPN 会取消整个原生 runtime 并释放 TUN，不因候选网络恢复而重新连接。
+
+`android-failover.json` 记录启用状态及候选 ID，`vpn-failover.json` 通过私有文件向独立库同步完整候选配置；文件均为 0600。Service 经 JNI 读取公开状态和流量快照，界面恢复后从 Service 同步实际节点，并更新本地 HTTP 出口。已运行的 Android 会话恢复 WebView 时不自动刷新订阅并重启 VPN。
+
+运行通知显示节点名称或云主机 IP、上传下载合计速率和本会话累计有效载荷字节（不含外层加密/协议开销）。每两秒采样，按真实 elapsedMs 差值计算速率，内容未变化时不刷新通知；会话更换、采样回退时速率重置为零。自动切换不清空累计。运行通知使用静默更新，切换成功、候选不可用及恢复使用独立事件通道；手动断开移除运行通知。通知权限被关闭时不影响转发。
+
+仅在订阅自动切换开启时持有 `PARTIAL_WAKE_LOCK`，支持普通熄屏时继续检测，关闭自动切换、停止服务时释放。流量通知本身不额外申请唤醒锁。持锁可能增加待机耗电；前台服务/唤醒锁不等于绕过所有系统 Doze 或厂商省电策略，长时间深度省电仍需真机验证。
+
+回归验证入口：
+
+```bash
+pnpm test
+cargo test --manifest-path src-proxy/Cargo.toml --lib
+cargo test --manifest-path src-vpn/Cargo.toml --lib
+# 安装 debug APK、确保缓存订阅含至少两个可用 VMess 节点后运行：
+node scripts/test-android-failover.mjs
+```
+
+集成脚本使用本机可控 TCP 中继及 `adb reverse` 接入真实节点，不需要 root，也不添加生产故障开关。通过实际关闭中继连接模拟当前节点断联；冻结 WebView、将应用放到后台并关闭屏幕后，验证 Service 切换及系统通知，再验证 Google 香港 HTTP 200、流量累计保留、全部候选异常、网络恢复、手动停止与 TUN 释放。额外重载 WebView 并校验会话编号不变。结束时恢复原订阅、设置和自动切换策略，移除本次端口转发，不创建云资源。
+
+通知速率计算的 JVM 测试位于 `app/src/test/.../VpnTrafficDisplayTest.kt`，覆盖非固定采样间隔、空闲、会话重置、重复及回退采样。
+
+Android 真机修复：删除历史 `mobileProxyMode/mobileProxyApps` 设置、启动参数、应用枚举插件和 QUERY_ALL_PACKAGES 权限；旧设置加载时丢弃这两个字段。VPN 始终接管所有应用并排除自身，避免历史 Chrome 白名单导致 Edge/YouTube 完全绕过 VPN。vivo release 实测修正接管范围后 Edge 能打开 YouTube 首页，通知累计流量正常增长。

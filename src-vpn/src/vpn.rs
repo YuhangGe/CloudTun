@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cloudtun_common::proxy::{proxy_to_cloudtun_server, proxy_udp_to_cloudtun_server};
+use cloudtun_proxy::ProxyConnector;
 use ipstack::{IpStackStream, IpStackUdpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::{
@@ -27,7 +27,7 @@ async fn handle_virtual_dns_session(
     let len = match udp.read(&mut buf).await {
       Err(e) => {
         // indicate UDP read fails not an error.
-        log::error!("Virtual DNS session error: {e}");
+        log::debug!("Virtual DNS session closed: {e}");
         break;
       }
       Ok(len) => len,
@@ -61,6 +61,26 @@ pub async fn start_run_vpn<D, F: Fn(&str, &str) + Send + Sync + 'static>(
 where
   D: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
+  start_run_vpn_with_connector(
+    device,
+    mtu,
+    ProxyConnector::cloud(server_addr),
+    shutdown_token,
+    log_fn,
+  )
+  .await
+}
+
+pub async fn start_run_vpn_with_connector<D, F: Fn(&str, &str) + Send + Sync + 'static>(
+  device: D,
+  mtu: u16,
+  connector: ProxyConnector,
+  shutdown_token: CancellationToken,
+  log_fn: F,
+) -> anyhow::Result<()>
+where
+  D: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
   anyhow::ensure!(mtu >= 576, "invalid VPN MTU");
   let log_fn = Arc::new(log_fn);
   let virtual_dns = Arc::new(Mutex::new(VirtualDns::new(
@@ -74,12 +94,11 @@ where
 
   let mut ip_stack = ipstack::IpStack::new(ipstack_config, device);
 
-  let server_addr = Arc::new(server_addr);
-
   let mut sessions = tokio::task::JoinSet::new();
   loop {
     let log_fn = log_fn.clone();
-    let server_addr = server_addr.clone();
+    let connector = connector.clone();
+    let cancel = shutdown_token.clone();
     let virtual_dns = virtual_dns.clone();
     let ip_stack_stream = tokio::select! {
         _ = shutdown_token.cancelled() => {
@@ -130,14 +149,15 @@ where
           continue;
         }
         sessions.spawn(async move {
-          if let Err(err) = proxy_to_cloudtun_server(
-            tcp,
-            server_addr,
-            domain_name.unwrap_or(target_ip.to_string()),
-            target_port,
-            log_fn,
-          )
-          .await
+          if let Err(err) = connector
+            .relay_tcp(
+              tcp,
+              domain_name.unwrap_or(target_ip.to_string()),
+              target_port,
+              cancel,
+              log_fn,
+            )
+            .await
           {
             eprintln!("failed proxy: \"{err}\"");
           }
@@ -159,17 +179,18 @@ where
           }
           let max_response = mtu.saturating_sub(if target_ip.is_ipv4() { 28 } else { 48 }) as usize;
           sessions.spawn(async move {
-            if let Err(e) = proxy_udp_to_cloudtun_server(
-              udp,
-              server_addr,
-              domain.unwrap_or_else(|| target_ip.to_string()),
-              target_port,
-              log_fn,
-              max_response,
-            )
-            .await
+            if let Err(e) = connector
+              .relay_udp(
+                udp,
+                domain.unwrap_or_else(|| target_ip.to_string()),
+                target_port,
+                cancel,
+                log_fn,
+                max_response,
+              )
+              .await
             {
-              log::debug!("UDP tunnel closed: {e}");
+              log::warn!("UDP tunnel closed: {e}");
             }
           });
         }

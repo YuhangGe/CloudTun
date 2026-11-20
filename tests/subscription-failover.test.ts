@@ -31,7 +31,7 @@ mock.module('@tauri-apps/api/event', () => ({ listen: async () => {} }));
 mock.module('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => ({ onCloseRequested: async () => {} }),
 }));
-mock.module('@/service/util', () => ({ IS_MOBILE: false, IS_ANDROID: false }));
+mock.module('@/service/util', () => ({ IS_MOBILE: false, IS_IOS: false, IS_ANDROID: false }));
 mock.module('@/service/notify', () => ({
   showNotifyWindow: async ({ notifyType }: { notifyType: string }) => {
     notices.push(notifyType);

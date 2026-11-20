@@ -208,7 +208,7 @@ impl GeoData {
     cancel: CancellationToken,
     force: bool,
   ) -> anyhow::Result<()> {
-    let client = reqwest::Client::builder()
+    let client = cloudtun_proxy::http_client_builder()?
       .no_proxy()
       .proxy(reqwest::Proxy::all(format!("http://127.0.0.1:{port}"))?)
       .user_agent("CloudTun-geodata")
@@ -492,11 +492,9 @@ mod tests {
     server.await.unwrap();
     assert_eq!(data, b"abcdef");
     assert_eq!(samples.first(), Some(&(0, Some(6), false)));
-    assert!(
-      samples
-        .iter()
-        .any(|&(received, _, complete)| received > 0 && received < 6 && !complete)
-    );
+    assert!(samples
+      .iter()
+      .any(|&(received, _, complete)| received > 0 && received < 6 && !complete));
     assert_eq!(samples.last(), Some(&(6, Some(6), true)));
   }
   #[test]
@@ -542,14 +540,12 @@ mod tests {
     )
     .unwrap();
     let cached = GeoData::new(directory.clone());
-    assert!(
-      cached
-        .rules
-        .snapshot()
-        .1
-        .unwrap()
-        .contains_ip("114.114.114.114".parse().unwrap())
-    );
+    assert!(cached
+      .rules
+      .snapshot()
+      .1
+      .unwrap()
+      .contains_ip("114.114.114.114".parse().unwrap()));
     std::fs::write(directory.join(manifest.folder()).join(FILES[0]), b"invalid").unwrap();
     assert!(GeoData::new(directory.clone()).rules.snapshot().1.is_none());
     std::fs::remove_dir_all(directory).unwrap();

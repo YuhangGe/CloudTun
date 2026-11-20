@@ -8,7 +8,7 @@ import { ProxyTraffic } from '@/components/ProxyTraffic';
 import type { StartupView } from './store/startup';
 
 import { desktopInvoke } from './service/desktop';
-import { copyToClipboard, IS_MOBILE } from './service/util';
+import { copyToClipboard, IS_MOBILE, IS_IOS, IS_ANDROID } from './service/util';
 import { desktop } from './store/desktop';
 import { LogView } from './views/logview';
 import { NodesView } from './views/nodes';
@@ -88,7 +88,7 @@ export function Layout(props: { initialView: StartupView }) {
           />
           <span>{desktop.status.running ? '代理运行中' : '代理未连接'}</span>
         </div>
-        {!IS_MOBILE && desktop.status.running && <ProxyTraffic />}
+        {!IS_IOS && desktop.status.running && <ProxyTraffic />}
         {!IS_MOBILE && (
           <>
             <div className="hidden space-y-1 px-3.5 pt-1 pb-4 font-mono text-[10px] sm:block">
@@ -130,8 +130,13 @@ export function Layout(props: { initialView: StartupView }) {
         )}
       </aside>
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex min-h-13 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 py-3 text-[13px] font-medium sm:min-h-17 sm:px-8">
-          <span>{state.title}</span>
+        <header
+          className={cx(
+            'flex min-h-13 shrink-0 items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 py-3 text-[13px] font-medium sm:min-h-17 sm:px-8',
+            IS_ANDROID ? 'flex-nowrap' : 'flex-wrap',
+          )}
+        >
+          <span className="shrink-0 whitespace-nowrap">{state.title}</span>
           <ProxyOptions />
         </header>
         <div className="min-h-0 flex-1 overflow-auto px-4 pt-5 pb-6 sm:px-8 sm:pt-7 sm:pb-9">

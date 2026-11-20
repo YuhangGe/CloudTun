@@ -74,22 +74,18 @@ mod tests {
     assert_eq!(config.port, 7893);
     assert_eq!(config.listen_host, "0.0.0.0");
     assert!(config.validate().is_ok());
-    assert!(
-      ProxyConfig {
-        port: 0,
-        ..config.clone()
-      }
-      .validate()
-      .is_err()
-    );
-    assert!(
-      ProxyConfig {
-        listen_host: "example.com".into(),
-        ..config
-      }
-      .validate()
-      .is_err()
-    );
+    assert!(ProxyConfig {
+      port: 0,
+      ..config.clone()
+    }
+    .validate()
+    .is_err());
+    assert!(ProxyConfig {
+      listen_host: "example.com".into(),
+      ..config
+    }
+    .validate()
+    .is_err());
   }
   #[test]
   fn local_only_does_not_advertise_lan_addresses() {

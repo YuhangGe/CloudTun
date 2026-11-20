@@ -1,5 +1,5 @@
 use crate::{
-  outbound::Outbound,
+  outbound::{DynamicOutbound, Outbound},
   proxy::proxy_request,
   route::{MatchType, RouteMatcher},
   routing::{Routing, RoutingMode},
@@ -42,7 +42,7 @@ pub struct ProxyArgs {
 }
 pub struct PreparedProxy {
   traffic: TrafficCounter,
-  outbound: Outbound,
+  outbound: DynamicOutbound,
   routing: Routing,
   listener: TcpListener,
   control: ProxyListenerControl,
@@ -54,8 +54,15 @@ struct ListenerUpdate {
   reply: tokio::sync::oneshot::Sender<std::io::Result<()>>,
 }
 #[derive(Clone)]
-pub struct ProxyListenerControl(tokio::sync::mpsc::Sender<ListenerUpdate>, Routing);
+pub struct ProxyListenerControl(
+  tokio::sync::mpsc::Sender<ListenerUpdate>,
+  Routing,
+  DynamicOutbound,
+);
 impl ProxyListenerControl {
+  pub fn set_node(&self, node: SubscriptionNode) -> std::io::Result<()> {
+    self.2.set_node(node)
+  }
   pub fn set_routing_mode(&self, mode: RoutingMode) {
     self.1.set_mode(mode);
   }
@@ -112,7 +119,8 @@ async fn rebind_listener(
 impl PreparedProxy {
   fn prepared(outbound: Outbound, routing: Routing, listener: TcpListener) -> Self {
     let (send, updates) = tokio::sync::mpsc::channel(8);
-    let control = ProxyListenerControl(send, routing.clone());
+    let outbound = DynamicOutbound::new(outbound);
+    let control = ProxyListenerControl(send, routing.clone(), outbound.clone());
     Self {
       traffic: TrafficCounter::new(),
       outbound,
@@ -124,6 +132,13 @@ impl PreparedProxy {
   }
   pub fn listener_control(&self) -> ProxyListenerControl {
     self.control.clone()
+  }
+  pub fn connector(&self) -> crate::ProxyConnector {
+    crate::ProxyConnector::with_shared(
+      self.outbound.clone(),
+      self.routing.clone(),
+      self.traffic.clone(),
+    )
   }
   pub fn traffic_counter(&self) -> TrafficCounter {
     self.traffic.clone()
@@ -246,7 +261,7 @@ impl PreparedProxy {
           tasks.spawn(async move {
             let service_cancel = cancel.clone(); let service_log = log.clone();
             let service = hyper::service::service_fn(move |req: Request<Incoming>| {
-              proxy_request(req, outbound.clone(), routing.clone(), service_log.clone(), service_cancel.clone(), tracker.clone())
+              proxy_request(req, outbound.snapshot().0, routing.clone(), service_log.clone(), service_cancel.clone(), tracker.clone())
             });
             tokio::select! {
               biased;

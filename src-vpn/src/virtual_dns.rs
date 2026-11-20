@@ -80,6 +80,10 @@ impl VirtualDns {
     if let Some(ip) = self.names.get(&name) {
       return Ok(*ip);
     }
+    // 198.18.0.2 is the Android VPN DNS listener, not an allocatable hostname.
+    if self.ipv4 && self.next == u32::from(std::net::Ipv4Addr::new(198, 18, 0, 2)) as u128 {
+      self.next += 1;
+    }
     anyhow::ensure!(self.next < self.last, "virtual DNS address pool exhausted");
     let ip = if self.ipv4 {
       IpAddr::V4((self.next as u32).into())
@@ -130,8 +134,20 @@ mod tests {
     assert_eq!(a.unwrap(), "198.18.0.1".parse::<IpAddr>().unwrap());
   }
   #[test]
+  fn dns_listener_address_is_never_assigned_to_a_hostname() {
+    let mut dns = VirtualDns::new("198.18.0.0/15".parse().unwrap());
+    let (_, _, first) = dns
+      .generate_query(&query("one.test.", RecordType::A))
+      .unwrap();
+    let (_, _, second) = dns
+      .generate_query(&query("two.test.", RecordType::A))
+      .unwrap();
+    assert_eq!(first.unwrap(), "198.18.0.1".parse::<IpAddr>().unwrap());
+    assert_eq!(second.unwrap(), "198.18.0.3".parse::<IpAddr>().unwrap());
+  }
+  #[test]
   fn exhausted_pool_returns_servfail_without_reusing_addresses() {
-    let mut dns = VirtualDns::new("198.18.0.0/30".parse().unwrap());
+    let mut dns = VirtualDns::new("198.18.1.0/30".parse().unwrap());
     let (_, _, first) = dns
       .generate_query(&query("one.test.", RecordType::A))
       .unwrap();

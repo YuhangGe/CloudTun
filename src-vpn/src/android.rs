@@ -1,167 +1,205 @@
 #![cfg(target_os = "android")]
 
+use cloudtun_proxy::{ProxyConnector, VpnConfig};
 use jni::{
   EnvUnowned,
   errors::ThrowRuntimeExAndDefault,
   objects::{JClass, JString},
-  sys::jint,
+  sys::{jint, jstring},
 };
+use std::{
+  os::fd::{AsRawFd, BorrowedFd, OwnedFd},
+  sync::Mutex,
+  time::Duration,
+};
+use tokio_util::sync::CancellationToken;
 
-use crate::{start_ping_interval, start_run_vpn};
-use std::os::fd::{BorrowedFd, IntoRawFd};
-
-struct RunningGuard;
-impl Drop for RunningGuard {
-  fn drop(&mut self) {
-    if let Ok(mut state) = TUN_QUIT.lock() {
-      *state = None;
-    }
-  }
+struct Session {
+  runtime: tokio::runtime::Runtime,
+  tun_fd: OwnedFd,
+  connector: ProxyConnector,
+  failover: std::sync::Arc<crate::failover::Failover>,
+  cancel: CancellationToken,
 }
+static SESSION: Mutex<Option<Session>> = Mutex::new(None);
 
-static TUN_QUIT: std::sync::Mutex<Option<tokio_util::sync::CancellationToken>> =
-  std::sync::Mutex::new(None);
-
-/// Start cloudtun
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_run(
+pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_start(
   mut env: EnvUnowned,
-  _clazz: JClass,
-  tun_fd: jint,
+  _: JClass,
+  fd: jint,
   mtu: jint,
-  server_ip: JString,
-  cvm_id: JString,
-  access_token: JString,
-  trust_dir: JString,
+  config: JString,
 ) -> jint {
   android_logger::init_once(
     android_logger::Config::default()
-      .with_tag("cloudtun")
-      .with_max_level(log::LevelFilter::Trace), // .with_filter(filter),
+      .with_tag("cloudtun-vpn")
+      .with_max_level(log::LevelFilter::Info),
   );
-
-  let Ok(server_ip) = get_java_string(&mut env, &server_ip) else {
-    log::error!("failed get jstring");
-    return -1;
-  };
-  // let Ok(token) = get_java_string(&mut env, &token) else {
-  //   log::error!("failed get jstring");
-  //   return -1;
-  // };
-  let Ok(cvm_id) = get_java_string(&mut env, &cvm_id) else {
-    log::error!("failed get jstring");
-    return -1;
-  };
-
-  if cvm_id.is_empty() || server_ip.is_empty() || tun_fd < 0 || !(576..=65535).contains(&mtu) {
-    return -1;
-  }
-  let mtu = mtu as u16;
-  // Kotlin retains ownership of its ParcelFileDescriptor. Duplicate it before
-  // starting asynchronous work so either side can close its own descriptor safely.
-  let Ok(owned_fd) = (unsafe { BorrowedFd::borrow_raw(tun_fd) }).try_clone_to_owned() else {
-    return -1;
-  };
-  let Ok(access_token) = get_java_string(&mut env, &access_token) else {
-    return -1;
-  };
-  let Ok(trust_dir) = get_java_string(&mut env, &trust_dir) else {
-    return -1;
-  };
-  let Ok(server) = cloudtun_common::tls::CloudEndpoint::new(
-    server_ip.clone(),
-    24816,
-    cvm_id.clone(),
-    access_token,
-    trust_dir.into(),
-  ) else {
-    return -1;
-  };
-
-  let shutdown_token = tokio_util::sync::CancellationToken::new();
-  if let Ok(mut lock) = TUN_QUIT.lock() {
-    if lock.is_some() {
-      log::error!("cloudtun_vpn already started");
-      return -1;
-    }
-    *lock = Some(shutdown_token.clone());
-  } else {
-    log::error!("failed to lock cloudtun_vpn quit token");
-    return -2;
-  }
-
-  let _running_guard = RunningGuard;
-  let Ok(rt) = tokio::runtime::Runtime::new() else {
-    log::error!("failed to create tokio runtime with");
-    return -3;
-  };
-
-  log::info!(
-    "XXX will start tokio vpn with ip {}, token: {}",
-    server_ip,
-    cvm_id
-  );
-  let res = rt.block_on(async move {
-    let ping_server = server.clone();
-    let ping_cancel_token = shutdown_token.clone();
-    let h2 = tokio::spawn(async move {
-      start_ping_interval(&ping_server, &ping_cancel_token).await;
-      0
-    });
-    let h1 = tokio::spawn(async move {
+  let result = (|| -> anyhow::Result<()> {
+    anyhow::ensure!(
+      fd >= 0 && (576..=65535).contains(&mtu),
+      "invalid TUN descriptor or MTU"
+    );
+    let config: VpnConfig =
+      serde_json::from_slice(&std::fs::read(java_string(&mut env, &config))?)?;
+    let policy = config.failover.clone();
+    let connector = config.connector()?;
+    let failover = crate::failover::Failover::new(connector.clone(), policy);
+    let mut state = SESSION
+      .lock()
+      .map_err(|_| anyhow::anyhow!("VPN lock poisoned"))?;
+    anyhow::ensure!(state.is_none(), "VPN is already running");
+    let owned = (unsafe { BorrowedFd::borrow_raw(fd) }).try_clone_to_owned()?;
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+      .worker_threads(2)
+      .enable_all()
+      .build()?;
+    let device = {
+      let _enter = runtime.enter();
       let mut config = tun::Configuration::default();
-      config.raw_fd(owned_fd.into_raw_fd());
-      // println!("XXX mtu {mtu} {tun_fd}");
-      let shutdown_token2 = shutdown_token.clone();
-      let Ok(device) = tun::create_as_async(&config) else {
-        log::error!("failed create tun device");
-        shutdown_token2.cancel();
-        return -1;
-      };
-      let log_fn = |log_type: &str, log_message: &str| {
-        log::info!("[{log_type}] {log_message}");
-      };
-
-      match start_run_vpn(device, mtu, server, shutdown_token, log_fn).await {
-        Ok(_) => 0,
-        Err(e) => {
-          log::error!("failed start_run_vpn: {e}");
-          shutdown_token2.cancel();
-          -1
-        }
-      }
-    });
-    tokio::select! {
-      a = h1 => match a {
-        Err(_) => -1,
-        Ok(n) => n
-      },
-      b = h2 => match b {
-        Err(_) => -1,
-        Ok(n) => n,
-      }
+      // The session owns this duplicate explicitly, even if a spawned IP stack
+      // task retains the async device during shutdown.
+      config.raw_fd(owned.as_raw_fd()).close_fd_on_drop(false);
+      tun::create_as_async(&config)?
+    };
+    let cancel = CancellationToken::new();
+    if let Some(server) = connector.cloud_endpoint() {
+      let heartbeat_cancel = cancel.clone();
+      runtime.spawn(async move {
+        crate::start_ping_interval(&server, &heartbeat_cancel).await;
+      });
     }
-  });
-  res
+    runtime.spawn(failover.clone().run(cancel.clone()));
+    let task_cancel = cancel.clone();
+    let task_connector = connector.clone();
+    runtime.spawn(async move {
+      let result = crate::start_run_vpn_with_connector(
+        device,
+        mtu as u16,
+        task_connector,
+        task_cancel.clone(),
+        |kind, message| {
+          log::info!("[{kind}] {message}");
+        },
+      )
+      .await;
+      if let Err(error) = result {
+        log::error!("VPN stopped: {error}");
+      }
+      task_cancel.cancel();
+    });
+    *state = Some(Session {
+      runtime,
+      tun_fd: owned,
+      connector,
+      failover,
+      cancel,
+    });
+    Ok(())
+  })();
+  match result {
+    Ok(()) => 0,
+    Err(error) => {
+      log::error!("Cannot start VPN: {error}");
+      -1
+    }
+  }
 }
 
-/// Shutdown cloudtun
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_stop(
-  _env: EnvUnowned,
+pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_stop(_env: EnvUnowned, _: JClass) {
+  let session = SESSION.lock().ok().and_then(|mut state| state.take());
+  if let Some(session) = session {
+    session.cancel.cancel();
+    session.runtime.shutdown_timeout(Duration::from_secs(3));
+    drop(session.tun_fd);
+  }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_updateRouting(
+  mut env: EnvUnowned,
   _: JClass,
+  config: JString,
 ) -> jint {
-  if let Ok(lock) = TUN_QUIT.lock() {
-    if let Some(shutdown_token) = lock.as_ref() {
-      shutdown_token.cancel();
-      return 0;
-    }
+  let config = std::fs::read(java_string(&mut env, &config))
+    .ok()
+    .and_then(|bytes| serde_json::from_slice::<VpnConfig>(&bytes).ok());
+  let Some(config) = config else {
+    return -1;
+  };
+  if let Some(session) = SESSION
+    .lock()
+    .ok()
+    .as_deref()
+    .and_then(|state| state.as_ref())
+  {
+    session.connector.update_routing(config);
+    return 0;
   }
   -1
 }
 
-fn get_java_string(env: &mut EnvUnowned, input: &JString) -> anyhow::Result<String> {
-  let v = env.with_env(|_| -> Result<String, jni::errors::Error> { Ok(input.to_string()) });
-  let v = v.resolve::<ThrowRuntimeExAndDefault>();
-  Ok(v)
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_stats(
+  mut env: EnvUnowned,
+  _: JClass,
+) -> jstring {
+  let stats = SESSION.lock().ok().and_then(|state| {
+    state
+      .as_ref()
+      .filter(|session| !session.cancel.is_cancelled())
+      .map(|session| session.connector.traffic_snapshot())
+  });
+  let value = serde_json::to_string(&stats).unwrap_or_else(|_| "null".into());
+  env
+    .with_env(|env| env.new_string(value).map(|value| value.into_raw()))
+    .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_updateFailover(
+  mut env: EnvUnowned,
+  _: JClass,
+  config: JString,
+) -> jint {
+  let policy = std::fs::read(java_string(&mut env, &config))
+    .ok()
+    .and_then(|bytes| serde_json::from_slice::<cloudtun_proxy::FailoverConfig>(&bytes).ok());
+  let Some(policy) = policy else {
+    return -1;
+  };
+  if let Some(session) = SESSION
+    .lock()
+    .ok()
+    .as_deref()
+    .and_then(|state| state.as_ref())
+  {
+    session.failover.update(policy);
+    return 0;
+  }
+  -1
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_status(
+  mut env: EnvUnowned,
+  _: JClass,
+) -> jstring {
+  let status = SESSION.lock().ok().and_then(|state| {
+    state
+      .as_ref()
+      .filter(|session| !session.cancel.is_cancelled())
+      .map(|session| session.failover.snapshot())
+  });
+  let value = serde_json::to_string(&status).unwrap_or_else(|_| "null".into());
+  env
+    .with_env(|env| env.new_string(value).map(|value| value.into_raw()))
+    .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+fn java_string(env: &mut EnvUnowned, input: &JString) -> String {
+  env
+    .with_env(|_| -> Result<String, jni::errors::Error> { Ok(input.to_string()) })
+    .resolve::<ThrowRuntimeExAndDefault>()
 }

@@ -2,7 +2,7 @@ import { cx, onMount, vm, watch } from 'jinge';
 import { Button } from 'jinge-antd';
 
 import { SubscriptionShare } from '@/components/SubscriptionShare';
-import { IS_MOBILE } from '@/service/util';
+import { IS_IOS } from '@/service/util';
 import {
   desktop,
   updateSubscription,
@@ -73,9 +73,9 @@ export function NodesView() {
   watch(state, 'sortByLatency', derive);
   return (
     <div className="mx-auto max-w-[1100px]">
-      {IS_MOBILE && (
+      {IS_IOS && (
         <p className="mb-4 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs leading-relaxed text-secondary-text">
-          移动端订阅连接将在后续版本接入。
+          iOS 订阅连接将在后续版本接入。
         </p>
       )}
       <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-primary/15 bg-linear-to-br from-primary/5 to-cyan-400/5 p-4 sm:flex-nowrap sm:gap-4 sm:px-6 sm:py-5.5">
@@ -98,7 +98,7 @@ export function NodesView() {
                     : state.selectedLatency
                   : '选择一个节点，连接你的网络'}
             </p>
-            {state.selectedNodeId && !IS_MOBILE && (
+            {state.selectedNodeId && !IS_IOS && (
               <button
                 type="button"
                 aria-label="刷新当前节点延迟"
@@ -133,7 +133,7 @@ export function NodesView() {
           }
           loading={desktop.connecting}
           disabled={
-            IS_MOBILE ||
+            IS_IOS ||
             desktop.updating ||
             (!(desktop.status.running && desktop.status.source === 'subscription') &&
               !state.canConnect)
@@ -175,7 +175,7 @@ export function NodesView() {
             value={state.url}
             autoComplete="off"
             placeholder="粘贴你的订阅链接 https://…"
-            disabled={IS_MOBILE || desktop.updating}
+            disabled={IS_IOS || desktop.updating}
             on:input={(event) => {
               state.url = event.target.value;
             }}
@@ -187,7 +187,7 @@ export function NodesView() {
             }}
             loading={desktop.updating}
             disabled={
-              IS_MOBILE ||
+              IS_IOS ||
               !state.url.trim() ||
               desktop.connecting ||
               desktop.testing ||
@@ -222,7 +222,7 @@ export function NodesView() {
                 globalSettings.subscriptionAutoSwitch ? '关闭自动切换节点' : '开启自动切换节点'
               }
               aria-pressed={globalSettings.subscriptionAutoSwitch}
-              disabled={IS_MOBILE || !desktop.nodes.length || desktop.updating}
+              disabled={IS_IOS || !desktop.nodes.length || desktop.updating}
               className={cx(
                 'grid size-9 cursor-pointer place-items-center rounded-lg border bg-transparent text-lg disabled:opacity-40',
                 globalSettings.subscriptionAutoSwitch

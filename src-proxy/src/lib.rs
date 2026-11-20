@@ -13,7 +13,7 @@ mod routing;
 pub mod subscription;
 pub use routing::RoutingMode;
 
-pub use outbound::check_node;
+pub use outbound::{check_node, http_client_builder};
 
 mod tcp;
 
@@ -23,3 +23,6 @@ pub use handler::ProxyListenerControl;
 
 mod traffic;
 pub use traffic::{TrafficCounter, TrafficSnapshot};
+
+mod connector;
+pub use connector::{FailoverConfig, ProxyConnector, VpnConfig};

@@ -5,15 +5,15 @@ use crate::{
 };
 use anyhow_tauri::{IntoTAResult, TAResult};
 use cloudtun_proxy::{
+  subscription::{fetch_subscription, ping_node, ping_nodes, NodeLatency, SubscriptionNode},
   PreparedProxy, ProxyArgs, RoutingMode, TrafficCounter, TrafficSnapshot,
-  subscription::{NodeLatency, SubscriptionNode, fetch_subscription, ping_node, ping_nodes},
 };
 use serde::{Deserialize, Serialize};
 use std::{
   path::{Path, PathBuf},
   sync::{
-    Arc,
     atomic::{AtomicU64, Ordering},
+    Arc,
   },
   time::{SystemTime, UNIX_EPOCH},
 };
@@ -21,7 +21,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
-#[derive(Clone, Serialize, Default)]
+#[derive(Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ProxyStatus {
   pub running: bool,
@@ -37,6 +37,8 @@ struct RunningProxy {
   cancel: CancellationToken,
   task: tokio::task::JoinHandle<()>,
   listener: cloudtun_proxy::ProxyListenerControl,
+  #[cfg(target_os = "android")]
+  connector: cloudtun_proxy::ProxyConnector,
 }
 #[derive(Default)]
 struct RuntimeState {
@@ -88,10 +90,19 @@ impl From<&StoredSubscription> for SubscriptionView {
   }
 }
 
+#[cfg(target_os = "android")]
+#[derive(Clone, Default, Serialize, Deserialize)]
+struct StoredFailover {
+  enabled: bool,
+  node_ids: Vec<String>,
+}
+
 pub struct ProxyLoop {
   transition: Mutex<()>,
   inner: Arc<Mutex<RuntimeState>>,
   subscription: Mutex<StoredSubscription>,
+  #[cfg(target_os = "android")]
+  failover: Mutex<StoredFailover>,
   revision: AtomicU64,
   config: Mutex<ProxyConfig>,
   directory: PathBuf,
@@ -123,11 +134,35 @@ impl ProxyLoop {
       transition: Mutex::new(()),
       inner: Arc::new(Mutex::new(state)),
       subscription: Mutex::new(subscription),
+      #[cfg(target_os = "android")]
+      failover: Mutex::new(
+        std::fs::read(directory.join("android-failover.json"))
+          .ok()
+          .and_then(|data| serde_json::from_slice(&data).ok())
+          .unwrap_or_default(),
+      ),
       revision: AtomicU64::new(0),
       config: Mutex::new(config),
       geodata: Arc::new(crate::geodata::GeoData::new(directory.join("china-rules"))),
       directory,
     })
+  }
+  #[cfg(target_os = "android")]
+  async fn failover_config(&self) -> cloudtun_proxy::FailoverConfig {
+    let policy = self.failover.lock().await.clone();
+    let nodes = self
+      .subscription
+      .lock()
+      .await
+      .nodes
+      .iter()
+      .filter(|node| policy.node_ids.contains(&node.id) && node.unsupported_reason.is_none())
+      .cloned()
+      .collect();
+    cloudtun_proxy::FailoverConfig {
+      enabled: policy.enabled,
+      candidates: nodes,
+    }
   }
   pub fn log_geo_status<R: Runtime>(&self, handle: &AppHandle<R>) {
     self.geodata.log_initial(handle);
@@ -169,9 +204,29 @@ impl ProxyLoop {
     name: String,
     mode: RoutingMode,
   ) -> anyhow::Result<()> {
+    #[cfg(target_os = "android")]
+    let connector = proxy.connector();
     let listener = proxy.listener_control();
     let traffic = proxy.traffic_counter();
     let cancel = CancellationToken::new();
+    #[cfg(target_os = "android")]
+    {
+      let config_path = self.directory.join("vpn-config.json");
+      let mut vpn_config = connector.config();
+      vpn_config.failover = self.failover_config().await;
+      save_private(&config_path, &serde_json::to_vec(&vpn_config)?)?;
+      let config = config_path.to_string_lossy().into_owned();
+      let app = h.clone();
+      let started = tokio::task::spawn_blocking(move || {
+        app
+          .state::<crate::android::Vpn<R>>()
+          .start_vpn(app.clone(), config)
+      })
+      .await?;
+      if !started.map_err(|error| anyhow::anyhow!(error.to_string()))? {
+        anyhow::bail!("VPN 未启动，请允许系统 VPN 授权后重试");
+      }
+    }
     let token = cancel.clone();
     let inner = self.inner.clone();
     let backup = self.backup();
@@ -186,6 +241,17 @@ impl ProxyLoop {
         .await
         .err()
         .map(|e| e.to_string());
+      #[cfg(target_os = "android")]
+      {
+        // Both service-side revocation and a stopped listener tear down the whole session.
+        let stop_app = app.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+          stop_app
+            .state::<crate::android::Vpn<R>>()
+            .stop_vpn(stop_app.clone())
+        })
+        .await;
+      }
       if !token.is_cancelled() {
         let error = error.unwrap_or_else(|| "代理监听已意外停止".into());
         {
@@ -207,6 +273,8 @@ impl ProxyLoop {
       cancel,
       task,
       listener,
+      #[cfg(target_os = "android")]
+      connector,
     });
     state.status = ProxyStatus {
       running: true,
@@ -222,11 +290,38 @@ impl ProxyLoop {
     let geodata = self.geodata.clone();
     let port = self.config.lock().await.port;
     tokio::spawn(async move {
-      geodata.check(h, port, update_cancel, false).await;
+      geodata.check(h.clone(), port, update_cancel, false).await;
+      #[cfg(target_os = "android")]
+      let _ = sync_vpn_routing(h).await;
     });
     Ok(())
   }
 }
+#[cfg(target_os = "android")]
+async fn sync_vpn_routing<R: Runtime>(handle: AppHandle<R>) -> anyhow::Result<()> {
+  let state = handle.state::<ProxyLoop>();
+  let config = state
+    .inner
+    .lock()
+    .await
+    .running
+    .as_ref()
+    .map(|running| serde_json::to_vec(&running.connector.config()))
+    .transpose()?;
+  if let Some(config) = config {
+    let path = state.directory.join("vpn-config.json");
+    save_private(&path, &config)?;
+    let config = path.to_string_lossy().into_owned();
+    tokio::task::spawn_blocking(move || {
+      handle
+        .state::<crate::android::Vpn<R>>()
+        .update_routing(config)
+    })
+    .await??;
+  }
+  Ok(())
+}
+
 pub(crate) fn save_private(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
   use std::io::Write;
   let temporary = path.with_extension("tmp");
@@ -307,7 +402,46 @@ pub async fn tauri_stop_proxy_client<R: Runtime>(
   .into_ta_result()
 }
 #[tauri::command]
-pub async fn tauri_proxy_status(state: State<'_, ProxyLoop>) -> TAResult<ProxyStatus> {
+pub async fn tauri_proxy_status<R: Runtime>(
+  handle: AppHandle<R>,
+  state: State<'_, ProxyLoop>,
+) -> TAResult<ProxyStatus> {
+  #[cfg(not(target_os = "android"))]
+  let _ = &handle;
+  #[cfg(target_os = "android")]
+  {
+    let _transition = state.transition.lock().await;
+    if state.inner.lock().await.running.is_some() {
+      let native =
+        tokio::task::spawn_blocking(move || handle.state::<crate::android::Vpn<R>>().status())
+          .await
+          .into_ta_result()?
+          .into_ta_result()?;
+      if let Some(native) = native {
+        let node = if let Some(id) = &native.node_id {
+          state
+            .subscription
+            .lock()
+            .await
+            .nodes
+            .iter()
+            .find(|node| &node.id == id)
+            .cloned()
+        } else {
+          None
+        };
+        let mut inner = state.inner.lock().await;
+        if inner.status.node_id != native.node_id {
+          if let (Some(running), Some(node)) = (&inner.running, node) {
+            running.listener.set_node(node).into_ta_result()?;
+          }
+        }
+        inner.status = native;
+      } else {
+        state.stop().await.into_ta_result()?;
+      }
+    }
+  }
   Ok(state.inner.lock().await.status.clone())
 }
 #[cfg(target_os = "macos")]
@@ -402,7 +536,18 @@ pub fn update_tray_speed<R: Runtime>(tray: tauri::tray::TrayIcon<R>) {
   });
 }
 #[tauri::command]
-pub async fn tauri_proxy_traffic(state: State<'_, ProxyLoop>) -> TAResult<Option<TrafficSnapshot>> {
+pub async fn tauri_proxy_traffic<R: Runtime>(
+  handle: AppHandle<R>,
+  state: State<'_, ProxyLoop>,
+) -> TAResult<Option<TrafficSnapshot>> {
+  #[cfg(not(target_os = "android"))]
+  let _ = &handle;
+  #[cfg(target_os = "android")]
+  return tokio::task::spawn_blocking(move || handle.state::<crate::android::Vpn<R>>().traffic())
+    .await
+    .into_ta_result()?
+    .into_ta_result();
+  #[cfg(not(target_os = "android"))]
   Ok(state.traffic_snapshot().await)
 }
 #[tauri::command]
@@ -446,6 +591,40 @@ pub async fn tauri_update_subscription<R: Runtime>(
   .await
   .into_ta_result()
 }
+#[cfg(target_os = "android")]
+#[tauri::command]
+pub async fn tauri_android_set_failover<R: Runtime>(
+  handle: AppHandle<R>,
+  state: State<'_, ProxyLoop>,
+  enabled: bool,
+  node_ids: Vec<String>,
+) -> TAResult<()> {
+  async {
+    let _transition = state.transition.lock().await;
+    let policy = StoredFailover { enabled, node_ids };
+    save_private(
+      &state.directory.join("android-failover.json"),
+      &serde_json::to_vec(&policy)?,
+    )?;
+    *state.failover.lock().await = policy;
+    if state.inner.lock().await.running.is_some() {
+      let config = state.failover_config().await;
+      let path = state.directory.join("vpn-failover.json");
+      save_private(&path, &serde_json::to_vec(&config)?)?;
+      let config = path.to_string_lossy().into_owned();
+      tokio::task::spawn_blocking(move || {
+        handle
+          .state::<crate::android::Vpn<R>>()
+          .update_failover(config)
+      })
+      .await??;
+    }
+    Ok::<_, anyhow::Error>(())
+  }
+  .await
+  .into_ta_result()
+}
+
 #[tauri::command]
 pub async fn tauri_ping_subscription_nodes(
   state: State<'_, ProxyLoop>,
@@ -691,8 +870,10 @@ pub async fn tauri_update_geo<R: Runtime>(
     state
       .geodata
       .clone()
-      .check(handle, port, cancel, true)
+      .check(handle.clone(), port, cancel, true)
       .await;
+    #[cfg(target_os = "android")]
+    sync_vpn_routing(handle.clone()).await?;
     Ok::<_, anyhow::Error>(state.geodata.status())
   }
   .await
@@ -712,6 +893,9 @@ pub async fn tauri_set_routing_mode<R: Runtime>(
   }
   inner.status.mode = mode;
   let _ = handle.emit("proxy-status", &inner.status);
+  drop(inner);
+  #[cfg(target_os = "android")]
+  sync_vpn_routing(handle.clone()).await.into_ta_result()?;
   emit_log(
     &handle,
     "log::info",

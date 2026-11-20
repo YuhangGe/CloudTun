@@ -18,7 +18,7 @@ const desktop = {
   nodes: [] as { id: string; unsupportedReason: string | null; latencyMs: number | null }[],
   status: { running: false },
 };
-mock.module('@/service/util', () => ({ IS_MOBILE: false }));
+mock.module('@/service/util', () => ({ IS_MOBILE: false, IS_IOS: false, IS_ANDROID: false }));
 mock.module('@/views/proxy/helper', () => ({
   loadInstance: async () => {
     events.push('cloud-read');

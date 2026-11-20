@@ -5,7 +5,7 @@ import { message } from 'jinge-antd';
 import type { Settings } from '@/service/settings';
 
 import { desktopInvoke } from '@/service/desktop';
-import { IS_MOBILE } from '@/service/util';
+import { IS_IOS } from '@/service/util';
 import { appendLog } from '@/store/log';
 import { globalSettings } from '@/store/settings';
 
@@ -36,7 +36,7 @@ async function callTencentApi<T>({
     const body = data ? JSON.stringify(data) : '{}';
     const host = `${service}.tencentcloudapi.com`;
     let resData: { Response: { Error?: { Code: string; Message: string }; RequestId: string } };
-    if (!IS_MOBILE) {
+    if (!IS_IOS) {
       resData = await desktopInvoke('tauri_call_tencent_api', {
         secretId: globalSettings.secretId,
         secretKey: globalSettings.secretKey,

@@ -5,14 +5,15 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit && vite build -c scripts/vite.config.ts",
-    "build-apk": "tauri android build --apk --target aarch64",
+    "build-apk": "bun scripts/android.ts build --apk --target aarch64",
     "dev": "vite dev -c scripts/vite.config.ts",
     "lint": "tsc --noEmit && oxlint --type-aware && oxfmt --check",
     "lint-fix": "oxfmt && oxlint --type-aware --fix",
     "lint-staged": "lint-staged",
     "prepare": "husky",
     "preview": "vite preview -c scripts/vite.config.ts",
-    "test": "bun test --isolate"
+    "test": "bun test --isolate",
+    "dev-android": "bun scripts/android.ts dev"
   },
   "dependencies": {
     "@ant-design/colors": "^8.0.1",

@@ -17,7 +17,7 @@ pub trait ProxyStream: AsyncRead + AsyncWrite + Unpin + Send {}
 impl<T: AsyncRead + AsyncWrite + Unpin + Send> ProxyStream for T {}
 pub type AnyStream = Box<dyn ProxyStream>;
 
-fn tls_connector() -> io::Result<tokio_rustls::TlsConnector> {
+fn tls_config() -> io::Result<tokio_rustls::rustls::ClientConfig> {
   let roots =
     tokio_rustls::rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
   let provider = Arc::new(tokio_rustls::rustls::crypto::ring::default_provider());
@@ -26,7 +26,20 @@ fn tls_connector() -> io::Result<tokio_rustls::TlsConnector> {
     .map_err(io::Error::other)?
     .with_root_certificates(roots)
     .with_no_client_auth();
-  Ok(tokio_rustls::TlsConnector::from(Arc::new(config)))
+  Ok(config)
+}
+
+fn tls_connector() -> io::Result<tokio_rustls::TlsConnector> {
+  Ok(tokio_rustls::TlsConnector::from(Arc::new(tls_config()?)))
+}
+
+/// Android has no platform-verifier JVM component in this Rust-only HTTP path.
+/// Use the same Mozilla root store as VMess TLS, keeping certificate/name validation.
+pub fn http_client_builder() -> io::Result<reqwest::ClientBuilder> {
+  let builder = reqwest::Client::builder();
+  #[cfg(target_os = "android")]
+  let builder = builder.tls_backend_preconfigured(tls_config()?);
+  Ok(builder)
 }
 
 struct VmessStream(leaf::proxy::AnyStream);
@@ -82,6 +95,29 @@ pub(crate) enum Outbound {
   },
   Vmess(SubscriptionNode),
 }
+#[derive(Clone)]
+pub(crate) struct DynamicOutbound(Arc<std::sync::RwLock<(Outbound, CancellationToken)>>);
+impl DynamicOutbound {
+  pub fn new(outbound: Outbound) -> Self {
+    Self(Arc::new(std::sync::RwLock::new((
+      outbound,
+      CancellationToken::new(),
+    ))))
+  }
+  pub fn snapshot(&self) -> (Outbound, CancellationToken) {
+    self.0.read().unwrap_or_else(|e| e.into_inner()).clone()
+  }
+  pub fn set_node(&self, node: SubscriptionNode) -> io::Result<()> {
+    if node.unsupported_reason.is_some() || node.vmess.is_none() {
+      return Err(io::Error::other("unsupported node"));
+    }
+    let mut slot = self.0.write().unwrap_or_else(|e| e.into_inner());
+    slot.1.cancel();
+    *slot = (Outbound::Vmess(node), CancellationToken::new());
+    Ok(())
+  }
+}
+
 impl Outbound {
   pub async fn connect<F: Fn(&str, &str) + Send + Sync + 'static>(
     &self,
@@ -124,6 +160,24 @@ pub async fn connect_vmess(
     .vmess
     .as_ref()
     .ok_or_else(|| io::Error::other("missing VMess configuration"))?;
+  let stream = vmess_transport(node).await?;
+  let mut session = Session::default();
+  session.destination = SocksAddr::try_from((host, port))?;
+  let vmess = leaf::proxy::vmess::outbound::StreamHandler {
+    address: node.address.clone(),
+    port: node.port,
+    uuid: config.uuid.clone(),
+    security: config.cipher.clone(),
+  };
+  let stream = vmess.handle(&session, None, Some(stream)).await?;
+  Ok(Box::new(VmessStream(stream)))
+}
+
+async fn vmess_transport(node: &SubscriptionNode) -> io::Result<leaf::proxy::AnyStream> {
+  let config = node
+    .vmess
+    .as_ref()
+    .ok_or_else(|| io::Error::other("missing VMess configuration"))?;
   let tcp = crate::tcp::connect(&node.address, node.port).await?;
   tcp.set_nodelay(true)?;
   let mut stream: leaf::proxy::AnyStream = Box::new(tcp);
@@ -151,16 +205,30 @@ pub async fn connect_vmess(
     };
     stream = ws.handle(&transport, None, Some(stream)).await?;
   }
+  Ok(stream)
+}
+
+pub(crate) async fn vmess_datagram(
+  node: &SubscriptionNode,
+  host: &str,
+  port: u16,
+) -> io::Result<leaf::proxy::AnyOutboundDatagram> {
+  use leaf::proxy::{OutboundDatagramHandler, OutboundTransport};
+  let config = node
+    .vmess
+    .as_ref()
+    .ok_or_else(|| io::Error::other("missing VMess configuration"))?;
+  let stream = vmess_transport(node).await?;
   let mut session = Session::default();
   session.destination = SocksAddr::try_from((host, port))?;
-  let vmess = leaf::proxy::vmess::outbound::StreamHandler {
+  leaf::proxy::vmess::outbound::DatagramHandler {
     address: node.address.clone(),
     port: node.port,
     uuid: config.uuid.clone(),
     security: config.cipher.clone(),
-  };
-  let stream = vmess.handle(&session, None, Some(stream)).await?;
-  Ok(Box::new(VmessStream(stream)))
+  }
+  .handle(&session, Some(OutboundTransport::Stream(stream)))
+  .await
 }
 
 /// Validate VMess authentication and a real HTTP response, beyond TCP ping.

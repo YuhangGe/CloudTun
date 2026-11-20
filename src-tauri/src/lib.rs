@@ -1,34 +1,34 @@
-#[cfg(desktop)]
+#[cfg(not(target_os = "ios"))]
 mod geodata;
 mod logs;
 use logs::{tauri_append_log, tauri_get_logs};
 #[cfg(target_os = "android")]
 mod android;
+mod cloud_access;
 #[cfg(all(desktop, debug_assertions))]
 mod dev_bridge;
 #[cfg(desktop)]
 mod notify;
 #[cfg(desktop)]
 mod ping;
-#[cfg(desktop)]
+#[cfg(not(target_os = "ios"))]
 mod proxy;
-#[cfg(desktop)]
+#[cfg(not(target_os = "ios"))]
 mod proxy_config;
-#[cfg(desktop)]
+#[cfg(not(target_os = "ios"))]
 mod system_proxy;
-mod cloud_access;
 use cloud_access::*;
 mod tencent;
 mod util;
 
 use log::info;
-#[cfg(desktop)]
+#[cfg(not(target_os = "ios"))]
 use proxy::*;
 #[cfg(desktop)]
 use tauri::{
-  AppHandle, Manager, Runtime, WebviewWindowBuilder, Wry,
   menu::{Menu, MenuItem},
   tray::TrayIconBuilder,
+  AppHandle, Manager, Runtime, WebviewWindowBuilder, Wry,
 };
 
 #[cfg(desktop)]
@@ -83,8 +83,16 @@ pub fn run() {
       .unwrap();
   }
 
+  #[cfg(target_os = "android")]
+  android_logger::init_once(
+    android_logger::Config::default()
+      .with_tag("cloudtun")
+      .with_max_level(log::LevelFilter::Info),
+  );
+
   let mut builder = tauri::Builder::default()
     .plugin(tauri_plugin_os::init())
+    .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_store::Builder::new().build())
     .plugin(tauri_plugin_http::init());
 
@@ -97,7 +105,6 @@ pub fn run() {
         tauri_plugin_autostart::MacosLauncher::LaunchAgent,
         None,
       ))
-      .plugin(tauri_plugin_clipboard_manager::init())
       .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
         let win = app.get_webview_window("main").expect("no main window");
         win.show().unwrap();
@@ -141,7 +148,7 @@ pub fn run() {
   #[cfg(target_os = "android")]
   {
     use crate::android::{
-      tauri_android_get_vpn_connected, tauri_android_init_plugin, tauri_android_list_all_apps,
+      tauri_android_get_vpn_connected, tauri_android_init_plugin,
       tauri_android_request_notification_permission, tauri_android_start_vpn,
       tauri_android_stop_vpn,
     };
@@ -158,11 +165,26 @@ pub fn run() {
         tauri_remember_cloud_access,
         tauri_base64_covert,
         tauri_android_request_notification_permission,
+        tauri_call_tencent_api,
         tauri_calc_tencent_cloud_api_signature,
         tauri_android_start_vpn,
         tauri_android_stop_vpn,
-        tauri_android_list_all_apps,
         tauri_android_get_vpn_connected,
+        tauri_android_set_failover,
+        tauri_start_proxy_client,
+        tauri_stop_proxy_client,
+        tauri_proxy_status,
+        tauri_proxy_traffic,
+        tauri_geo_status,
+        tauri_update_geo,
+        tauri_get_proxy_config,
+        tauri_set_proxy_config,
+        tauri_get_subscription,
+        tauri_update_subscription,
+        tauri_ping_subscription_nodes,
+        tauri_check_subscription_node,
+        tauri_connect_subscription,
+        tauri_set_routing_mode,
       ]);
   }
 
@@ -191,14 +213,16 @@ pub fn run() {
       _app.manage(logs::Logs::new());
       _app.manage(CloudAccess::new(_app.path().app_data_dir()?)?);
       crate::util::emit_log(_app.handle(), "log::info", "CloudTun 后台已启动");
-      #[cfg(desktop)]
+      #[cfg(not(target_os = "ios"))]
       {
         use crate::proxy::ProxyLoop;
 
         let proxy_loop = ProxyLoop::new(_app.path().app_data_dir()?)?;
         proxy_loop.log_geo_status(_app.handle());
         _app.manage(proxy_loop);
-
+      }
+      #[cfg(desktop)]
+      {
         let quit_i = MenuItem::with_id(_app, "quit", "退出CloudTun", true, None::<&str>).unwrap();
         let menu = Menu::with_items(_app, &[&quit_i]).unwrap();
         let _tray = TrayIconBuilder::new()
