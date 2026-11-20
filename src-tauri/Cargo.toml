@@ -40,6 +40,7 @@ tauri-plugin-os = "2.4.0"
 tokio = { version = "1.54.1", features = ["macros"] }
 tokio-util = { version = "0.7.20" }
 env_logger = "0.11.11"
+regex = "1.12"
 
 [target.'cfg(not(target_os = "ios"))'.dependencies]
 cloudtun-proxy = { path = "../src-proxy" }

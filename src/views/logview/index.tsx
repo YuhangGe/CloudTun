@@ -1,5 +1,6 @@
 import { cx, onMount, onUnmount, ref, vm, watch } from 'jinge';
 
+import { logTone } from '@/service/log-level';
 import { type Log, logStore, refreshLogs } from '@/store/log';
 
 interface LogRow extends Log {
@@ -35,11 +36,7 @@ function row(log: Log): LogRow {
     isoTime: date.toISOString(),
     category: categories[category ?? 'info'] ?? category ?? '系统',
     content: prefix ? log.text.slice(prefix[0].length) : log.text,
-    tone: /error|失败|超时|失联/i.test(log.text)
-      ? 'error'
-      : /warn|警告/i.test(log.text)
-        ? 'warning'
-        : 'normal',
+    tone: logTone(log.text),
   };
 }
 export function LogView() {
@@ -165,7 +162,7 @@ export function LogView() {
                     log.tone === 'error'
                       ? 'bg-error/8 text-error'
                       : log.tone === 'warning'
-                        ? 'bg-amber-500/10 text-amber-700'
+                        ? 'bg-orange-500/10 text-orange-600'
                         : 'bg-primary/5 text-secondary-text',
                   )}
                 >
@@ -177,7 +174,7 @@ export function LogView() {
                     log.tone === 'error'
                       ? 'text-error'
                       : log.tone === 'warning'
-                        ? 'text-amber-700'
+                        ? 'text-orange-600'
                         : 'text-normal-text/80',
                   )}
                 >

@@ -5,6 +5,7 @@ import { IS_MOBILE, currentInWebMock } from '@/service/util';
 import { desktop, saveProxyConfig, refreshProxyConfig, type ProxyConfig } from '@/store/desktop';
 import { globalSettings } from '@/store/settings';
 
+import { DebugSettings } from './Debug';
 import { GeoSettings } from './Geo';
 
 export function GeneralSettings() {
@@ -123,6 +124,7 @@ export function GeneralSettings() {
         </p>
       )}
       {!IS_MOBILE && <GeoSettings />}
+      {!IS_MOBILE && <DebugSettings />}
       {!IS_MOBILE && (
         <div className="mt-7 border-t border-border pt-6">
           <h2>应用</h2>

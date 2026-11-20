@@ -119,6 +119,22 @@ impl DynamicOutbound {
 }
 
 impl Outbound {
+  pub(crate) fn diagnostic_label(&self) -> String {
+    match self {
+      Self::Cloud { server } => format!("cloud upstream={}:{}", server.host, server.port),
+      Self::Vmess(node) => format!(
+        "vmess upstream={}:{} transport={} tls={}",
+        node.address,
+        node.port,
+        node
+          .vmess
+          .as_ref()
+          .map(|v| v.network.as_str())
+          .unwrap_or("unknown"),
+        node.vmess.as_ref().is_some_and(|v| v.tls)
+      ),
+    }
+  }
   pub async fn connect<F: Fn(&str, &str) + Send + Sync + 'static>(
     &self,
     host: &str,
@@ -136,8 +152,8 @@ impl Outbound {
           tokio::select! {
             biased;
             _ = cancel.cancelled() => {},
-            result = cloudtun_common::proxy::proxy_to_cloudtun_server(transport, server, host, port, log.clone()) => {
-              if let Err(e) = result { log("proxy::error", &format!("Cloud tunnel closed: {e}")); }
+            result = cloudtun_common::proxy::proxy_to_cloudtun_server(transport, server, host.clone(), port, log.clone()) => {
+              if let Err(e) = result { log("proxy::error", &format!("stage=cloud.transport target={host}:{port} Cloud tunnel closed: {e:?}")); }
             }
           }
         });

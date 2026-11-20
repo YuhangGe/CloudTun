@@ -10,8 +10,11 @@ use axum::extract::Request;
 use hyper::{body::Incoming, server::conn::http1};
 use hyper_util::rt::TokioIo;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::{net::TcpListener, task::JoinSet};
 use tokio_util::sync::CancellationToken;
+
+static NEXT_CONNECTION: AtomicU64 = AtomicU64::new(1);
 
 // macOS can permit a specific IPv4 bind alongside an existing IPv6 wildcard
 // listener with SO_REUSEADDR. Detect it before taking over another proxy's traffic.
@@ -246,7 +249,7 @@ impl PreparedProxy {
           if fatal.is_some() { break; }
         },
         accepted = listener.as_ref().unwrap().accept() => {
-          let (stream, _) = match accepted {
+          let (stream, peer) = match accepted {
             Ok(value) => value,
             Err(error) => {
               log_fn("proxy::error", &format!("accept failed: {error}"));
@@ -257,19 +260,28 @@ impl PreparedProxy {
           let _ = stream.set_nodelay(true);
           let stream = MeteredStream(stream, traffic.clone());
           let tracker = tunnels.clone(); let cancel = connection_cancel.clone();
-          let outbound = outbound.clone(); let routing = routing.clone(); let log = log_fn.clone();
+          let outbound = outbound.clone(); let routing = routing.clone();
+          let parent_log = log_fn.clone();
+          let connection_id = NEXT_CONNECTION.fetch_add(1, Ordering::Relaxed);
+          let log = Arc::new(move |kind: &str, text: &str| parent_log(kind, &format!("[conn={connection_id} peer={peer}] {text}")));
           tasks.spawn(async move {
+            let started = std::time::Instant::now();
+            log("proxy::debug", "stage=client.accept");
             let service_cancel = cancel.clone(); let service_log = log.clone();
             let service = hyper::service::service_fn(move |req: Request<Incoming>| {
               proxy_request(req, outbound.snapshot().0, routing.clone(), service_log.clone(), service_cancel.clone(), tracker.clone())
             });
             tokio::select! {
               biased;
-              _ = cancel.cancelled() => {},
+              _ = cancel.cancelled() => { log("proxy::debug", "stage=client.cancel reason=proxy-stopped"); },
               result = http1::Builder::new().serve_connection(TokioIo::new(stream), service).with_upgrades() => {
-                if let Err(error) = result { log("proxy::error", &format!("HTTP connection closed: {error}")); }
+                if let Err(error) = result {
+                  let level = if error.is_incomplete_message() { "proxy::warn" } else { "proxy::error" };
+                  log(level, &format!("stage=client.http elapsed_ms={} HTTP connection closed: {error:?}", started.elapsed().as_millis()));
+                }
               }
             }
+            log("proxy::debug", &format!("stage=client.http.finished elapsed_ms={}", started.elapsed().as_millis()));
           });
         }
       }
@@ -318,6 +330,94 @@ mod tests {
       default_rule: MatchType::Direct,
       proxy_rules: None,
     }
+  }
+
+  #[tokio::test]
+  async fn connection_failure_logs_target_stage_and_correlation_ids() {
+    let target = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let unavailable = target.local_addr().unwrap();
+    drop(target);
+    let proxy = PreparedProxy::bind(args()).await.unwrap();
+    let addr = proxy.local_addr().unwrap();
+    let entries = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let captured = entries.clone();
+    let cancel = CancellationToken::new();
+    let token = cancel.clone();
+    let task = tokio::spawn(async move {
+      proxy
+        .run(token, move |_, text| {
+          captured.lock().unwrap().push(text.into())
+        })
+        .await
+        .unwrap();
+    });
+    let mut client = TcpStream::connect(addr).await.unwrap();
+    client.write_all(format!("CONNECT {unavailable} HTTP/1.1\r\nHost: {unavailable}\r\nConnection: close\r\nProxy-Authorization: Basic never-log-this\r\n\r\n").as_bytes()).await.unwrap();
+    let mut response = Vec::new();
+    timeout(Duration::from_secs(3), client.read_to_end(&mut response))
+      .await
+      .unwrap()
+      .unwrap();
+    assert!(response.starts_with(b"HTTP/1.1 502"));
+    cancel.cancel();
+    task.await.unwrap();
+    let entries = entries.lock().unwrap();
+    let error = entries
+      .iter()
+      .find(|line| line.contains("Unable to connect:"))
+      .unwrap();
+    assert!(error.contains("conn="));
+    assert!(error.contains("req="));
+    assert!(error.contains(&format!("target={unavailable}")));
+    assert!(error.contains("stage=outbound.connect"));
+    assert!(error.contains("ConnectionRefused"));
+    assert!(error.contains("outbound=direct"));
+    assert!(!error.contains("upstream="));
+    assert!(!entries.join("\n").contains("never-log-this"));
+  }
+
+  #[tokio::test]
+  async fn incomplete_client_request_warns_and_keeps_error_details() {
+    let proxy = PreparedProxy::bind(args()).await.unwrap();
+    let addr = proxy.local_addr().unwrap();
+    let entries = Arc::new(std::sync::Mutex::new(Vec::<(String, String)>::new()));
+    let captured = entries.clone();
+    let cancel = CancellationToken::new();
+    let token = cancel.clone();
+    let task = tokio::spawn(async move {
+      proxy
+        .run(token, move |level, text| {
+          captured.lock().unwrap().push((level.into(), text.into()))
+        })
+        .await
+        .unwrap();
+    });
+    let mut client = TcpStream::connect(addr).await.unwrap();
+    client
+      .write_all(b"CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n")
+      .await
+      .unwrap();
+    client.shutdown().await.unwrap();
+    let mut response = Vec::new();
+    timeout(Duration::from_secs(3), client.read_to_end(&mut response))
+      .await
+      .unwrap()
+      .unwrap();
+    cancel.cancel();
+    task.await.unwrap();
+    let entries = entries.lock().unwrap();
+    let (level, text) = entries
+      .iter()
+      .find(|(_, text)| text.contains("IncompleteMessage"))
+      .unwrap();
+    assert_eq!(level, "proxy::warn");
+    assert!(text.contains("conn="));
+    assert!(text.contains("stage=client.http"));
+    assert!(
+      !entries
+        .iter()
+        .any(|(_, text)| text.contains("stage=client.closed"))
+    );
   }
 
   #[tokio::test]

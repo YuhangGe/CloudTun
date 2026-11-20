@@ -848,6 +848,7 @@ dependencies = [
  "objc2-foundation",
  "oslog",
  "rand 0.9.4",
+ "regex 1.13.2",
  "reqwest 0.13.5",
  "serde",
  "serde_json",

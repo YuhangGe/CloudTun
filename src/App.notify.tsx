@@ -18,18 +18,26 @@ function App() {
 
   onMount(() => {
     let lisFn: UnlistenFn | undefined = undefined;
-    void listen<Notify>('notify-state-changed', (evt) => {
-      Object.assign(notify, evt.payload);
+    let disposed = false;
+    const scheduleClose = () => {
       clearTimeout(closeTm);
       if (notify.notifyType !== 'processing') {
         closeTm = window.setTimeout(() => {
           void invoke('tauri_close_notify_window');
         }, 5000);
       }
+    };
+    scheduleClose();
+    void listen<Notify>('notify-state-changed', (evt) => {
+      Object.assign(notify, evt.payload);
+      scheduleClose();
     }).then((fn) => {
-      lisFn = fn;
+      if (disposed) fn();
+      else lisFn = fn;
     });
     return () => {
+      disposed = true;
+      clearTimeout(closeTm);
       if (lisFn) lisFn();
     };
   });
@@ -40,7 +48,7 @@ function App() {
         <img src={imgLogo} className="size-4.5" />
         <span className="text-sm">CloudTun</span>
         <span className="flex-1"></span>
-        <span className="icon-[gravity-ui--broadcast-signal] text-base text-primary"></span>
+        <span className="text-base text-primary icon-[gravity-ui--broadcast-signal]"></span>
       </div>
       {notify.notifyType === 'processing' && (
         <p className="mt-4 flex items-center gap-3">

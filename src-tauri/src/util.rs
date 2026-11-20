@@ -4,6 +4,10 @@ use tauri::{AppHandle, Emitter, Runtime};
 use uuid::Uuid;
 
 pub fn emit_log<R: Runtime>(h: &AppHandle<R>, log_type: &str, log_message: &str) {
+  if log_type == "proxy::debug" {
+    crate::logs::record_debug(h, &format!("[{log_type}] {log_message}"));
+    return;
+  }
   println!("[{}] {}", log_type, log_message);
   crate::logs::record(h, &format!("[{log_type}] {log_message}"));
   let _ = h.emit(log_type, log_message);

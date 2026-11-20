@@ -1,7 +1,11 @@
+#[cfg(desktop)]
+mod debug_logs;
 #[cfg(not(target_os = "ios"))]
 mod geodata;
 mod logs;
 use logs::{tauri_append_log, tauri_get_logs};
+#[cfg(desktop)]
+use logs::{tauri_debug_log_status, tauri_export_debug_logs, tauri_set_debug_logging};
 #[cfg(target_os = "android")]
 mod android;
 mod cloud_access;
@@ -111,6 +115,9 @@ pub fn run() {
         let _ = win.set_focus();
       }))
       .invoke_handler(tauri::generate_handler![
+        tauri_debug_log_status,
+        tauri_set_debug_logging,
+        tauri_export_debug_logs,
         tauri_get_logs,
         tauri_append_log,
         tauri_generate_uuid,
@@ -210,6 +217,11 @@ pub fn run() {
   builder
     .setup(|_app| {
       use tauri::Manager;
+      #[cfg(desktop)]
+      _app.manage(logs::Logs::with_debug_directory(
+        _app.path().app_log_dir()?.join("debug"),
+      )?);
+      #[cfg(not(desktop))]
       _app.manage(logs::Logs::new());
       _app.manage(CloudAccess::new(_app.path().app_data_dir()?)?);
       crate::util::emit_log(_app.handle(), "log::info", "CloudTun 后台已启动");

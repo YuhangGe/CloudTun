@@ -94,6 +94,14 @@ async fn command<R: Runtime>(
       args["token"].as_str().unwrap_or_default().into(),
     )),
     "tauri_get_logs" => result(crate::logs::tauri_get_logs(app.state())),
+    "tauri_debug_log_status" => result(crate::logs::tauri_debug_log_status(app.state()).await),
+    "tauri_set_debug_logging" => result(
+      crate::logs::tauri_set_debug_logging(app.state(), args["enabled"].as_bool().unwrap_or(false))
+        .await,
+    ),
+    "tauri_export_debug_logs" => {
+      result(crate::logs::tauri_export_debug_logs(app.clone(), app.state()).await)
+    }
     "tauri_append_log" => result(crate::logs::tauri_append_log(
       app.clone(),
       app.state(),

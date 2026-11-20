@@ -34,6 +34,8 @@ struct Buffer {
 pub struct Logs {
   session_id: String,
   buffer: Mutex<Buffer>,
+  #[cfg(desktop)]
+  debug: Option<crate::debug_logs::DebugLogs>,
 }
 impl Logs {
   pub fn new() -> Self {
@@ -43,7 +45,26 @@ impl Logs {
         next_id: 1,
         entries: VecDeque::with_capacity(MAX_LOGS),
       }),
+      #[cfg(desktop)]
+      debug: None,
     }
+  }
+  #[cfg(desktop)]
+  pub fn with_debug_directory(directory: std::path::PathBuf) -> std::io::Result<Self> {
+    let mut logs = Self::new();
+    logs.debug = Some(crate::debug_logs::DebugLogs::new(
+      directory,
+      logs.session_id.clone(),
+    )?);
+    Ok(logs)
+  }
+  fn record_debug(&self, text: &str) {
+    #[cfg(desktop)]
+    if let Some(debug) = &self.debug {
+      debug.record(text);
+    }
+    #[cfg(not(desktop))]
+    let _ = text;
   }
   fn append(&self, text: &str) -> LogEvent {
     let mut end = text.len().min(MAX_TEXT_BYTES);
@@ -55,6 +76,7 @@ impl Logs {
     } else {
       text.to_owned()
     };
+    self.record_debug(&text);
     let mut buffer = self
       .buffer
       .lock()
@@ -87,6 +109,71 @@ impl Logs {
       logs: buffer.entries.iter().cloned().collect(),
     }
   }
+}
+pub fn record_debug<R: Runtime>(app: &AppHandle<R>, text: &str) {
+  if let Some(logs) = app.try_state::<Logs>() {
+    logs.record_debug(text);
+  }
+}
+#[cfg(desktop)]
+fn debug_writer(logs: &Logs) -> anyhow::Result<crate::debug_logs::DebugLogs> {
+  logs
+    .debug
+    .clone()
+    .ok_or_else(|| anyhow::anyhow!("调试日志服务未初始化"))
+}
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn tauri_debug_log_status(
+  logs: State<'_, Logs>,
+) -> TAResult<crate::debug_logs::DebugStatus> {
+  use anyhow_tauri::IntoTAResult;
+  async {
+    let debug = debug_writer(&logs)?;
+    Ok::<_, anyhow::Error>(tokio::task::spawn_blocking(move || debug.status()).await??)
+  }
+  .await
+  .into_ta_result()
+}
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn tauri_set_debug_logging(
+  logs: State<'_, Logs>,
+  enabled: bool,
+) -> TAResult<crate::debug_logs::DebugStatus> {
+  use anyhow_tauri::IntoTAResult;
+  async {
+    let debug = debug_writer(&logs)?;
+    if !enabled {
+      logs.record_debug("[diagnostic] debug logging disabled");
+    }
+    let status = tokio::task::spawn_blocking(move || debug.configure(enabled)).await??;
+    if enabled {
+      logs.record_debug("[diagnostic] debug logging enabled");
+    }
+    Ok::<_, anyhow::Error>(status)
+  }
+  .await
+  .into_ta_result()
+}
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn tauri_export_debug_logs<R: Runtime>(
+  app: AppHandle<R>,
+  logs: State<'_, Logs>,
+) -> TAResult<crate::debug_logs::DebugExport> {
+  use anyhow_tauri::IntoTAResult;
+  async {
+    let debug = debug_writer(&logs)?;
+    let destination = app.path().download_dir()?.join(format!(
+      "cloudtun-debug-{}-{}.jsonl",
+      chrono::Local::now().format("%Y%m%d-%H%M%S"),
+      uuid::Uuid::new_v4()
+    ));
+    Ok::<_, anyhow::Error>(tokio::task::spawn_blocking(move || debug.export(destination)).await??)
+  }
+  .await
+  .into_ta_result()
 }
 pub fn record<R: Runtime>(app: &AppHandle<R>, text: &str) {
   if let Some(logs) = app.try_state::<Logs>() {

@@ -15,6 +15,57 @@ use tokio::{
 
 static NEXT_SESSION: AtomicU64 = AtomicU64::new(1);
 
+#[derive(Clone, Default)]
+pub(crate) struct TransferStats(Arc<(AtomicU64, AtomicU64)>);
+impl std::fmt::Display for TransferStats {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "upload_bytes={} download_bytes={}",
+      self.0.0.load(Ordering::Relaxed),
+      self.0.1.load(Ordering::Relaxed)
+    )
+  }
+}
+pub(crate) struct DiagnosticStream<S>(pub S, pub TransferStats);
+impl<S: AsyncRead + Unpin> AsyncRead for DiagnosticStream<S> {
+  fn poll_read(
+    mut self: Pin<&mut Self>,
+    cx: &mut Context<'_>,
+    buf: &mut ReadBuf<'_>,
+  ) -> Poll<io::Result<()>> {
+    let before = buf.filled().len();
+    let result = Pin::new(&mut self.0).poll_read(cx, buf);
+    if let Poll::Ready(Ok(())) = result {
+      self
+        .1
+        .0
+        .1
+        .fetch_add((buf.filled().len() - before) as u64, Ordering::Relaxed);
+    }
+    result
+  }
+}
+impl<S: AsyncWrite + Unpin> AsyncWrite for DiagnosticStream<S> {
+  fn poll_write(
+    mut self: Pin<&mut Self>,
+    cx: &mut Context<'_>,
+    buf: &[u8],
+  ) -> Poll<io::Result<usize>> {
+    let result = Pin::new(&mut self.0).poll_write(cx, buf);
+    if let Poll::Ready(Ok(count)) = result {
+      self.1.0.0.fetch_add(count as u64, Ordering::Relaxed);
+    }
+    result
+  }
+  fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+    Pin::new(&mut self.0).poll_flush(cx)
+  }
+  fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+    Pin::new(&mut self.0).poll_shutdown(cx)
+  }
+}
+
 #[derive(Clone)]
 pub struct TrafficCounter(Arc<TrafficSession>);
 
