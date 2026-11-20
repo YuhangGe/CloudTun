@@ -3,6 +3,7 @@ import { message } from 'jinge-antd';
 
 import imgLogo from '@/assets/logo-512.png';
 import { ProxyOptions } from '@/components/ProxyOptions';
+import { ProxyTraffic } from '@/components/ProxyTraffic';
 
 import type { StartupView } from './store/startup';
 
@@ -87,6 +88,7 @@ export function Layout(props: { initialView: StartupView }) {
           />
           <span>{desktop.status.running ? '代理运行中' : '代理未连接'}</span>
         </div>
+        {!IS_MOBILE && desktop.status.running && <ProxyTraffic />}
         {!IS_MOBILE && (
           <>
             <div className="hidden space-y-1 px-3.5 pt-1 pb-4 font-mono text-[10px] sm:block">

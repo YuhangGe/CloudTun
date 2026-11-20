@@ -20,3 +20,6 @@ mod tcp;
 pub mod china;
 
 pub use handler::ProxyListenerControl;
+
+mod traffic;
+pub use traffic::{TrafficCounter, TrafficSnapshot};

@@ -4,6 +4,7 @@ use crate::{
   route::{MatchType, RouteMatcher},
   routing::{Routing, RoutingMode},
   subscription::SubscriptionNode,
+  traffic::{MeteredStream, TrafficCounter},
 };
 use axum::extract::Request;
 use hyper::{body::Incoming, server::conn::http1};
@@ -40,6 +41,7 @@ pub struct ProxyArgs {
   pub proxy_rules: Option<String>,
 }
 pub struct PreparedProxy {
+  traffic: TrafficCounter,
   outbound: Outbound,
   routing: Routing,
   listener: TcpListener,
@@ -112,6 +114,7 @@ impl PreparedProxy {
     let (send, updates) = tokio::sync::mpsc::channel(8);
     let control = ProxyListenerControl(send, routing.clone());
     Self {
+      traffic: TrafficCounter::new(),
       outbound,
       routing,
       listener,
@@ -121,6 +124,9 @@ impl PreparedProxy {
   }
   pub fn listener_control(&self) -> ProxyListenerControl {
     self.control.clone()
+  }
+  pub fn traffic_counter(&self) -> TrafficCounter {
+    self.traffic.clone()
   }
 
   pub async fn bind(args: ProxyArgs) -> std::io::Result<Self> {
@@ -192,6 +198,7 @@ impl PreparedProxy {
     log_fn: F,
   ) -> Result<(), Box<dyn std::error::Error>> {
     let Self {
+      traffic,
       outbound,
       routing,
       listener,
@@ -233,6 +240,7 @@ impl PreparedProxy {
             }
           };
           let _ = stream.set_nodelay(true);
+          let stream = MeteredStream(stream, traffic.clone());
           let tracker = tunnels.clone(); let cancel = connection_cancel.clone();
           let outbound = outbound.clone(); let routing = routing.clone(); let log = log_fn.clone();
           tasks.spawn(async move {
@@ -328,6 +336,7 @@ mod tests {
       assert_eq!(socket.read(&mut byte).await.unwrap(), 0);
     });
     let proxy = PreparedProxy::bind(args()).await.unwrap();
+    let traffic = proxy.traffic_counter();
     let addr = proxy.local_addr().unwrap();
     let cancel = CancellationToken::new();
     let token = cancel.clone();
@@ -347,6 +356,7 @@ mod tests {
       "{}",
       String::from_utf8_lossy(&header)
     );
+    let before_frames = traffic.snapshot().total_bytes;
     client
       .write_all(&[
         0x81,
@@ -368,6 +378,7 @@ mod tests {
       .unwrap()
       .unwrap();
     assert_eq!(&frame, &[0x81, 4, b'p', b'o', b'n', b'g']);
+    assert_eq!(traffic.snapshot().total_bytes - before_frames, 16);
     cancel.cancel();
     let mut byte = [0];
     assert_eq!(
@@ -400,6 +411,9 @@ mod tests {
         .unwrap();
     });
     let proxy = PreparedProxy::bind(args()).await.unwrap();
+    let traffic = proxy.traffic_counter();
+    let initial = traffic.snapshot();
+    assert_eq!(initial.total_bytes, 0);
     let addr = proxy.local_addr().unwrap();
     let cancel = CancellationToken::new();
     let token = cancel.clone();
@@ -414,6 +428,8 @@ mod tests {
     })
     .await
     .unwrap();
+    let streaming = traffic.snapshot();
+    assert!(streaming.total_bytes > first.len() as u64);
     release.send(()).unwrap();
     let mut rest = Vec::new();
     timeout(Duration::from_secs(3), client.read_to_end(&mut rest))
@@ -421,9 +437,17 @@ mod tests {
       .unwrap()
       .unwrap();
     assert!(String::from_utf8_lossy(&rest).contains("data: second"));
+    assert!(traffic.snapshot().total_bytes > streaming.total_bytes);
     origin.await.unwrap();
     cancel.cancel();
     task.await.unwrap();
+    let next = PreparedProxy::bind(args())
+      .await
+      .unwrap()
+      .traffic_counter()
+      .snapshot();
+    assert_ne!(next.session_id, initial.session_id);
+    assert_eq!(next.total_bytes, 0);
   }
 
   #[tokio::test]
@@ -601,6 +625,7 @@ mod tests {
     let target = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let target_addr = target.local_addr().unwrap();
     let proxy = PreparedProxy::bind(args()).await.unwrap();
+    let traffic = proxy.traffic_counter();
     let addr = proxy.listener.local_addr().unwrap();
     let cancel = CancellationToken::new();
     let token = cancel.clone();
@@ -622,6 +647,7 @@ mod tests {
       );
     }
     assert!(header.starts_with(b"HTTP/1.1 200"));
+    let before_tunnel = traffic.snapshot().total_bytes;
     let (mut remote, _) = timeout(Duration::from_secs(2), target.accept())
       .await
       .unwrap()
@@ -632,6 +658,14 @@ mod tests {
       .await
       .unwrap()
       .unwrap();
+    remote.write_all(b"reply").await.unwrap();
+    let mut reply = [0; 5];
+    timeout(Duration::from_secs(2), client.read_exact(&mut reply))
+      .await
+      .unwrap()
+      .unwrap();
+    assert_eq!(&reply, b"reply");
+    assert_eq!(traffic.snapshot().total_bytes - before_tunnel, 14);
     cancel.cancel();
     timeout(Duration::from_secs(2), task)
       .await

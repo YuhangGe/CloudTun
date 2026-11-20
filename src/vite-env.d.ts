@@ -3,6 +3,7 @@
 interface ImportMetaEnv {
   VITE_SECRET_ID?: string;
   VITE_SECRET_KEY?: string;
+  VITE_SUBSCRIPTION_URL?: string;
   VITE_VMESS_ID?: string;
   VITE_SETTING_REGION?: string;
   VITE_SETTING_ZONE?: string;

@@ -1,8 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { vm } from 'jinge';
 
 import { desktopInvoke } from '@/service/desktop';
+import { showNotifyWindow } from '@/service/notify';
 import { IS_MOBILE, IS_ANDROID } from '@/service/util';
 
 import { pauseCloudProxy } from './instance';
@@ -46,6 +48,8 @@ interface ProxyConfigView {
   config: ProxyConfig;
   addresses: ProxyAddress[];
 }
+const defaultSubscriptionUrl = import.meta.env.VITE_SUBSCRIPTION_URL?.trim() ?? '';
+
 export const desktop = vm({
   config: { listenHost: '0.0.0.0', port: 7893 } as ProxyConfig,
   addresses: [] as ProxyAddress[],
@@ -55,7 +59,7 @@ export const desktop = vm({
   testing: false,
   testingNodeId: '',
   connecting: false,
-  subscriptionUrl: '',
+  subscriptionUrl: defaultSubscriptionUrl,
   updatedAt: 0,
   nodes: [] as NodeEntry[],
   error: '',
@@ -71,15 +75,129 @@ export const desktop = vm({
 });
 let initialized: Promise<void> | undefined;
 let testGeneration = 0;
+let failoverRevision = 0;
+let monitoredNode: string | null = null;
+let failures = 0;
+let notified = false;
 function errorText(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 function useSubscription(data: Subscription) {
-  desktop.subscriptionUrl = data.url;
+  const url = data.url.trim() || defaultSubscriptionUrl;
+  if (globalSettings.subscriptionPolicyUrl !== url) {
+    globalSettings.subscriptionAutoSwitch = false;
+    globalSettings.subscriptionCandidates = null;
+    globalSettings.subscriptionPolicyUrl = '';
+    ++failoverRevision;
+  }
+  desktop.subscriptionUrl = url;
   desktop.updatedAt = data.updatedAt;
   desktop.nodes = data.nodes.map((node) => ({ ...node, latencyMs: null, tested: false }));
   if (!data.nodes.some((node) => node.id === globalSettings.subscriptionSelectedId))
     globalSettings.subscriptionSelectedId = '';
+}
+export function toggleAutoSwitch() {
+  globalSettings.subscriptionPolicyUrl = desktop.subscriptionUrl;
+  if (!globalSettings.subscriptionAutoSwitch && globalSettings.subscriptionCandidates === null) {
+    globalSettings.subscriptionCandidates = desktop.nodes.map(({ id }) => id);
+  }
+  globalSettings.subscriptionAutoSwitch = !globalSettings.subscriptionAutoSwitch;
+  ++failoverRevision;
+  monitoredNode = null;
+}
+
+export function toggleAutoSwitchCandidate(id: string) {
+  const candidates = globalSettings.subscriptionCandidates ?? [];
+  globalSettings.subscriptionCandidates = candidates.includes(id)
+    ? candidates.filter((candidate) => candidate !== id)
+    : [...candidates, id];
+  ++failoverRevision;
+  monitoredNode = null;
+}
+
+async function monitorSubscription() {
+  const { running, source, nodeId } = desktop.status;
+  if (!globalSettings.subscriptionAutoSwitch || !running || source !== 'subscription' || !nodeId) {
+    monitoredNode = null;
+    return;
+  }
+  const busy = () =>
+    desktop.connecting || desktop.updating || desktop.testing || desktop.testingNodeId;
+  if (busy()) return;
+  if (monitoredNode !== nodeId) {
+    monitoredNode = nodeId;
+    failures = 0;
+    notified = false;
+  }
+  const revision = failoverRevision;
+  const stillCurrent = () =>
+    revision === failoverRevision &&
+    globalSettings.subscriptionAutoSwitch &&
+    !busy() &&
+    desktop.status.running &&
+    desktop.status.source === 'subscription' &&
+    desktop.status.nodeId === nodeId;
+  const healthy = await desktopInvoke<boolean>('tauri_check_subscription_node', { nodeId });
+  if (!stillCurrent()) return;
+  if (healthy) {
+    failures = 0;
+    notified = false;
+    return;
+  }
+  if (++failures < 3) return;
+  failures = 0;
+  const nodeIds = (globalSettings.subscriptionCandidates ?? []).filter(
+    (id) =>
+      id !== nodeId && desktop.nodes.some((node) => node.id === id && !node.unsupportedReason),
+  );
+  const results = nodeIds.length
+    ? await desktopInvoke<{ id: string; latencyMs: number | null }[]>(
+        'tauri_ping_subscription_nodes',
+        { nodeIds },
+      )
+    : [];
+  if (!stillCurrent()) return;
+  const candidates = results
+    .flatMap(({ id, latencyMs }) =>
+      latencyMs !== null && latencyMs < 800 ? [{ id, latencyMs }] : [],
+    )
+    .sort((a, b) => a.latencyMs - b.latencyMs);
+  for (const candidate of candidates) {
+    const healthy = await desktopInvoke<boolean>('tauri_check_subscription_node', {
+      nodeId: candidate.id,
+    });
+    if (!stillCurrent()) return;
+    if (!healthy) continue;
+    await connectSelected(candidate.id);
+    if (desktop.status.running && desktop.status.nodeId === candidate.id) {
+      globalSettings.subscriptionSelectedId = candidate.id;
+      await showNotifyWindow({
+        notifyType: 'success',
+        notifyMessage: `已自动切换至 ${desktop.status.name ?? '备用节点'}`,
+      });
+      return;
+    }
+    if (!stillCurrent()) return;
+  }
+  if (!notified) {
+    notified = true;
+    await showNotifyWindow({
+      notifyType: 'error',
+      notifyMessage: '当前节点异常，暂无可用候选节点',
+    });
+  }
+}
+
+function scheduleSubscriptionMonitor() {
+  window.setTimeout(async () => {
+    try {
+      await monitorSubscription();
+    } catch (error) {
+      appendLog(`自动切换检测失败：${errorText(error)}`);
+    } finally {
+      scheduleSubscriptionMonitor();
+    }
+  }, 15_000);
 }
 export async function refreshStatus() {
   desktop.status = await desktopInvoke<ProxyStatus>('tauri_proxy_status');
@@ -107,11 +225,18 @@ export function initializeDesktop() {
         await listen<ProxyStatus>('proxy-status', (event) => {
           desktop.status = event.payload;
         });
+        const mainWindow = getCurrentWindow();
+        await mainWindow.onCloseRequested((event) => {
+          if (!globalSettings.subscriptionAutoSwitch) return;
+          event.preventDefault();
+          void mainWindow.hide().catch((error) => appendLog(errorText(error)));
+        });
       } else if (import.meta.env.DEV) {
         window.setInterval(() => {
           void refreshStatus().catch(() => {});
         }, 1500);
       }
+      scheduleSubscriptionMonitor();
     } catch (error) {
       desktop.error = errorText(error);
     }
@@ -180,15 +305,15 @@ export async function disconnectProxy() {
     desktop.connecting = false;
   }
 }
-export async function connectSelected() {
+export async function connectSelected(nodeId = globalSettings.subscriptionSelectedId) {
   if (IS_MOBILE) return;
-  if (desktop.connecting || !globalSettings.subscriptionSelectedId) return;
+  if (desktop.connecting || !nodeId) return;
   pauseCloudProxy();
   desktop.connecting = true;
   desktop.error = '';
   try {
     await desktopInvoke('tauri_connect_subscription', {
-      nodeId: globalSettings.subscriptionSelectedId,
+      nodeId,
       mode: globalSettings.routingMode,
     });
     await desktopInvoke('tauri_interval_ping_stop');
@@ -209,7 +334,7 @@ export async function selectNode(node: NodeEntry) {
     node.unsupportedReason ||
     !node.tested ||
     node.latencyMs === null ||
-    node.latencyMs >= 500
+    node.latencyMs >= 800
   )
     return;
   if (globalSettings.subscriptionSelectedId === node.id) return;

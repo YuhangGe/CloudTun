@@ -81,7 +81,7 @@ test.each(['missing', 'unsupported', 'slow', 'untested'])(
     replaceNodes = () => {
       if (reason === 'missing') desktop.nodes = [];
       if (reason === 'unsupported') desktop.nodes[0].unsupportedReason = 'unsupported';
-      if (reason === 'slow') desktop.nodes[0].latencyMs = 500;
+      if (reason === 'slow') desktop.nodes[0].latencyMs = 800;
       if (reason === 'untested') desktop.nodes[0].latencyMs = null;
     };
     await (await fresh()).activateInitialSubscription();

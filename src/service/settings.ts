@@ -2,6 +2,9 @@ import { RegionOptions } from './region';
 
 export interface Settings {
   subscriptionSelectedId: string;
+  subscriptionAutoSwitch: boolean;
+  subscriptionCandidates: string[] | null;
+  subscriptionPolicyUrl: string;
   routingMode: 'global' | 'bypassChina';
   subscriptionSystemProxy: boolean;
   resourceName: string;
@@ -27,6 +30,9 @@ const defaultRegion =
 
 export const DefaultSettings: Settings = {
   subscriptionSelectedId: '',
+  subscriptionAutoSwitch: false,
+  subscriptionCandidates: null,
+  subscriptionPolicyUrl: '',
   routingMode: 'bypassChina',
   subscriptionSystemProxy: false,
   region: defaultRegion,

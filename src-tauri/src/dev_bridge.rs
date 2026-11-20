@@ -134,6 +134,7 @@ async fn command<R: Runtime>(
       .await,
     ),
     "tauri_proxy_status" => result(tauri_proxy_status(app.state()).await),
+    "tauri_proxy_traffic" => result(tauri_proxy_traffic(app.state()).await),
     "tauri_get_subscription" => result(tauri_get_subscription(app.state()).await),
     "tauri_update_subscription" => result(
       tauri_update_subscription(
@@ -144,7 +145,19 @@ async fn command<R: Runtime>(
       .await,
     ),
     "tauri_ping_subscription_nodes" => result(
-      tauri_ping_subscription_nodes(app.state(), args["nodeId"].as_str().map(str::to_owned)).await,
+      tauri_ping_subscription_nodes(
+        app.state(),
+        args["nodeId"].as_str().map(str::to_owned),
+        serde_json::from_value(args["nodeIds"].clone()).unwrap_or_default(),
+      )
+      .await,
+    ),
+    "tauri_check_subscription_node" => result(
+      tauri_check_subscription_node(
+        app.state(),
+        args["nodeId"].as_str().unwrap_or_default().into(),
+      )
+      .await,
     ),
     "tauri_connect_subscription" => match serde_json::from_value(args["mode"].clone()) {
       Ok(mode) => result(

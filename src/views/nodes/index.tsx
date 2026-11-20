@@ -11,16 +11,18 @@ import {
   connectSelected,
   disconnectProxy,
   selectNode,
+  toggleAutoSwitch,
+  toggleAutoSwitchCandidate,
   type NodeEntry,
 } from '@/store/desktop';
 import { globalSettings } from '@/store/settings';
 import { activateInitialSubscription } from '@/store/startup';
 
 function updatedText(at: number) {
-  return at ? `上次更新 ${new Date(at).toLocaleString()}` : '节点只从订阅导入，不支持手动编辑';
+  return `上次更新 ${new Date(at).toLocaleString()}`;
 }
 function latencyText(ms: number | null, tested: boolean) {
-  return !tested ? '待测试' : ms === null ? '超时 / ≥500 ms' : `${ms} ms`;
+  return !tested ? '待测试' : ms === null ? '超时 / ≥800 ms' : `${ms} ms`;
 }
 export function NodesView() {
   onMount(() => {
@@ -46,7 +48,7 @@ export function NodesView() {
       state.visible.sort((a, b) => (score(a) === score(b) ? 0 : score(a) - score(b)));
     }
     state.available = desktop.nodes.filter(
-      (node) => !node.unsupportedReason && node.latencyMs !== null && node.latencyMs < 500,
+      (node) => !node.unsupportedReason && node.latencyMs !== null && node.latencyMs < 800,
     ).length;
     const selected = desktop.nodes.find(
       (node) => node.id === globalSettings.subscriptionSelectedId,
@@ -60,7 +62,7 @@ export function NodesView() {
       selected &&
       !selected.unsupportedReason &&
       selected.latencyMs !== null &&
-      selected.latencyMs < 500,
+      selected.latencyMs < 800,
     );
   }
   watch(desktop, 'subscriptionUrl', (url) => {
@@ -195,11 +197,13 @@ export function NodesView() {
             更新订阅
           </Button>
         </form>
-        <div className="mt-2.5 flex flex-col gap-1 text-[10px] text-secondary-text sm:flex-row sm:justify-between sm:gap-3">
-          <span>{updatedText(desktop.updatedAt)}</span>
-        </div>
+        {desktop.updatedAt > 0 && (
+          <div className="mt-2.5 text-[10px] text-secondary-text">
+            {updatedText(desktop.updatedAt)}
+          </div>
+        )}
       </section>
-      <section className="border-t border-border pt-6">
+      <section>
         <div className="mb-4.5 flex flex-wrap items-center justify-between gap-3 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2 [&_h2]:text-sm [&_h2]:font-semibold [&_p]:mt-1 [&_p]:text-[10px] [&_p]:text-secondary-text">
           <div>
             <h2>
@@ -208,9 +212,27 @@ export function NodesView() {
                 {desktop.nodes.length}
               </span>
             </h2>
-            <p>{state.available} 个节点 TCP 延迟低于 500 ms</p>
+            <p>{state.available} 个节点 TCP 延迟低于 800 ms</p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-label="自动切换节点"
+              title={
+                globalSettings.subscriptionAutoSwitch ? '关闭自动切换节点' : '开启自动切换节点'
+              }
+              aria-pressed={globalSettings.subscriptionAutoSwitch}
+              disabled={IS_MOBILE || !desktop.nodes.length || desktop.updating}
+              className={cx(
+                'grid size-9 cursor-pointer place-items-center rounded-lg border bg-transparent text-lg disabled:opacity-40',
+                globalSettings.subscriptionAutoSwitch
+                  ? 'border-primary text-primary'
+                  : 'border-border text-secondary-text hover:text-primary',
+              )}
+              on:click={toggleAutoSwitch}
+            >
+              <span className="icon-[ant-design--swap-outlined]" />
+            </button>
             <button
               type="button"
               aria-label="测试延迟"
@@ -269,55 +291,76 @@ export function NodesView() {
         ) : (
           <div className="grid grid-cols-1 gap-3 min-[430px]:grid-cols-[repeat(auto-fill,minmax(215px,1fr))]">
             {state.visible.map((node) => (
-              <button
-                key={node.id}
-                type="button"
-                className={cx(
-                  'flex min-w-0 cursor-pointer flex-col gap-3 rounded-xl border px-4 py-4 text-left text-normal-text transition-colors enabled:hover:border-primary/60 disabled:cursor-default disabled:opacity-55',
-                  node.id === globalSettings.subscriptionSelectedId
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border bg-transparent',
-                  Boolean(node.unsupportedReason) && 'border-dashed',
-                )}
-                disabled={
-                  desktop.connecting ||
-                  desktop.updating ||
-                  Boolean(node.unsupportedReason) ||
-                  node.latencyMs === null ||
-                  node.latencyMs >= 500
-                }
-                aria-pressed={node.id === globalSettings.subscriptionSelectedId}
-                on:click={() => {
-                  void selectNode(node);
-                }}
-              >
-                <div className="flex items-center justify-between gap-2.5 text-[10px]">
-                  <span className="rounded bg-primary/5 px-1.5 py-1 text-[9px] tracking-wide text-secondary-text">
-                    {node.protocol.toUpperCase()}
-                  </span>
-                  <span
+              <div key={node.id} className="relative min-w-0">
+                <button
+                  type="button"
+                  className={cx(
+                    'flex size-full min-w-0 cursor-pointer flex-col gap-3 rounded-xl border px-4 py-4 text-left text-normal-text transition-colors enabled:hover:border-primary/60 disabled:cursor-default disabled:opacity-55',
+                    node.id === globalSettings.subscriptionSelectedId
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border bg-transparent',
+                    Boolean(node.unsupportedReason) && 'border-dashed',
+                  )}
+                  disabled={
+                    desktop.connecting ||
+                    desktop.updating ||
+                    Boolean(node.unsupportedReason) ||
+                    node.latencyMs === null ||
+                    node.latencyMs >= 800
+                  }
+                  aria-pressed={node.id === globalSettings.subscriptionSelectedId}
+                  on:click={() => {
+                    void selectNode(node);
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-2.5 text-[10px]">
+                    <span className="rounded bg-primary/5 px-1.5 py-1 text-[9px] tracking-wide text-secondary-text">
+                      {node.protocol.toUpperCase()}
+                    </span>
+                    <span
+                      className={cx(
+                        'text-[10px]',
+                        node.latencyMs !== null && node.latencyMs < 800
+                          ? 'text-emerald-500'
+                          : 'text-secondary-text',
+                      )}
+                    >
+                      {node.unsupportedReason
+                        ? '暂不支持'
+                        : desktop.testing && !node.tested
+                          ? '测试中…'
+                          : latencyText(node.latencyMs, node.tested)}
+                    </span>
+                  </div>
+                  <strong className="truncate text-[13px] font-semibold">{node.name}</strong>
+                  <div
                     className={cx(
-                      'text-[10px]',
-                      node.latencyMs !== null && node.latencyMs < 500
-                        ? 'text-emerald-500'
-                        : 'text-secondary-text',
+                      'flex min-w-0 gap-2 text-[10px] text-secondary-text [&>span:first-child]:flex-1 [&>span:first-child]:truncate',
+                      globalSettings.subscriptionAutoSwitch && 'pr-7',
                     )}
                   >
-                    {node.unsupportedReason
-                      ? '暂不支持'
-                      : desktop.testing && !node.tested
-                        ? '测试中…'
-                        : latencyText(node.latencyMs, node.tested)}
-                  </span>
-                </div>
-                <strong className="truncate text-[13px] font-semibold">{node.name}</strong>
-                <div className="flex min-w-0 gap-2 text-[10px] text-secondary-text [&>span:first-child]:flex-1 [&>span:first-child]:truncate">
-                  <span>{node.unsupportedReason || `${node.address}:${node.port}`}</span>
-                  {node.id === globalSettings.subscriptionSelectedId && (
-                    <span className="text-[13px] text-primary">✓</span>
-                  )}
-                </div>
-              </button>
+                    <span>{node.unsupportedReason || `${node.address}:${node.port}`}</span>
+                  </div>
+                </button>
+                {globalSettings.subscriptionAutoSwitch && (
+                  <button
+                    type="button"
+                    aria-label={`候选节点：${node.name}`}
+                    title={node.unsupportedReason || '自动切换候选节点'}
+                    aria-pressed={globalSettings.subscriptionCandidates?.includes(node.id) ?? false}
+                    disabled={Boolean(node.unsupportedReason) || desktop.updating}
+                    className={cx(
+                      'absolute right-2 bottom-2 grid size-7 cursor-pointer place-items-center rounded-md border border-transparent bg-transparent text-base hover:bg-primary/10 disabled:opacity-40',
+                      globalSettings.subscriptionCandidates?.includes(node.id)
+                        ? 'text-primary'
+                        : 'text-secondary-text',
+                    )}
+                    on:click={() => toggleAutoSwitchCandidate(node.id)}
+                  >
+                    <span className="icon-[ant-design--swap-outlined]" />
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         )}

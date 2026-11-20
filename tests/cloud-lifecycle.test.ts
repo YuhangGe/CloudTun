@@ -154,6 +154,21 @@ test('a failed instance refresh clears loading and preserves the known machine',
   expect(events).toEqual(['read']);
 });
 
+test('refresh keeps a ready cloud instance ready while the probe is pending', async () => {
+  await cloud.loadGlobalInst();
+  cloud.globalInst.state = 4;
+  let finish!: (ready: boolean) => void;
+  readiness = () =>
+    new Promise((resolve) => {
+      finish = resolve;
+    });
+  await cloud.loadGlobalInst();
+  expect(cloud.globalInst.state).toBe(4);
+  finish(true);
+  await Promise.resolve();
+  expect(cloud.globalInst.state).toBe(4);
+});
+
 test('instance metadata is shown without waiting for the readiness probe', async () => {
   let finish!: (ready: boolean) => void;
   readiness = () =>

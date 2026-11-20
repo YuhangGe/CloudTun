@@ -271,7 +271,7 @@ pub async fn ping_node(node: &SubscriptionNode) -> NodeLatency {
     for _ in 0..3 {
       let start = Instant::now();
       if let Ok(Ok(_)) = timeout(
-        Duration::from_millis(500),
+        Duration::from_millis(800),
         crate::tcp::connect_addresses(&addresses),
       )
       .await

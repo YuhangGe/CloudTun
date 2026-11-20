@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow_tauri::{IntoTAResult, TAResult};
 use cloudtun_proxy::{
-  PreparedProxy, ProxyArgs, RoutingMode,
+  PreparedProxy, ProxyArgs, RoutingMode, TrafficCounter, TrafficSnapshot,
   subscription::{NodeLatency, SubscriptionNode, fetch_subscription, ping_node, ping_nodes},
 };
 use serde::{Deserialize, Serialize};
@@ -33,6 +33,7 @@ pub struct ProxyStatus {
   pub error: Option<String>,
 }
 struct RunningProxy {
+  traffic: TrafficCounter,
   cancel: CancellationToken,
   task: tokio::task::JoinHandle<()>,
   listener: cloudtun_proxy::ProxyListenerControl,
@@ -131,6 +132,15 @@ impl ProxyLoop {
   pub fn log_geo_status<R: Runtime>(&self, handle: &AppHandle<R>) {
     self.geodata.log_initial(handle);
   }
+  pub async fn traffic_snapshot(&self) -> Option<TrafficSnapshot> {
+    self
+      .inner
+      .lock()
+      .await
+      .running
+      .as_ref()
+      .map(|proxy| proxy.traffic.snapshot())
+  }
   fn backup(&self) -> PathBuf {
     self.directory.join("system-proxy-backup.json")
   }
@@ -160,6 +170,7 @@ impl ProxyLoop {
     mode: RoutingMode,
   ) -> anyhow::Result<()> {
     let listener = proxy.listener_control();
+    let traffic = proxy.traffic_counter();
     let cancel = CancellationToken::new();
     let token = cancel.clone();
     let inner = self.inner.clone();
@@ -192,6 +203,7 @@ impl ProxyLoop {
     });
     let update_cancel = cancel.clone();
     state.running = Some(RunningProxy {
+      traffic,
       cancel,
       task,
       listener,
@@ -298,6 +310,101 @@ pub async fn tauri_stop_proxy_client<R: Runtime>(
 pub async fn tauri_proxy_status(state: State<'_, ProxyLoop>) -> TAResult<ProxyStatus> {
   Ok(state.inner.lock().await.status.clone())
 }
+#[cfg(target_os = "macos")]
+pub fn update_tray_speed<R: Runtime>(tray: tauri::tray::TrayIcon<R>) {
+  const TITLE_GAP: &str = "\u{2002}";
+
+  tauri::async_runtime::spawn(async move {
+    let original_width = tray
+      .with_inner_tray_icon(|icon| icon.ns_status_item().map(|item| item.length()))
+      .ok()
+      .flatten();
+    let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut previous: Option<TrafficSnapshot> = None;
+    let mut displayed = None;
+    loop {
+      tick.tick().await;
+      let current = tray
+        .app_handle()
+        .state::<ProxyLoop>()
+        .traffic_snapshot()
+        .await;
+      let title = current.as_ref().map(|sample| {
+        let rate = previous
+          .as_ref()
+          .filter(|last| {
+            last.session_id == sample.session_id && sample.elapsed_ms > last.elapsed_ms
+          })
+          .map_or(0.0, |last| {
+            sample.total_bytes.saturating_sub(last.total_bytes) as f64 * 1000.0
+              / (sample.elapsed_ms - last.elapsed_ms) as f64
+          });
+        let (value, unit) = if rate >= 1_000_000_000.0 {
+          (rate / 1_000_000_000.0, "GB")
+        } else if rate >= 1_000_000.0 {
+          (rate / 1_000_000.0, "MB")
+        } else if rate >= 1_000.0 {
+          (rate / 1_000.0, "KB")
+        } else {
+          (rate, "B")
+        };
+        if unit != "B" && value < 10.0 {
+          format!("{TITLE_GAP}{value:.1} {unit}/s")
+        } else {
+          format!("{TITLE_GAP}{value:.0} {unit}/s")
+        }
+      });
+      previous = current;
+      if title == displayed {
+        continue;
+      }
+      if displayed.is_none() && title.is_some() && original_width.is_some() {
+        let _ = tray.with_inner_tray_icon(|icon| {
+          if let Some(item) = icon.ns_status_item() {
+            if let Some(button) = item.button(objc2::MainThreadMarker::new().unwrap()) {
+              let old_title = button.title();
+              let sample = objc2_foundation::NSString::from_str(&format!("{TITLE_GAP}8888 Kb/s"));
+              button.setTitle(&sample);
+              let width = button
+                .cell()
+                .map(|cell| cell.cellSize().width.ceil() - 10.0);
+              button.setTitle(&old_title);
+              if let Some(width) = width.filter(|width| *width > 0.0) {
+                item.setLength(width);
+              }
+            }
+          }
+        });
+      }
+      if tray.set_title(title.as_deref()).is_ok() {
+        let connected = title.is_some();
+        if let Some(width) = original_width {
+          let _ = tray.with_inner_tray_icon(move |icon| {
+            if let Some(item) = icon.ns_status_item() {
+              if !connected {
+                item.setLength(width);
+              }
+              if let Some(button) = item.button(objc2::MainThreadMarker::new().unwrap()) {
+                let alignment = if connected {
+                  objc2_app_kit::NSTextAlignment::Left
+                } else {
+                  objc2_app_kit::NSTextAlignment::Center
+                };
+                button.setAlignment(alignment);
+              }
+            }
+          });
+        }
+        displayed = title;
+      }
+    }
+  });
+}
+#[tauri::command]
+pub async fn tauri_proxy_traffic(state: State<'_, ProxyLoop>) -> TAResult<Option<TrafficSnapshot>> {
+  Ok(state.traffic_snapshot().await)
+}
 #[tauri::command]
 pub async fn tauri_get_subscription(state: State<'_, ProxyLoop>) -> TAResult<SubscriptionView> {
   Ok(SubscriptionView::from(&*state.subscription.lock().await))
@@ -343,6 +450,7 @@ pub async fn tauri_update_subscription<R: Runtime>(
 pub async fn tauri_ping_subscription_nodes(
   state: State<'_, ProxyLoop>,
   node_id: Option<String>,
+  node_ids: Option<Vec<String>>,
 ) -> TAResult<Vec<NodeLatency>> {
   let nodes = state.subscription.lock().await.nodes.clone();
   if let Some(id) = node_id {
@@ -353,8 +461,38 @@ pub async fn tauri_ping_subscription_nodes(
       .into_ta_result()?;
     Ok(vec![ping_node(node).await])
   } else {
-    Ok(ping_nodes(&nodes).await)
+    let selected = nodes
+      .into_iter()
+      .filter(|node| node_ids.as_ref().is_none_or(|ids| ids.contains(&node.id)))
+      .collect::<Vec<_>>();
+    Ok(ping_nodes(&selected).await)
   }
+}
+
+#[tauri::command]
+pub async fn tauri_check_subscription_node(
+  state: State<'_, ProxyLoop>,
+  node_id: String,
+) -> TAResult<bool> {
+  let node = state
+    .subscription
+    .lock()
+    .await
+    .nodes
+    .iter()
+    .find(|node| node.id == node_id && node.unsupported_reason.is_none())
+    .cloned();
+  let Some(node) = node else {
+    return Ok(false);
+  };
+  Ok(
+    tokio::time::timeout(
+      std::time::Duration::from_secs(5),
+      cloudtun_proxy::check_node(&node),
+    )
+    .await
+    .is_ok_and(|result| result.is_ok()),
+  )
 }
 
 #[tauri::command]
@@ -378,8 +516,8 @@ pub async fn tauri_connect_subscription<R: Runtime>(
     anyhow::ensure!(node.unsupported_reason.is_none(), "此节点暂不支持");
     let latency = ping_node(&node).await;
     anyhow::ensure!(
-      latency.latency_ms.is_some_and(|ms| ms < 500),
-      "节点 TCP 延迟不可用或超过 500 ms，请选择其他节点"
+      latency.latency_ms.is_some_and(|ms| ms < 800),
+      "节点 TCP 延迟不可用或超过 800 ms，请选择其他节点"
     );
     cloudtun_proxy::check_node(&node)
       .await

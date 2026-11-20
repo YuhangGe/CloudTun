@@ -134,19 +134,20 @@ export function pauseCloudProxy() {
 }
 async function updateInst(inst: CVMInstance | undefined, autoConnect: boolean, generation: number) {
   autoConnect = autoConnect || cloudAutoConnect;
+  const ip = inst?.InstanceState === 'RUNNING' ? inst.PublicIpAddresses[0] : undefined;
+  const wasReady =
+    !!ip &&
+    !!inst &&
+    globalInst.data?.InstanceId === inst.InstanceId &&
+    globalInst.ip === ip &&
+    globalInst.state >= 3;
   globalInst.data = inst;
+  globalInst.ip = ip;
   if (!inst) {
-    globalInst.ip = undefined;
     globalInst.state = 0;
     return;
-  } else {
-    globalInst.state = 1;
   }
-  if (inst?.InstanceState === 'RUNNING') {
-    globalInst.ip = inst.PublicIpAddresses[0];
-  } else {
-    globalInst.ip = undefined;
-  }
+  if (!wasReady) globalInst.state = 1;
 
   if (!globalInst.ip) {
     if (!['PENDING', 'RUNNING'].includes(inst.InstanceState)) {
@@ -174,29 +175,35 @@ async function updateInst(inst: CVMInstance | undefined, autoConnect: boolean, g
 }
 
 async function updateConnect(autoConnect: boolean, generation: number) {
-  globalInst.state = 2;
+  const ip = globalInst.ip;
+  const id = globalInst.data?.InstanceId;
+  if (!ip || !id) return;
+  if (globalInst.state < 3) globalInst.state = 2;
+  const isCurrent = () =>
+    generation === cloudGeneration && globalInst.ip === ip && globalInst.data?.InstanceId === id;
   let ret: boolean;
   try {
-    ret = await pingServerOnce(globalInst.ip!, globalInst.data!.InstanceId);
+    ret = await pingServerOnce(ip, id);
   } catch (error) {
-    if (generation !== cloudGeneration) return;
+    if (!isCurrent()) return;
     globalInst.error = error instanceof Error ? error.message : String(error);
     cloudAutoConnect = false;
     appendLog(`[log::cloud] ${globalInst.error}`);
     return;
   }
-  if (generation !== cloudGeneration) return;
+  if (!isCurrent()) return;
   if (ret) {
-    globalInst.state = 3;
+    if (globalInst.state < 3) globalInst.state = 3;
     if (autoConnect && cloudAutoConnect) {
       cloudAutoConnect = false;
       if (!IS_MOBILE) await connectGlobalProxy(cloudAutoNotify);
       else showMsg('远程 CloudTun 服务已就绪，可启动本地 VPN！', 'success');
     }
   } else {
+    globalInst.state = 2;
     if (tm) clearTimeout(tm);
     tm = window.setTimeout(() => {
-      if (generation === cloudGeneration) void updateConnect(autoConnect, generation);
+      if (isCurrent()) void updateConnect(autoConnect, generation);
     }, 2000);
   }
 }

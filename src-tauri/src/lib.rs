@@ -119,6 +119,7 @@ pub fn run() {
         tauri_start_proxy_client,
         tauri_stop_proxy_client,
         tauri_proxy_status,
+        tauri_proxy_traffic,
         tauri_geo_status,
         tauri_update_geo,
         tauri_get_proxy_config,
@@ -126,6 +127,7 @@ pub fn run() {
         tauri_get_subscription,
         tauri_update_subscription,
         tauri_ping_subscription_nodes,
+        tauri_check_subscription_node,
         tauri_connect_subscription,
         tauri_set_system_proxy,
         tauri_set_routing_mode,
@@ -199,7 +201,7 @@ pub fn run() {
 
         let quit_i = MenuItem::with_id(_app, "quit", "退出CloudTun", true, None::<&str>).unwrap();
         let menu = Menu::with_items(_app, &[&quit_i]).unwrap();
-        let _ = TrayIconBuilder::new()
+        let _tray = TrayIconBuilder::new()
           .icon(_app.default_window_icon().unwrap().clone())
           .menu(&menu)
           .tooltip("CloudTun - 自用网络代理方案")
@@ -228,6 +230,8 @@ pub fn run() {
           })
           .build(_app)
           .unwrap();
+        #[cfg(target_os = "macos")]
+        crate::proxy::update_tray_speed(_tray);
         _app.manage(NotifyWindow::<Wry>::new());
         _app.manage(Ping::new());
         #[cfg(debug_assertions)]
