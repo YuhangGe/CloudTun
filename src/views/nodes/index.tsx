@@ -134,6 +134,7 @@ export function NodesView() {
           loading={desktop.connecting}
           disabled={
             IS_IOS ||
+            desktop.connecting ||
             desktop.updating ||
             (!(desktop.status.running && desktop.status.source === 'subscription') &&
               !state.canConnect)

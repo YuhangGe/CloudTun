@@ -89,6 +89,7 @@ export function Control(
           size="sm"
           loading={desktop.connecting}
           disabled={
+            desktop.connecting ||
             state.creating ||
             state.destroing ||
             desktop.updating ||

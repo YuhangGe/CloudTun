@@ -315,6 +315,7 @@ export async function updateSubscription(url: string) {
   }
 }
 export async function disconnectProxy() {
+  if (desktop.connecting) return false;
   pauseCloudProxy();
   desktop.connecting = true;
   try {
