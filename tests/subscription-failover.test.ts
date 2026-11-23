@@ -27,6 +27,7 @@ Object.assign(globalThis, {
   },
 });
 mock.module('jinge', () => ({ vm: <T>(value: T) => value }));
+mock.module('jinge-antd', () => ({ message: { error() {} } }));
 mock.module('@tauri-apps/api/event', () => ({ listen: async () => {} }));
 mock.module('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => ({ onCloseRequested: async () => {} }),

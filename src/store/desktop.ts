@@ -1,6 +1,7 @@
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { vm } from 'jinge';
+import { message } from 'jinge-antd';
 
 import { desktopInvoke } from '@/service/desktop';
 import { showNotifyWindow } from '@/service/notify';
@@ -275,20 +276,56 @@ export async function testNodes() {
   if (desktop.testing || desktop.testingNodeId) return;
   const generation = ++testGeneration;
   desktop.testing = true;
-  try {
-    const results = await desktopInvoke<{ id: string; latencyMs: number | null }[]>(
-      'tauri_ping_subscription_nodes',
-    );
-    if (generation !== testGeneration) return;
-    for (const result of results) {
-      const node = desktop.nodes.find((node) => node.id === result.id);
+  desktop.error = '';
+  const nodes = desktop.nodes.filter((node) => !node.unsupportedReason);
+  for (const node of nodes) {
+    node.latencyMs = null;
+    node.tested = false;
+  }
+  let next = 0;
+  async function worker() {
+    while (next < nodes.length && generation === testGeneration) {
+      const id = nodes[next++].id;
+      let latencyMs: number | null = null;
+      try {
+        const results = await desktopInvoke<{ id: string; latencyMs: number | null }[]>(
+          'tauri_ping_subscription_nodes',
+          { nodeId: id },
+        );
+        latencyMs = results.find((result) => result.id === id)?.latencyMs ?? null;
+      } catch (error) {
+        if (generation === testGeneration) desktop.error = errorText(error);
+      }
+      if (generation !== testGeneration) return;
+      const node = desktop.nodes.find((node) => node.id === id);
       if (node) {
-        node.latencyMs = result.latencyMs;
+        node.latencyMs = latencyMs;
         node.tested = true;
       }
     }
-  } catch (error) {
-    desktop.error = errorText(error);
+  }
+  try {
+    await Promise.all(Array.from({ length: Math.min(6, nodes.length) }, worker));
+    if (generation !== testGeneration) return;
+    const available = (node: NodeEntry | undefined): node is NodeEntry =>
+      Boolean(
+        node &&
+        !node.unsupportedReason &&
+        node.tested &&
+        node.latencyMs !== null &&
+        node.latencyMs > 0 &&
+        node.latencyMs < 5000,
+      );
+    const current = desktop.nodes.find((node) => node.id === globalSettings.subscriptionSelectedId);
+    if (available(current)) return;
+    const candidates = globalSettings.subscriptionAutoSwitch
+      ? (globalSettings.subscriptionCandidates ?? []).map((id) =>
+          desktop.nodes.find((node) => node.id === id),
+        )
+      : desktop.nodes;
+    const next = candidates.find(available);
+    if (next) await selectNode(next);
+    else void message.error('当前无可用节点');
   } finally {
     if (generation === testGeneration) desktop.testing = false;
   }

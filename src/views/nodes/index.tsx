@@ -326,11 +326,19 @@ export function NodesView() {
                           : 'text-secondary-text',
                       )}
                     >
-                      {node.unsupportedReason
-                        ? '暂不支持'
-                        : desktop.testing && !node.tested
-                          ? '测试中…'
-                          : latencyText(node.latencyMs, node.tested)}
+                      {node.unsupportedReason ? (
+                        '暂不支持'
+                      ) : (desktop.testing && !node.tested) || desktop.testingNodeId === node.id ? (
+                        <span
+                          role="status"
+                          aria-label="测速中"
+                          className="inline-flex items-center"
+                        >
+                          <span className="icon-[ant-design--loading-outlined] animate-spin" />
+                        </span>
+                      ) : (
+                        latencyText(node.latencyMs, node.tested)
+                      )}
                     </span>
                   </div>
                   <strong className="truncate text-[13px] font-semibold">{node.name}</strong>
