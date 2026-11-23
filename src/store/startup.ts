@@ -75,7 +75,7 @@ export function activateInitialSubscription() {
       !selected ||
       selected.unsupportedReason ||
       selected.latencyMs === null ||
-      selected.latencyMs >= 800
+      selected.latencyMs >= 5000
     ) {
       appendLog('[log::startup] 上次选择的节点已失效或不可用，请手动选择');
       return;

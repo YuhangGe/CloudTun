@@ -216,16 +216,14 @@ impl Failover {
   }
 }
 async fn check(node: SubscriptionNode) -> bool {
-  tokio::time::timeout(Duration::from_secs(5), cloudtun_proxy::check_node(&node))
-    .await
-    .is_ok_and(|result| result.is_ok())
+  cloudtun_proxy::check_node(&node).await.is_ok()
 }
 async fn rank(nodes: Vec<SubscriptionNode>) -> Vec<SubscriptionNode> {
   let mut scores = ping_nodes(&nodes).await;
   scores.sort_by_key(|score| score.latency_ms.unwrap_or(u64::MAX));
   scores
     .into_iter()
-    .filter(|score| score.latency_ms.is_some_and(|ms| ms < 800))
+    .filter(|score| score.latency_ms.is_some_and(|ms| ms < 5000))
     .filter_map(|score| nodes.iter().find(|node| node.id == score.id).cloned())
     .collect()
 }

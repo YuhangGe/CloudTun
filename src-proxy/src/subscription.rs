@@ -4,8 +4,7 @@ use base64::{
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::time::{Duration, Instant};
-use tokio::time::timeout;
+use std::time::Duration;
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -252,39 +251,13 @@ pub async fn fetch_subscription(url: &str) -> anyhow::Result<Vec<SubscriptionNod
 }
 
 pub async fn ping_node(node: &SubscriptionNode) -> NodeLatency {
-  let mut samples = Vec::new();
-  if node.unsupported_reason.is_none() {
-    let addresses = match timeout(
-      Duration::from_secs(3),
-      tokio::net::lookup_host((node.address.as_str(), node.port)),
-    )
-    .await
-    {
-      Ok(Ok(addresses)) => addresses.collect::<Vec<_>>(),
-      _ => {
-        return NodeLatency {
-          id: node.id.clone(),
-          latency_ms: None,
-        };
-      }
-    };
-    for _ in 0..3 {
-      let start = Instant::now();
-      if let Ok(Ok(_)) = timeout(
-        Duration::from_millis(800),
-        crate::tcp::connect_addresses(&addresses),
-      )
-      .await
-      {
-        samples.push(start.elapsed().as_millis() as u64);
-      }
-    }
-  }
-  samples.sort_unstable();
   NodeLatency {
     id: node.id.clone(),
-    latency_ms: if samples.len() >= 2 {
-      Some(samples[samples.len() / 2])
+    latency_ms: if node.unsupported_reason.is_none() {
+      crate::outbound::real_ping(node)
+        .await
+        .ok()
+        .filter(|ms| *ms > 0)
     } else {
       None
     },

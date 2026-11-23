@@ -664,14 +664,7 @@ pub async fn tauri_check_subscription_node(
   let Some(node) = node else {
     return Ok(false);
   };
-  Ok(
-    tokio::time::timeout(
-      std::time::Duration::from_secs(5),
-      cloudtun_proxy::check_node(&node),
-    )
-    .await
-    .is_ok_and(|result| result.is_ok()),
-  )
+  Ok(cloudtun_proxy::check_node(&node).await.is_ok())
 }
 
 #[tauri::command]
@@ -695,12 +688,9 @@ pub async fn tauri_connect_subscription<R: Runtime>(
     anyhow::ensure!(node.unsupported_reason.is_none(), "此节点暂不支持");
     let latency = ping_node(&node).await;
     anyhow::ensure!(
-      latency.latency_ms.is_some_and(|ms| ms < 800),
-      "节点 TCP 延迟不可用或超过 800 ms，请选择其他节点"
+      latency.latency_ms.is_some_and(|ms| ms > 0 && ms < 5000),
+      "节点真连接测试失败或超过 5 秒，请选择其他节点"
     );
-    cloudtun_proxy::check_node(&node)
-      .await
-      .map_err(|_| anyhow::anyhow!("TCP 可连接，但 VMess 实际转发失败，请换一个节点"))?;
     // Prepare the outbound before stopping an existing connection.
     state.stop().await?;
     let name = node.name.clone();

@@ -81,7 +81,7 @@ test.each(['missing', 'unsupported', 'slow', 'untested'])(
     replaceNodes = () => {
       if (reason === 'missing') desktop.nodes = [];
       if (reason === 'unsupported') desktop.nodes[0].unsupportedReason = 'unsupported';
-      if (reason === 'slow') desktop.nodes[0].latencyMs = 800;
+      if (reason === 'slow') desktop.nodes[0].latencyMs = 5000;
       if (reason === 'untested') desktop.nodes[0].latencyMs = null;
     };
     await (await fresh()).activateInitialSubscription();
@@ -108,4 +108,12 @@ test('cloud query failure falls back to subscription without purchasing anything
   expect((await startup.initializeStartup()).view).toBe('nodes');
   await startup.activateInitialSubscription();
   expect(events).toEqual(['initialize', 'cloud-read', 'update', 'connect']);
+});
+
+test('a real connection delay above 800 ms still reconnects within the five-second limit', async () => {
+  desktop.nodes[0].latencyMs = 1200;
+  const startup = await fresh();
+  await startup.initializeStartup();
+  await startup.activateInitialSubscription();
+  expect(events).toContain('connect');
 });

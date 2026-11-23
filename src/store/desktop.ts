@@ -178,7 +178,7 @@ async function monitorSubscription() {
   if (!stillCurrent()) return;
   const candidates = results
     .flatMap(({ id, latencyMs }) =>
-      latencyMs !== null && latencyMs < 800 ? [{ id, latencyMs }] : [],
+      latencyMs !== null && latencyMs < 5000 ? [{ id, latencyMs }] : [],
     )
     .sort((a, b) => a.latencyMs - b.latencyMs);
   for (const candidate of candidates) {
@@ -358,7 +358,7 @@ export async function selectNode(node: NodeEntry) {
     node.unsupportedReason ||
     !node.tested ||
     node.latencyMs === null ||
-    node.latencyMs >= 800
+    node.latencyMs >= 5000
   )
     return;
   if (globalSettings.subscriptionSelectedId === node.id) return;

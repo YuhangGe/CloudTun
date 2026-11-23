@@ -22,7 +22,7 @@ function updatedText(at: number) {
   return `上次更新 ${new Date(at).toLocaleString()}`;
 }
 function latencyText(ms: number | null, tested: boolean) {
-  return !tested ? '待测试' : ms === null ? '超时 / ≥800 ms' : `${ms} ms`;
+  return !tested ? '待测试' : ms === null ? '测试失败 / 超时' : `${ms} ms`;
 }
 export function NodesView() {
   onMount(() => {
@@ -48,7 +48,7 @@ export function NodesView() {
       state.visible.sort((a, b) => (score(a) === score(b) ? 0 : score(a) - score(b)));
     }
     state.available = desktop.nodes.filter(
-      (node) => !node.unsupportedReason && node.latencyMs !== null && node.latencyMs < 800,
+      (node) => !node.unsupportedReason && node.latencyMs !== null && node.latencyMs < 5000,
     ).length;
     const selected = desktop.nodes.find(
       (node) => node.id === globalSettings.subscriptionSelectedId,
@@ -62,7 +62,7 @@ export function NodesView() {
       selected &&
       !selected.unsupportedReason &&
       selected.latencyMs !== null &&
-      selected.latencyMs < 800,
+      selected.latencyMs < 5000,
     );
   }
   watch(desktop, 'subscriptionUrl', (url) => {
@@ -212,7 +212,7 @@ export function NodesView() {
                 {desktop.nodes.length}
               </span>
             </h2>
-            <p>{state.available} 个节点 TCP 延迟低于 800 ms</p>
+            <p>{state.available} 个节点通过真连接测试（5 秒超时）</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -306,7 +306,7 @@ export function NodesView() {
                     desktop.updating ||
                     Boolean(node.unsupportedReason) ||
                     node.latencyMs === null ||
-                    node.latencyMs >= 800
+                    node.latencyMs >= 5000
                   }
                   aria-pressed={node.id === globalSettings.subscriptionSelectedId}
                   on:click={() => {
@@ -320,7 +320,7 @@ export function NodesView() {
                     <span
                       className={cx(
                         'text-[10px]',
-                        node.latencyMs !== null && node.latencyMs < 800
+                        node.latencyMs !== null && node.latencyMs < 5000
                           ? 'text-emerald-500'
                           : 'text-secondary-text',
                       )}

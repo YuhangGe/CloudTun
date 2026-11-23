@@ -247,33 +247,163 @@ pub(crate) async fn vmess_datagram(
   .await
 }
 
-/// Validate VMess authentication and a real HTTP response, beyond TCP ping.
-pub async fn check_node(node: &SubscriptionNode) -> anyhow::Result<()> {
-  use tokio::io::{AsyncReadExt, AsyncWriteExt};
-  const HOST: &str = "www.google.com";
-  tokio::time::timeout(std::time::Duration::from_secs(15), async {
-    let tunnel = connect_vmess(node, HOST, 443).await?;
-    let name = tokio_rustls::rustls::pki_types::ServerName::try_from(HOST)?;
-    let mut stream = tls_connector()?.connect(name, tunnel).await?;
-    stream
-      .write_all(b"GET /generate_204 HTTP/1.1\r\nHost: www.google.com\r\nConnection: close\r\n\r\n")
+/// Match v2rayN real ping: two full GETs, 100 ms gaps, one shared five-second budget.
+pub async fn real_ping(node: &SubscriptionNode) -> anyhow::Result<u64> {
+  let proxy =
+    crate::PreparedProxy::bind_node_at(node.clone(), crate::RoutingMode::Global, "127.0.0.1", 0)
       .await?;
-    stream.flush().await?;
-    let mut status = [0; 13];
-    stream.read_exact(&mut status).await?;
-    anyhow::ensure!(
-      status == *b"HTTP/1.1 204 " || status == *b"HTTP/1.0 204 ",
-      "节点探测未返回 HTTP 204"
-    );
-    Ok::<_, anyhow::Error>(())
+  let address = proxy.local_addr()?;
+  let cancel = CancellationToken::new();
+  struct StopProbe(CancellationToken);
+  impl Drop for StopProbe {
+    fn drop(&mut self) {
+      self.0.cancel();
+    }
+  }
+  let _stop = StopProbe(cancel.clone());
+  tokio::spawn(async move {
+    let _ = proxy.run(cancel, |_, _| {}).await;
+  });
+  let client = http_client_builder()?
+    .no_proxy()
+    .proxy(reqwest::Proxy::all(format!("http://{address}"))?)
+    .connect_timeout(std::time::Duration::from_secs(5))
+    .build()?;
+  measure_http_latency(
+    &client,
+    "https://www.google.com/generate_204",
+    std::time::Duration::from_secs(5),
+  )
+  .await
+}
+
+async fn measure_http_latency(
+  client: &reqwest::Client,
+  url: &str,
+  budget: std::time::Duration,
+) -> anyhow::Result<u64> {
+  tokio::time::timeout(budget, async {
+    let mut samples = Vec::with_capacity(2);
+    for _ in 0..2 {
+      let started = std::time::Instant::now();
+      // Like HttpClient.GetAsync, consume the response body without requiring HTTP 204.
+      client.get(url).send().await?.bytes().await?;
+      let elapsed = started.elapsed().as_millis() as u64;
+      if elapsed > 0 {
+        samples.push(elapsed);
+      }
+      tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    Ok::<_, anyhow::Error>(samples.into_iter().min().unwrap_or(0))
   })
   .await
-  .map_err(|_| anyhow::anyhow!("VMess 连通测试超时"))?
+  .map_err(|_| anyhow::anyhow!("真连接延迟测试超时（两次请求共用 5 秒）"))?
+}
+
+pub async fn check_node(node: &SubscriptionNode) -> anyhow::Result<()> {
+  anyhow::ensure!(real_ping(node).await? > 0, "真连接延迟测试失败");
+  Ok(())
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  async fn probe_server(fail_second: bool, delay_ms: u64) -> (String, tokio::task::JoinHandle<()>) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let task = tokio::spawn(async move {
+      for index in 0..2 {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut header = Vec::new();
+        while !header.ends_with(b"\r\n\r\n") {
+          header.push(socket.read_u8().await.unwrap());
+        }
+        socket
+          .write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 4\r\nConnection: close\r\n\r\n")
+          .await
+          .unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+        if index == 1 && fail_second {
+          socket.write_all(b"x").await.unwrap();
+        } else {
+          socket.write_all(b"body").await.unwrap();
+        }
+      }
+    });
+    (format!("http://{address}"), task)
+  }
+  #[tokio::test]
+  async fn real_ping_reads_both_bodies_and_accepts_non_204_status() {
+    let (url, task) = probe_server(false, 20).await;
+    let result = measure_http_latency(
+      &reqwest::Client::builder().no_proxy().build().unwrap(),
+      &url,
+      std::time::Duration::from_secs(2),
+    )
+    .await;
+    task.await.unwrap();
+    assert!(result.unwrap() >= 15);
+  }
+  #[tokio::test]
+  async fn second_response_failure_discards_first_success() {
+    let (url, task) = probe_server(true, 20).await;
+    let result = measure_http_latency(
+      &reqwest::Client::builder().no_proxy().build().unwrap(),
+      &url,
+      std::time::Duration::from_secs(2),
+    )
+    .await;
+    task.await.unwrap();
+    assert!(result.is_err());
+  }
+  #[tokio::test]
+  async fn requests_share_one_overall_timeout() {
+    let (url, task) = probe_server(false, 20).await;
+    let result = measure_http_latency(
+      &reqwest::Client::builder().no_proxy().build().unwrap(),
+      &url,
+      std::time::Duration::from_millis(80),
+    )
+    .await;
+    task.abort();
+    assert!(result.unwrap_err().to_string().contains("超时"));
+  }
+
+  #[tokio::test]
+  async fn real_ping_accepts_latency_above_the_old_800_ms_limit() {
+    let (url, task) = probe_server(false, 900).await;
+    let result = measure_http_latency(
+      &reqwest::Client::builder().no_proxy().build().unwrap(),
+      &url,
+      std::time::Duration::from_secs(5),
+    )
+    .await;
+    task.await.unwrap();
+    assert!(result.unwrap() >= 800);
+  }
+  #[tokio::test]
+  async fn tcp_reachable_without_vmess_forwarding_is_not_a_successful_ping() {
+    use base64::Engine;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let fixture = serde_json::json!({"v":"2","ps":"tcp-only","add":"127.0.0.1","port":address.port(),"id":"00000000-0000-4000-8000-000000000001","net":"tcp","tls":""});
+    let link = format!(
+      "vmess://{}",
+      base64::engine::general_purpose::STANDARD.encode(fixture.to_string())
+    );
+    let node = crate::subscription::parse_subscription(&link)
+      .unwrap()
+      .remove(0);
+    let task = tokio::spawn(async move {
+      let (socket, _) = listener.accept().await.unwrap();
+      drop(socket);
+    });
+    let result = crate::subscription::ping_node(&node).await;
+    task.await.unwrap();
+    assert!(result.latency_ms.is_none());
+  }
 
   #[test]
   fn websocket_disconnect_is_not_retried_as_interrupted_io() {
