@@ -24,6 +24,8 @@ use tokio_util::sync::CancellationToken;
 #[derive(Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ProxyStatus {
+  #[serde(default)]
+  pub event_kind: Option<String>,
   pub running: bool,
   pub source: Option<String>,
   pub node_id: Option<String>,
@@ -309,9 +311,17 @@ impl ProxyLoop {
       }
       #[cfg(target_os = "android")]
       if service_stopped {
+        let status_app = app.clone();
+        let terminal = tokio::task::spawn_blocking(move || {
+          status_app.state::<crate::android::Vpn<R>>().status()
+        })
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .flatten();
         let mut state = inner.lock().await;
         state.running = None;
-        state.status = ProxyStatus::default();
+        state.status = terminal.unwrap_or_default();
         let _ = app.emit("proxy-status", &state.status);
         return;
       }
@@ -340,6 +350,7 @@ impl ProxyLoop {
       connector,
     });
     state.status = ProxyStatus {
+      event_kind: None,
       running: true,
       source: Some(source.into()),
       node_id,

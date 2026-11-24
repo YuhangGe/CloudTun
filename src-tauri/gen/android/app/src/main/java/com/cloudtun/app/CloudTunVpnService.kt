@@ -19,6 +19,7 @@ import java.util.Locale
 
 class CloudTunVpnService : VpnService() {
   companion object {
+    @Volatile var terminalStatus: String? = null
     var instance: CloudTunVpnService? = null
     @Volatile var isVpnConnected = false
     var startCallback: ((String?) -> Unit)? = null
@@ -26,6 +27,18 @@ class CloudTunVpnService : VpnService() {
     private const val EVENT_CHANNEL = "vpn_events"
     private const val RUNNING_ID = 1
     private const val EVENT_ID = 2
+    fun notifySubscription(context: android.content.Context, text: String) {
+      val manager = context.getSystemService(NotificationManager::class.java)
+      manager.createNotificationChannel(NotificationChannel(EVENT_CHANNEL, "CloudTun 连接状态", NotificationManager.IMPORTANCE_DEFAULT))
+      if (!manager.areNotificationsEnabled()) return
+      val intent = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+      try {
+        manager.notify(EVENT_ID, NotificationCompat.Builder(context, EVENT_CHANNEL)
+          .setContentTitle("CloudTun").setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(text))
+          .setSmallIcon(R.drawable.ic_stat_vpn).setContentIntent(intent).setAutoCancel(true).setTimeoutAfter(5000).build())
+      } catch (_: SecurityException) { }
+    }
+
   }
   private var vpnInterface: ParcelFileDescriptor? = null
   private val vpn = CloudTunVpn()
@@ -45,6 +58,12 @@ class CloudTunVpnService : VpnService() {
           return
         }
         val status = JSONObject(raw)
+        if (status.optString("eventKind") == "unavailable") {
+          terminalStatus = raw
+          disconnect()
+          notifySubscription(this@CloudTunVpnService, status.optString("eventMessage"))
+          return
+        }
         if (status.optString("eventKind") == "cloudLost") {
           val message = status.optString("eventMessage")
           disconnect()
@@ -127,6 +146,7 @@ class CloudTunVpnService : VpnService() {
     if (intent?.action != "START") { disconnect(); return START_NOT_STICKY }
     try {
       instance = this
+      terminalStatus = null
       check(vpnInterface == null) { "VPN 服务已启动" }
       manager().createNotificationChannel(NotificationChannel(RUNNING_CHANNEL, "CloudTun VPN", NotificationManager.IMPORTANCE_LOW))
       manager().createNotificationChannel(NotificationChannel(EVENT_CHANNEL, "CloudTun 连接状态", NotificationManager.IMPORTANCE_DEFAULT))

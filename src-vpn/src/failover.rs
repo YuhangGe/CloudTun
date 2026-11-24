@@ -141,7 +141,7 @@ impl Failover {
     };
     let revision = {
       let policy = self.policy.lock().unwrap_or_else(|e| e.into_inner());
-      if !policy.config.enabled {
+      if !policy.config.enabled || !policy.status.running {
         return;
       }
       policy.revision
@@ -217,13 +217,15 @@ impl Failover {
       return;
     }
     policy.status.switching = false;
-    policy.status.error = Some("当前节点异常，暂无可用候选节点".into());
+    policy.status.running = false;
+    policy.status.auto_switch = false;
+    policy.status.error = Some("当前无可用节点，请手动重试".into());
     if !policy.outage_reported {
       policy.outage_reported = true;
       Self::event(
         &mut policy,
         "unavailable",
-        "当前节点异常，暂无可用候选节点；将继续重试".into(),
+        "当前无可用订阅节点，VPN 已断开".into(),
       );
     }
   }
@@ -358,7 +360,7 @@ mod tests {
     assert_eq!(manager.snapshot().name, "B");
   }
   #[tokio::test]
-  async fn all_unavailable_is_reported_once_and_recovers() {
+  async fn all_unavailable_stops_checks_and_keeps_one_event() {
     let manager = manager();
     for _ in 0..9 {
       manager
@@ -370,8 +372,12 @@ mod tests {
     manager
       .tick(|_| async { true }, |nodes| async { nodes })
       .await;
-    assert_eq!(manager.snapshot().event_id, 2);
-    assert_eq!(manager.snapshot().event_kind.as_deref(), Some("recovered"));
+    assert!(!manager.snapshot().running);
+    assert_eq!(manager.snapshot().event_id, 1);
+    assert_eq!(
+      manager.snapshot().event_kind.as_deref(),
+      Some("unavailable")
+    );
   }
   #[tokio::test]
   async fn disabling_during_probe_prevents_stale_switch() {

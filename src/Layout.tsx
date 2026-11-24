@@ -10,6 +10,7 @@ import type { StartupView } from './store/startup';
 import { desktopInvoke } from './service/desktop';
 import { copyToClipboard, IS_MOBILE, IS_IOS, IS_ANDROID } from './service/util';
 import { desktop } from './store/desktop';
+import { globalInst } from './store/instance';
 import { LogView } from './views/logview';
 import { NodesView } from './views/nodes';
 import { CloudPage } from './views/proxy/CloudPage';
@@ -72,7 +73,17 @@ export function Layout(props: { initialView: StartupView }) {
                 navigate(item.value);
               }}
             >
-              <span className={cx(item.icon, 'text-xl')} />
+              <span className="relative inline-flex shrink-0">
+                <span className={cx(item.icon, 'text-xl')} />
+                {item.value === 'cloud' && globalInst.data?.InstanceState === 'RUNNING' && (
+                  <span
+                    className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-emerald-500"
+                    role="img"
+                    aria-label="有运行中的云主机"
+                    title="有运行中的云主机"
+                  />
+                )}
+              </span>
               <span>{item.label}</span>
             </button>
           ))}
@@ -84,7 +95,13 @@ export function Layout(props: { initialView: StartupView }) {
               desktop.status.running ? 'bg-emerald-500 ring-4 ring-emerald-500/10' : 'bg-gray-400',
             )}
           />
-          <span>{desktop.status.running ? '代理运行中' : '代理未连接'}</span>
+          <span>
+            {desktop.status.running
+              ? desktop.status.source === 'subscription'
+                ? '订阅代理运行中'
+                : '主机代理运行中'
+              : '代理未连接'}
+          </span>
         </div>
         {!IS_IOS && desktop.status.running && <ProxyTraffic />}
         {!IS_MOBILE && (

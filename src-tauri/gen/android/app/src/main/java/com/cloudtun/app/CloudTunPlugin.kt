@@ -25,6 +25,10 @@ class StartVpnArgs {
 }
 
 @Keep
+@InvokeArg
+class SubscriptionNoticeArgs { var text: String = "" }
+
+@Keep
 @TauriPlugin
 class CloudTunPlugin(private val activity: Activity): Plugin(activity) {
 
@@ -102,8 +106,21 @@ class CloudTunPlugin(private val activity: Activity): Plugin(activity) {
   }
 
   @Command
+  fun notifySubscription(invoke: Invoke) {
+    val args = invoke.parseArgs(SubscriptionNoticeArgs::class.java)
+    CloudTunVpnService.notifySubscription(activity, args.text)
+    invoke.resolve(JSObject().put("success", true))
+  }
+  @Command
+  fun clearSubscriptionOutage(invoke: Invoke) {
+    CloudTunVpnService.terminalStatus = null
+    invoke.resolve(JSObject().put("success", true))
+  }
+
+  @Command
   fun getVpnStatus(invoke: Invoke) {
-    val status = CloudTunVpn().status()
+    val raw = CloudTunVpn().status()
+    val status = if (raw == "null") CloudTunVpnService.terminalStatus ?: raw else raw
     invoke.resolve(JSObject().put("status", if (status == "null") org.json.JSONObject.NULL else JSObject(status)))
   }
 

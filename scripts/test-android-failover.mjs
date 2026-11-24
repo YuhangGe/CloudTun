@@ -39,9 +39,11 @@ async function listen(server) {
 }
 class Relay {
   enabled = true;
+  attempts = 0;
   sockets = new Set();
   constructor(node) {
     this.server = net.createServer((client) => {
+      this.attempts++;
       if (!this.enabled) {
         client.destroy();
         return;
@@ -402,17 +404,36 @@ try {
   await app.send('Page.setWebLifecycleState', { state: 'frozen' });
   frozen = true;
   relayB.cut();
-  await waitFor('all candidates unavailable produces a Service notification', () =>
-    notifications().includes('暂无可用节点'),
-  );
-  const failures = run('shell', 'logcat', '-d', '-s', 'CloudTunVpnService:I');
-  assert(failures.includes('暂无可用节点'));
+  await waitFor('all candidates unavailable stops Service and posts a native notification', () => {
+    const text = notifications();
+    return text.includes('当前无可用订阅节点，VPN 已断开') && !text.includes('CloudTun · 节点：');
+  });
+  await delay(3000);
+  const attempts = relayA.attempts + relayB.attempts;
   relayB.recover();
-  await waitFor('network restoration produces a recovery notification', () =>
-    notifications().includes('连接已恢复'),
+  await delay(20000);
+  assert.equal(
+    relayA.attempts + relayB.attempts,
+    attempts,
+    'Stopped Android Service must not keep probing nodes',
   );
   await app.send('Page.setWebLifecycleState', { state: 'active' });
   frozen = false;
+  assert.equal((await app.invoke('tauri_proxy_status')).running, false);
+  assert.equal(await app.invoke('tauri_proxy_traffic'), null);
+  assert(await app.evaluate("document.body.innerText.includes('当前无可用节点，请手动重试')"));
+  await app.evaluate(
+    '(() => { document.querySelector(\'button[aria-label="测试延迟"]\').click(); return true; })()',
+  );
+  await waitFor(
+    'manual test reconnects recovered node B',
+    async () => {
+      const status = await app.invoke('tauri_proxy_status');
+      return status.running && status.nodeId === b.id;
+    },
+    30000,
+  );
+  assert.notEqual((await app.invoke('tauri_proxy_traffic')).sessionId, after.sessionId);
   await app.invoke('tauri_stop_proxy_client');
   assert.equal((await app.invoke('tauri_proxy_status')).running, false);
   assert.equal(await app.invoke('tauri_proxy_traffic'), null);

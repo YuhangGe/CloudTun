@@ -117,7 +117,6 @@ UI 初始化先订阅 `log-entry`，再读取 `tauri_get_logs` 快照，按编�
 
 实机流式验证（2026-11-19）：经本地 7893 → 硅谷云主机 → 临时受控端点，HTTP/HTTPS SSE 分段到达；HTTP/ws 明文升级和 WSS 均通过文本、128 KiB 二进制、Ping/Pong、正常关闭测试。SSE 事件间隔及 WS/WSS 无应用数据间隔 70 秒后仍能继续收发。测试端点及自签名测试证书已清理；没有修改生产 TLS 校验行为。
 
-
 ## WSS v3 / TOFU（服务端 0.2.0）
 
 云端链路已替换为 WSS，删除 XOR 和实例 ID 派生密码。实例创建前生成独立随机 32 字节访问凭据，通过初始化脚本的 `CLOUDTUN_ACCESS_TOKEN` 注入服务端；客户端按实例 ID 私有保存。更换设备或缓存丢失时，可经腾讯云 `DescribeInstancesAttributes(UserData)` 恢复凭据，需要对应 API 权限；不记录请求体、凭据或私钥。
@@ -137,7 +136,6 @@ python3 scripts/test-wss-local.py
 附加回归测试：在 `src-server/` 执行 `cargo +nightly test --locked`，覆盖证书首次信任与复用、换证书拒绝、并发固定证书、错误凭据、完整 HTTP→WSS→SSE/WS、TCP 半关闭、大数据背压及 UDP 边界。
 
 **发布要求：** WSS v3 与已发布的旧明文 WS 服务端不兼容。先通过既有手动 CI 发布 `src-server/Cargo.toml` 的 `0.2.0`，再创建新实例。旧实例缺少新初始化凭据时会显示升级/重建提示，不会回退到旧协议。Android 的 Kotlin/JNI 参数已同步为实例 ID、随机访问凭据与私有信任目录；共享 VPN 层已通过 aarch64-apple-ios 编译检查，但本轮没有 Android/iOS 真机测试。
-
 
 # Android 构建与 VPN
 
@@ -160,11 +158,9 @@ Android 支持云主机 WSS v3 与 VMess AEAD（TCP/WebSocket、可选 TLS）的
 
 Vite 的 `envDir` 是 `scripts/`。本地默认订阅写入 `scripts/.env.local` 的 `VITE_SUBSCRIPTION_URL`；该文件由 `*.local` 忽略。链接会嵌入生成的前端资源，适用于本地验证包；不要将带个人订阅的 APK 对外分发。未配置本地覆盖时仍可在订阅页面输入链接。
 
-
 本次 Android 模拟器验证范围：订阅自动拉取/测速、首次 VPN 授权、Chrome 在 CloudTun 退到后台后访问 `https://www.google.com.hk/`、切换订阅节点、切换分流和停止清理。未实连云主机。Google 香港最终复测返回 HTTP 200，Chrome 导航协议为 HTTP/3，已验证经 VPN 的 UDP/443；TCP/HTTPS 也通过实际页面访问验证。STUN/19302 探测未收到成功响应（同节点在宿主机直接测试也失败），不将该项算作通过。
 
 覆盖安装后的首次启动曾出现一次原生 `FORTIFY: pthread_mutex_lock called on a destroyed mutex` 退出；系统没有提供可定位的崩溃堆栈。重新启动以及强停后的冷启动复测均通过，原因尚未定位，不能据此保证真机稳定性。
-
 
 ## Android 云主机实测（2026-11-20）
 
@@ -175,7 +171,6 @@ Vite 的 `envDir` 是 `scripts/`。本地默认订阅写入 `scripts/.env.local`
 实测修复：云主机校验只检查云资源相关必需字段，订阅候选列表的合法 null 值不再阻止购买；Android 与桌面共用主机就绪后的自动连接流程。增加空候选配置、非法带宽及 Android 购买/已有主机重连回归验证，前端共 27 项测试通过。
 
 后续已按用户确认将 Android 自动切换和连接通知迁入 VPN Service 管理的独立运行时，见下节。桌面端保留原有前端自动切换流程。
-
 
 ## Android Service 自动切换、通知与流量
 
@@ -228,3 +223,7 @@ PC 连接日志分级：CONNECT/WebSocket 隧道传输中的 UnexpectedEof 与�
 PC 云主机心跳丢失处理：保留每 30 秒检测、连续三次失败的门槛；达到门槛后在后端直连调用 DescribeInstances（明确指定实例 ID 和连接时的地域/凭据）。仅成功响应 TotalCount=0 且 InstanceSet 为空，或明确 InvalidInstanceId.NotFound 时确认丢失；仍能查到实例（包括停机、关机等状态）、权限/限流/网络错误、不完整或不匹配响应都保留代理并继续重试。凭据仅保存在心跳任务内存中。确认丢失后停止该云代理并恢复系统代理设置，广播状态，通知五秒后自动关闭；未确认丢失不再弹出「可能已回收」提示。停止时在代理切换锁下检查心跳取消状态、云来源与流量会话编号，旧查询不能关闭新节点或重连后的会话。
 
 云实例确认丢失通知调整：主界面移除 log::disconnected 的 message.error 监听，仅保留运行日志。PC 使用独立通知窗口；Android 使用独立 VPN 内核每 30 秒进行心跳，连续三次失败后以连接时传入的云凭据直连核查实例，共用严格的实例丢失判定。确认丢失通过 native status 的 cloudLost 事件交给 VpnService，Service 先释放 TUN/唤醒锁并移除前台运行通知，再发出与 PC 窗口相同的「云主机实例已丢失，代理已自动关闭」通知，系统 setTimeoutAfter(5000) 自动撤销。重复停止不会删除这条新通知。主 Rust 后台另外轮询 Service 存活状态，Service 停止后关闭本地 HTTP 监听和转发，不依赖 WebView 恢复才清理。新增凭据仍走 Unix 0600 私有配置文件，JNI 读取后由 Service 删除；未记录到诊断日志。
+
+订阅全不可用恢复流程：PC 在主动测速或自动候选测速确认无可用节点时显示红色「当前无可用节点，将在30秒后自动重试」，停止订阅代理并通过独立窗口通知。每轮测速完全结束后再计时 30 秒，不并行叠加重试；恢复时优先使用允许的候选节点，若当前运行云主机代理只通知订阅恢复，否则连接订阅节点。手动断开及更新订阅会使旧重试失效；更新订阅期间丢弃旧测速结果，并允许更新按钮中断正在进行的重试测速。切换到云主机不会被后续订阅恢复覆盖。
+
+按用户确认，Android 在全不可用后完全停止自动测速：独立内核产生 unavailable 终态，VpnService 关闭 VPN、移除运行通知并发送原生通知；终态保留供主 Rust 后台及界面同步。Android 显示「当前无可用节点，请手动重试」，不启动 PC 的 30 秒重试；手动测速恢复后可重新连接，或在云代理运行时只发原生通知。更新订阅清除旧终态，避免旧通知状态重新覆盖新界面。原有前台按节点完成即展示的六并发测速保持不变。

@@ -68,6 +68,30 @@ pub async fn tauri_android_get_vpn_connected<R: Runtime>(
   state.get_vpn_connected(h)
 }
 
+#[tauri::command]
+pub fn tauri_android_notify<R: Runtime>(
+  text: String,
+  _app: AppHandle<R>,
+  state: State<'_, Vpn<R>>,
+) -> TAResult<()> {
+  state
+    .0
+    .run_mobile_plugin::<StartVpnResponse>("notifySubscription", serde_json::json!({"text":text}))
+    .map(|_| ())
+    .into_ta_result()
+}
+#[tauri::command]
+pub fn tauri_android_reset_subscription_outage<R: Runtime>(
+  _app: AppHandle<R>,
+  state: State<'_, Vpn<R>>,
+) -> TAResult<()> {
+  state
+    .0
+    .run_mobile_plugin::<StartVpnResponse>("clearSubscriptionOutage", ())
+    .map(|_| ())
+    .into_ta_result()
+}
+
 #[derive(Clone)]
 pub struct Vpn<R: Runtime>(PluginHandle<R>);
 

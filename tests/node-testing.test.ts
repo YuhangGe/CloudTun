@@ -7,6 +7,16 @@ const settings = {
 };
 const notices: string[] = [];
 const calls: string[] = [];
+const connected: string[] = [];
+let backendStatus = {
+  running: false,
+  source: null as string | null,
+  nodeId: null as string | null,
+  name: null as string | null,
+  mode: 'global',
+  systemProxy: false,
+  error: null,
+};
 const pending = new Map<
   string,
   {
@@ -19,12 +29,31 @@ mock.module('jinge-antd', () => ({ message: { error: (text: string) => notices.p
 mock.module('@tauri-apps/api/event', () => ({ listen: async () => {} }));
 mock.module('@tauri-apps/api/window', () => ({ getCurrentWindow: () => ({}) }));
 mock.module('@/service/util', () => ({ IS_MOBILE: false, IS_ANDROID: false, IS_IOS: false }));
-mock.module('@/service/notify', () => ({ showNotifyWindow: async () => {} }));
+mock.module('@/service/notify', () => ({
+  showNotifyWindow: async ({ notifyMessage }: { notifyMessage: string }) =>
+    notices.push(notifyMessage),
+}));
 mock.module('../src/store/settings', () => ({ globalSettings: settings }));
 mock.module('../src/store/instance', () => ({ pauseCloudProxy() {} }));
 mock.module('../src/store/log', () => ({ appendLog() {} }));
 mock.module('@/service/desktop', () => ({
   desktopInvoke: (command: string, args: { nodeId: string }) => {
+    if (command === 'tauri_connect_subscription') {
+      connected.push(args.nodeId);
+      backendStatus = {
+        ...backendStatus,
+        running: true,
+        source: 'subscription',
+        nodeId: args.nodeId,
+      };
+      return Promise.resolve();
+    }
+    if (command === 'tauri_proxy_status') return Promise.resolve(backendStatus);
+    if (command === 'tauri_stop_proxy_client') {
+      backendStatus = { ...backendStatus, running: false, source: null };
+      return Promise.resolve();
+    }
+    if (command === 'tauri_interval_ping_stop') return Promise.resolve();
     if (command !== 'tauri_ping_subscription_nodes') throw new Error(`Unexpected ${command}`);
     calls.push(args.nodeId);
     return new Promise((resolve, reject) =>
@@ -35,7 +64,17 @@ mock.module('@/service/desktop', () => ({
     );
   },
 }));
-const { desktop, testNodes } = await import('../src/store/desktop');
+const timers: { fn: () => Promise<void>; delay: number }[] = [];
+Object.assign(globalThis, {
+  window: {
+    setTimeout(fn: () => Promise<void>, delay: number) {
+      timers.push({ fn, delay });
+      return timers.length;
+    },
+  },
+});
+const { desktop, testNodes, cancelSubscriptionRetry, updateSubscription } =
+  await import('../src/store/desktop');
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 function finish(id: string, latencyMs: number | null) {
   const request = pending.get(id)!;
@@ -43,9 +82,13 @@ function finish(id: string, latencyMs: number | null) {
   request.resolve([{ id, latencyMs }]);
 }
 beforeEach(() => {
+  cancelSubscriptionRetry();
+  timers.length = 0;
   pending.clear();
   calls.length = 0;
   notices.length = 0;
+  connected.length = 0;
+  backendStatus = { ...backendStatus, running: false, source: null, nodeId: null };
   settings.subscriptionSelectedId = 'current';
   settings.subscriptionAutoSwitch = false;
   settings.subscriptionCandidates = null;
@@ -107,7 +150,7 @@ test('no available candidate shows message.error even if an excluded node works'
   finish('second', 10);
   finish('third', null);
   await run;
-  expect(notices).toEqual(['当前无可用节点']);
+  expect(notices).toEqual(['当前无可用订阅节点，订阅代理已断开']);
 });
 test('a request failure finishes its loading state and does not block remaining nodes', async () => {
   const run = testNodes();
@@ -118,7 +161,7 @@ test('a request failure finishes its loading state and does not block remaining 
   await run;
   expect(desktop.nodes.every((node) => node.tested)).toBe(true);
   expect(desktop.testing).toBe(false);
-  expect(notices).toEqual(['当前无可用节点']);
+  expect(notices).toEqual(['当前无可用订阅节点，订阅代理已断开']);
 });
 test('keeps concurrency at six while queued nodes also show loading', async () => {
   desktop.nodes.push(
@@ -133,4 +176,73 @@ test('keeps concurrency at six while queued nodes also show loading', async () =
   for (const id of pending.keys()) finish(id, 100);
   await run;
   expect(desktop.nodes.every((node) => node.tested)).toBe(true);
+});
+
+test('all unavailable disconnects once and retries after 30 seconds until recovery connects', async () => {
+  desktop.status = {
+    ...backendStatus,
+    running: true,
+    source: 'subscription',
+    nodeId: 'current',
+    name: 'current',
+  } as typeof desktop.status;
+  const first = testNodes();
+  for (const id of pending.keys()) finish(id, null);
+  await first;
+  expect(desktop.subscriptionUnavailable).toBe(true);
+  expect(desktop.status.running).toBe(false);
+  expect(timers.at(-1)!.delay).toBe(30_000);
+  const retry = timers.at(-1)!.fn();
+  for (const id of pending.keys()) finish(id, null);
+  await retry;
+  expect(notices.length).toBe(1);
+  expect(timers.at(-1)!.delay).toBe(30_000);
+  const recovered = timers.at(-1)!.fn();
+  finish('current', null);
+  finish('second', 200);
+  finish('third', null);
+  await recovered;
+  expect(desktop.subscriptionUnavailable).toBe(false);
+  expect(connected).toEqual(['second']);
+});
+test('subscription recovery leaves a cloud proxy running and only notifies', async () => {
+  desktop.subscriptionUnavailable = true;
+  desktop.status = {
+    ...backendStatus,
+    running: true,
+    source: 'cloud',
+    name: '192.0.2.1',
+  } as typeof desktop.status;
+  const run = testNodes();
+  finish('current', null);
+  finish('second', 200);
+  finish('third', null);
+  await run;
+  expect(connected).toEqual([]);
+  expect(desktop.status.source).toBe('cloud');
+  expect(notices).toEqual(['有订阅节点可用：second']);
+});
+test('updating a subscription invalidates a pending retry even if the update fails', async () => {
+  const run = testNodes();
+  for (const id of pending.keys()) finish(id, null);
+  await run;
+  const timer = timers.at(-1)!;
+  const count = calls.length;
+  await updateSubscription('https://example.test/updated');
+  await timer.fn();
+  expect(calls.length).toBe(count);
+  expect(desktop.subscriptionUnavailable).toBe(false);
+});
+
+test('updating while retry requests are in flight discards their results and reconnect actions', async () => {
+  desktop.subscriptionUnavailable = true;
+  const run = testNodes();
+  const oldRequests = new Map(pending);
+  await updateSubscription('https://example.test/changed');
+  for (const [id, request] of oldRequests) request.resolve([{ id, latencyMs: 100 }]);
+  await run;
+  expect(desktop.subscriptionUnavailable).toBe(false);
+  expect(desktop.testing).toBe(false);
+  expect(connected).toEqual([]);
+  expect(desktop.nodes.every((node) => node.latencyMs === null)).toBe(true);
 });

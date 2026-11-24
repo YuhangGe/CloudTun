@@ -155,9 +155,9 @@ pub fn run() {
   #[cfg(target_os = "android")]
   {
     use crate::android::{
-      tauri_android_get_vpn_connected, tauri_android_init_plugin,
-      tauri_android_request_notification_permission, tauri_android_start_vpn,
-      tauri_android_stop_vpn,
+      tauri_android_get_vpn_connected, tauri_android_init_plugin, tauri_android_notify,
+      tauri_android_request_notification_permission, tauri_android_reset_subscription_outage,
+      tauri_android_start_vpn, tauri_android_stop_vpn,
     };
 
     builder = builder
@@ -177,6 +177,8 @@ pub fn run() {
         tauri_android_start_vpn,
         tauri_android_stop_vpn,
         tauri_android_get_vpn_connected,
+        tauri_android_notify,
+        tauri_android_reset_subscription_outage,
         tauri_android_set_failover,
         tauri_start_proxy_client,
         tauri_stop_proxy_client,

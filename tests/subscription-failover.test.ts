@@ -8,6 +8,7 @@ const settings = {
   routingMode: 'global',
 };
 let activeNode = 'current';
+let running = true;
 let subscriptionUrl = 'https://example.test/first';
 let tick: (() => Promise<void>) | undefined;
 let backupHealthy = true;
@@ -48,7 +49,7 @@ mock.module('@/service/desktop', () => ({
       case 'tauri_update_subscription':
         return { url: subscriptionUrl, nodes, updatedAt: 1 };
       case 'tauri_proxy_status':
-        return { running: true, source: 'subscription', nodeId: activeNode, name: activeNode };
+        return { running, source: 'subscription', nodeId: activeNode, name: activeNode };
       case 'tauri_get_proxy_config':
         return { config: {}, addresses: [] };
       case 'tauri_check_subscription_node':
@@ -56,7 +57,11 @@ mock.module('@/service/desktop', () => ({
         return args.nodeId === 'backup' && backupHealthy;
       case 'tauri_ping_subscription_nodes':
         return (args.nodeIds ?? []).map((id) => ({ id, latencyMs: id === 'fast' ? 20 : 40 }));
+      case 'tauri_stop_proxy_client':
+        running = false;
+        return;
       case 'tauri_connect_subscription':
+        running = true;
         activeNode = args.nodeId!;
         order.push('connect ' + activeNode);
     }

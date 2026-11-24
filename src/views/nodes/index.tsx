@@ -2,7 +2,7 @@ import { cx, onMount, vm, watch } from 'jinge';
 import { Button } from 'jinge-antd';
 
 import { SubscriptionShare } from '@/components/SubscriptionShare';
-import { IS_IOS } from '@/service/util';
+import { IS_IOS, IS_ANDROID } from '@/service/util';
 import {
   desktop,
   updateSubscription,
@@ -187,13 +187,7 @@ export function NodesView() {
               void updateSubscription(state.url);
             }}
             loading={desktop.updating}
-            disabled={
-              IS_IOS ||
-              !state.url.trim() ||
-              desktop.connecting ||
-              desktop.testing ||
-              Boolean(desktop.testingNodeId)
-            }
+            disabled={IS_IOS || !state.url.trim() || desktop.connecting}
           >
             更新订阅
           </Button>
@@ -213,7 +207,13 @@ export function NodesView() {
                 {desktop.nodes.length}
               </span>
             </h2>
-            <p>{state.available} 个节点通过真连接测试（5 秒超时）</p>
+            {desktop.subscriptionUnavailable ? (
+              <p className="text-error!">
+                {IS_ANDROID ? '当前无可用节点，请手动重试' : '当前无可用节点，将在30秒后自动重试'}
+              </p>
+            ) : (
+              <p>{state.available} 个节点通过真连接测试（5 秒超时）</p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button

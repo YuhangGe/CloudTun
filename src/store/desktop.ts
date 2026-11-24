@@ -1,7 +1,6 @@
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { vm } from 'jinge';
-import { message } from 'jinge-antd';
 
 import { desktopInvoke } from '@/service/desktop';
 import { showNotifyWindow } from '@/service/notify';
@@ -30,6 +29,7 @@ export interface ProxyStatus {
   mode: RoutingMode;
   systemProxy: boolean;
   error: string | null;
+  eventKind?: string | null;
 }
 interface Subscription {
   url: string;
@@ -57,6 +57,7 @@ export const desktop = vm({
   ready: false,
   updating: false,
   testing: false,
+  subscriptionUnavailable: false,
   testingNodeId: '',
   connecting: false,
   subscriptionUrl: defaultSubscriptionUrl,
@@ -79,6 +80,52 @@ let failoverRevision = 0;
 let monitoredNode: string | null = null;
 let failures = 0;
 let notified = false;
+let retryTimer = 0;
+let recoveryRevision = 0;
+
+export function cancelSubscriptionRetry() {
+  ++recoveryRevision;
+  clearTimeout(retryTimer);
+  retryTimer = 0;
+  desktop.subscriptionUnavailable = false;
+}
+async function subscriptionNotice(text: string, success = false) {
+  try {
+    if (IS_ANDROID) await desktopInvoke('tauri_android_notify', { text });
+    else await showNotifyWindow({ notifyType: success ? 'success' : 'error', notifyMessage: text });
+  } catch (error) {
+    appendLog(`订阅通知失败：${errorText(error)}`);
+  }
+}
+function scheduleRetry() {
+  if (IS_ANDROID || !desktop.subscriptionUnavailable || retryTimer) return;
+  const revision = recoveryRevision;
+  retryTimer = window.setTimeout(async () => {
+    retryTimer = 0;
+    if (revision !== recoveryRevision || !desktop.subscriptionUnavailable) return;
+    if (desktop.connecting || desktop.updating || desktop.testing || desktop.testingNodeId) {
+      scheduleRetry();
+      return;
+    }
+    await testNodes();
+  }, 30_000);
+}
+async function subscriptionUnavailable() {
+  const revision = recoveryRevision;
+  const first = !desktop.subscriptionUnavailable;
+  desktop.subscriptionUnavailable = true;
+  if (desktop.status.running && desktop.status.source === 'subscription')
+    await disconnectProxy(true);
+  if (revision !== recoveryRevision) return;
+  if (first)
+    await subscriptionNotice(
+      desktop.status.running && desktop.status.source === 'cloud'
+        ? '当前无可用订阅节点，云主机代理保持运行'
+        : '当前无可用订阅节点，订阅代理已断开',
+    );
+  if (revision === recoveryRevision) scheduleRetry();
+}
+
 function errorText(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -131,6 +178,17 @@ async function syncAndroidFailover() {
 
 function applyStatus(status: ProxyStatus) {
   desktop.status = status;
+  if (IS_ANDROID && status.eventKind === 'unavailable') {
+    if (!desktop.subscriptionUnavailable) {
+      const ids = globalSettings.subscriptionCandidates ?? [];
+      for (const node of desktop.nodes)
+        if (node.id === status.nodeId || ids.includes(node.id)) {
+          node.latencyMs = null;
+          node.tested = true;
+        }
+    }
+    desktop.subscriptionUnavailable = true;
+  }
   if (IS_ANDROID && status.running && status.source === 'subscription' && status.nodeId)
     globalSettings.subscriptionSelectedId = status.nodeId;
 }
@@ -201,10 +259,7 @@ async function monitorSubscription() {
   }
   if (!notified) {
     notified = true;
-    await showNotifyWindow({
-      notifyType: 'error',
-      notifyMessage: '当前节点异常，暂无可用候选节点',
-    });
+    await subscriptionUnavailable();
   }
 }
 
@@ -250,7 +305,7 @@ export function initializeDesktop() {
         if (!IS_MOBILE) {
           const mainWindow = getCurrentWindow();
           await mainWindow.onCloseRequested((event) => {
-            if (!globalSettings.subscriptionAutoSwitch) return;
+            if (!globalSettings.subscriptionAutoSwitch && !desktop.subscriptionUnavailable) return;
             event.preventDefault();
             void mainWindow.hide().catch((error) => appendLog(errorText(error)));
           });
@@ -272,9 +327,54 @@ export function initializeDesktop() {
   })();
   return initialized;
 }
+async function finishSubscriptionTests(recovery: number) {
+  const available = (node: NodeEntry | undefined): node is NodeEntry =>
+    Boolean(
+      node &&
+      !node.unsupportedReason &&
+      node.tested &&
+      node.latencyMs !== null &&
+      node.latencyMs > 0 &&
+      node.latencyMs < 5000,
+    );
+  if (recovery !== recoveryRevision) return;
+  const recovering = desktop.subscriptionUnavailable;
+  const current = desktop.nodes.find((node) => node.id === globalSettings.subscriptionSelectedId);
+  if (!recovering && available(current)) return;
+  const candidates = globalSettings.subscriptionAutoSwitch
+    ? (globalSettings.subscriptionCandidates ?? []).map((id) =>
+        desktop.nodes.find((node) => node.id === id),
+      )
+    : desktop.nodes;
+  const next = candidates.find(available);
+  if (!next) {
+    await subscriptionUnavailable();
+    return;
+  }
+  desktop.subscriptionUnavailable = false;
+  if (recovering) {
+    globalSettings.subscriptionSelectedId = next.id;
+    if (desktop.status.running && desktop.status.source === 'cloud') {
+      await subscriptionNotice(`有订阅节点可用：${next.name}`, true);
+    } else {
+      await connectSelected(next.id);
+      if (
+        recovery === recoveryRevision &&
+        (!desktop.status.running || desktop.status.source !== 'subscription')
+      ) {
+        desktop.subscriptionUnavailable = true;
+        scheduleRetry();
+      }
+    }
+  } else await selectNode(next);
+}
+
 export async function testNodes() {
   if (desktop.testing || desktop.testingNodeId) return;
   const generation = ++testGeneration;
+  const recovery = recoveryRevision;
+  clearTimeout(retryTimer);
+  retryTimer = 0;
   desktop.testing = true;
   desktop.error = '';
   const nodes = desktop.nodes.filter((node) => !node.unsupportedReason);
@@ -307,36 +407,22 @@ export async function testNodes() {
   try {
     await Promise.all(Array.from({ length: Math.min(6, nodes.length) }, worker));
     if (generation !== testGeneration) return;
-    const available = (node: NodeEntry | undefined): node is NodeEntry =>
-      Boolean(
-        node &&
-        !node.unsupportedReason &&
-        node.tested &&
-        node.latencyMs !== null &&
-        node.latencyMs > 0 &&
-        node.latencyMs < 5000,
-      );
-    const current = desktop.nodes.find((node) => node.id === globalSettings.subscriptionSelectedId);
-    if (available(current)) return;
-    const candidates = globalSettings.subscriptionAutoSwitch
-      ? (globalSettings.subscriptionCandidates ?? []).map((id) =>
-          desktop.nodes.find((node) => node.id === id),
-        )
-      : desktop.nodes;
-    const next = candidates.find(available);
-    if (next) await selectNode(next);
-    else void message.error('当前无可用节点');
+    await finishSubscriptionTests(recovery);
   } finally {
     if (generation === testGeneration) desktop.testing = false;
   }
 }
 export async function updateSubscription(url: string) {
   if (IS_IOS) return false;
-  if (desktop.updating || desktop.connecting || desktop.testing || desktop.testingNodeId)
-    return false;
+  cancelSubscriptionRetry();
+  if (desktop.updating || desktop.connecting) return false;
+  ++testGeneration;
+  desktop.testing = false;
+  desktop.testingNodeId = '';
   desktop.updating = true;
   desktop.error = '';
   try {
+    if (IS_ANDROID) await desktopInvoke('tauri_android_reset_subscription_outage');
     const data = await desktopInvoke<Subscription>('tauri_update_subscription', { url });
     useSubscription(data);
     await syncAndroidFailover();
@@ -351,8 +437,11 @@ export async function updateSubscription(url: string) {
     desktop.updating = false;
   }
 }
-export async function disconnectProxy() {
+export async function disconnectProxy(preserveRetry = false) {
+  if (!preserveRetry) cancelSubscriptionRetry();
   if (desktop.connecting) return false;
+  ++failoverRevision;
+  monitoredNode = null;
   pauseCloudProxy();
   desktop.connecting = true;
   try {
@@ -370,6 +459,8 @@ export async function disconnectProxy() {
 export async function connectSelected(nodeId = globalSettings.subscriptionSelectedId) {
   if (IS_IOS) return;
   if (desktop.connecting || !nodeId) return;
+  ++failoverRevision;
+  monitoredNode = null;
   pauseCloudProxy();
   desktop.connecting = true;
   desktop.error = '';
@@ -511,6 +602,10 @@ export async function connectCloudProxy(serverIp: string, cvmId: string) {
 export async function testNodeLatency(nodeId: string) {
   if (IS_IOS || desktop.testing || desktop.testingNodeId || desktop.updating || desktop.connecting)
     return;
+  const generation = testGeneration;
+  const recovery = recoveryRevision;
+  clearTimeout(retryTimer);
+  retryTimer = 0;
   desktop.testingNodeId = nodeId;
   desktop.error = '';
   try {
@@ -518,15 +613,18 @@ export async function testNodeLatency(nodeId: string) {
       'tauri_ping_subscription_nodes',
       { nodeId },
     );
+    if (generation !== testGeneration) return;
     const result = results.find((result) => result.id === nodeId);
     const node = desktop.nodes.find((node) => node.id === nodeId);
     if (node && result) {
       node.latencyMs = result.latencyMs;
       node.tested = true;
     }
+    if (desktop.nodes.every((node) => node.unsupportedReason || node.tested))
+      await finishSubscriptionTests(recovery);
   } catch (error) {
-    desktop.error = errorText(error);
+    if (generation === testGeneration) desktop.error = errorText(error);
   } finally {
-    desktop.testingNodeId = '';
+    if (generation === testGeneration) desktop.testingNodeId = '';
   }
 }
