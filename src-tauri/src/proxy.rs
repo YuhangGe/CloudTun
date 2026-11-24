@@ -176,6 +176,31 @@ impl ProxyLoop {
       .as_ref()
       .map(|proxy| proxy.traffic.snapshot())
   }
+  #[cfg(desktop)]
+  pub(crate) async fn stop_lost_cloud<R: Runtime>(
+    &self,
+    app: &AppHandle<R>,
+    session_id: u64,
+    cancel: &CancellationToken,
+  ) -> anyhow::Result<bool> {
+    let _transition = self.transition.lock().await;
+    {
+      let state = self.inner.lock().await;
+      if cancel.is_cancelled()
+        || state.status.source.as_deref() != Some("cloud")
+        || state
+          .running
+          .as_ref()
+          .is_none_or(|running| running.traffic.snapshot().session_id != session_id)
+      {
+        return Ok(false);
+      }
+    }
+    let result = self.stop().await;
+    let _ = app.emit("proxy-status", &self.inner.lock().await.status);
+    result?;
+    Ok(true)
+  }
   fn backup(&self) -> PathBuf {
     self.directory.join("system-proxy-backup.json")
   }
@@ -203,7 +228,10 @@ impl ProxyLoop {
     node_id: Option<String>,
     name: String,
     mode: RoutingMode,
+    cloud_monitor: Option<cloudtun_proxy::cloud_health::CloudMonitor>,
   ) -> anyhow::Result<()> {
+    #[cfg(not(target_os = "android"))]
+    let _ = &cloud_monitor;
     #[cfg(target_os = "android")]
     let connector = proxy.connector();
     let listener = proxy.listener_control();
@@ -214,6 +242,7 @@ impl ProxyLoop {
       let config_path = self.directory.join("vpn-config.json");
       let mut vpn_config = connector.config();
       vpn_config.failover = self.failover_config().await;
+      vpn_config.cloud_monitor = cloud_monitor;
       save_private(&config_path, &serde_json::to_vec(&vpn_config)?)?;
       let config = config_path.to_string_lossy().into_owned();
       let app = h.clone();
@@ -234,6 +263,7 @@ impl ProxyLoop {
     let mut state = self.inner.lock().await;
     let task = tokio::spawn(async move {
       let log_handle = app.clone();
+      #[cfg(not(target_os = "android"))]
       let error = proxy
         .run(token.clone(), move |kind, text| {
           emit_log(&log_handle, kind, text)
@@ -241,6 +271,31 @@ impl ProxyLoop {
         .await
         .err()
         .map(|e| e.to_string());
+      #[cfg(target_os = "android")]
+      let (error, service_stopped) = {
+        let monitor_app = app.clone();
+        let monitor_token = token.clone();
+        let monitor = async move {
+          loop {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            let check_app = monitor_app.clone();
+            let connected = tokio::task::spawn_blocking(move || {
+              check_app
+                .state::<crate::android::Vpn<R>>()
+                .service_connected()
+            })
+            .await;
+            if matches!(connected, Ok(Ok(false))) {
+              monitor_token.cancel();
+              break;
+            }
+          }
+        };
+        tokio::select! {
+          result = proxy.run(token.clone(), move |kind, text| emit_log(&log_handle, kind, text)) => (result.err().map(|e| e.to_string()), false),
+          _ = monitor => (None, true),
+        }
+      };
       #[cfg(target_os = "android")]
       {
         // Both service-side revocation and a stopped listener tear down the whole session.
@@ -251,6 +306,14 @@ impl ProxyLoop {
             .stop_vpn(stop_app.clone())
         })
         .await;
+      }
+      #[cfg(target_os = "android")]
+      if service_stopped {
+        let mut state = inner.lock().await;
+        state.running = None;
+        state.status = ProxyStatus::default();
+        let _ = app.emit("proxy-status", &state.status);
+        return;
       }
       if !token.is_cancelled() {
         let error = error.unwrap_or_else(|| "代理监听已意外停止".into());
@@ -353,6 +416,7 @@ pub async fn tauri_start_proxy_client<R: Runtime>(
   server_ip: String,
   cvm_id: String,
   mode: RoutingMode,
+  cloud: Option<cloudtun_proxy::cloud_health::CloudMonitor>,
 ) -> TAResult<()> {
   async {
     anyhow::ensure!(
@@ -381,7 +445,7 @@ pub async fn tauri_start_proxy_client<R: Runtime>(
     )
     .await?;
     state
-      .start(proxy, handle, "cloud", None, server_ip, mode)
+      .start(proxy, handle, "cloud", None, server_ip, mode, cloud)
       .await
   }
   .await
@@ -705,7 +769,7 @@ pub async fn tauri_connect_subscription<R: Runtime>(
     )
     .await?;
     state
-      .start(proxy, handle, "subscription", Some(id), name, mode)
+      .start(proxy, handle, "subscription", Some(id), name, mode, None)
       .await
   }
   .await

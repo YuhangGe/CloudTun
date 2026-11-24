@@ -121,6 +121,7 @@ async fn command<R: Runtime>(
         args["serverIp"].as_str().unwrap_or_default().into(),
         args["cvmId"].as_str().unwrap_or_default().into(),
         serde_json::from_value(args["mode"].clone()).unwrap_or_default(),
+        serde_json::from_value(args["cloud"].clone()).unwrap_or(None),
       )
       .await,
     ),
@@ -128,6 +129,7 @@ async fn command<R: Runtime>(
       crate::ping::tauri_interval_ping_start(
         args["ip"].as_str().unwrap_or_default(),
         args["token"].as_str().unwrap_or_default(),
+        serde_json::from_value(args["cloud"].clone()).unwrap_or(None),
         app.clone(),
         app.state(),
       )

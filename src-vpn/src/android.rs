@@ -44,6 +44,7 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_start(
     let config: VpnConfig =
       serde_json::from_slice(&std::fs::read(java_string(&mut env, &config))?)?;
     let policy = config.failover.clone();
+    let cloud_monitor = config.cloud_monitor.clone();
     let connector = config.connector()?;
     let failover = crate::failover::Failover::new(connector.clone(), policy);
     let mut state = SESSION
@@ -66,8 +67,9 @@ pub unsafe extern "C" fn Java_com_cloudtun_app_CloudTunVpn_start(
     let cancel = CancellationToken::new();
     if let Some(server) = connector.cloud_endpoint() {
       let heartbeat_cancel = cancel.clone();
+      let status = failover.clone();
       runtime.spawn(async move {
-        crate::start_ping_interval(&server, &heartbeat_cancel).await;
+        crate::ping::monitor_cloud(server, cloud_monitor, heartbeat_cancel, status).await;
       });
     }
     runtime.spawn(failover.clone().run(cancel.clone()));

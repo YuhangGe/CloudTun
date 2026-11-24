@@ -446,11 +446,13 @@ checksum = "e0921b3876b3a1df8a1c9f912e7f94342458022c2e84288015893d83c4d62a79"
 name = "cloudtun-common"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "futures-util",
  "hex",
  "hmac 0.13.0",
  "http",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -2140,6 +2142,8 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",
+ "serde",
+ "serde_json",
  "sync_wrapper",
  "tokio",
  "tokio-rustls",

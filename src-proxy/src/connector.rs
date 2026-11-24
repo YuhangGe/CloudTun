@@ -25,6 +25,8 @@ pub enum VpnOutbound {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct VpnConfig {
   #[serde(default)]
+  pub cloud_monitor: Option<crate::cloud_health::CloudMonitor>,
+  #[serde(default)]
   pub failover: FailoverConfig,
   pub outbound: VpnOutbound,
   pub mode: RoutingMode,
@@ -94,6 +96,7 @@ impl ProxyConnector {
       Outbound::Vmess(node) => VpnOutbound::Subscription { node: node.clone() },
     };
     VpnConfig {
+      cloud_monitor: None,
       failover: FailoverConfig::default(),
       outbound,
       mode: self.routing.current_mode(),

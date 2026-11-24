@@ -79,6 +79,19 @@ impl Failover {
       }),
     })
   }
+  pub fn cloud_lost(&self) {
+    let mut policy = self.policy.lock().unwrap_or_else(|e| e.into_inner());
+    if policy.status.source != "cloud" {
+      return;
+    }
+    policy.status.running = false;
+    policy.status.auto_switch = false;
+    Self::event(
+      &mut policy,
+      "cloudLost",
+      cloudtun_proxy::cloud_health::INSTANCE_LOST_MESSAGE.into(),
+    );
+  }
   pub fn snapshot(&self) -> VpnStatus {
     let mut status = self
       .policy
@@ -231,6 +244,29 @@ async fn rank(nodes: Vec<SubscriptionNode>) -> Vec<SubscriptionNode> {
 #[cfg(test)]
 mod tests {
   use super::*;
+  #[test]
+  fn cloud_loss_retains_a_service_event_until_service_teardown() {
+    let connector = cloudtun_proxy::ProxyConnector::cloud(
+      cloudtun_common::tls::CloudEndpoint::new(
+        "192.0.2.1".into(),
+        24816,
+        "ins-test".into(),
+        "01".repeat(32),
+        std::env::temp_dir().join("cloudtun-test-trust"),
+      )
+      .unwrap(),
+    );
+    let failover = Failover::new(connector, FailoverConfig::default());
+    failover.cloud_lost();
+    let status = failover.snapshot();
+    assert!(!status.running);
+    assert!(!status.auto_switch);
+    assert_eq!(status.event_kind.as_deref(), Some("cloudLost"));
+    assert_eq!(
+      status.event_message.as_deref(),
+      Some(cloudtun_proxy::cloud_health::INSTANCE_LOST_MESSAGE)
+    );
+  }
   fn node(id: &str) -> SubscriptionNode {
     cloudtun_proxy::subscription::parse_subscription(&format!("vmess://{}", base64_node(id)))
       .unwrap()
@@ -245,6 +281,7 @@ mod tests {
     let a = node("A");
     let b = node("B");
     let connector = cloudtun_proxy::VpnConfig {
+      cloud_monitor: None,
       outbound: serde_json::from_value(serde_json::json!({"type":"subscription","node":a}))
         .unwrap(),
       mode: RoutingMode::Global,

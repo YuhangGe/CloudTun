@@ -26,3 +26,5 @@ pub use traffic::{TrafficCounter, TrafficSnapshot};
 
 mod connector;
 pub use connector::{FailoverConfig, ProxyConnector, VpnConfig};
+
+pub mod cloud_health;

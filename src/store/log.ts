@@ -1,6 +1,5 @@
 import { listen } from '@tauri-apps/api/event';
 import { vm } from 'jinge';
-import { message } from 'jinge-antd';
 
 import { desktopInvoke } from '@/service/desktop';
 
@@ -58,9 +57,6 @@ export function initializeLogs() {
       // Subscribe first, then merge the snapshot by id to avoid gaps and duplicates.
       await listen<LogEvent>('log-entry', (event) => {
         receive(event.payload);
-      });
-      await listen<string>('log::disconnected', (event) => {
-        void message.error({ content: event.payload, duration: 0 });
       });
     } else if (import.meta.env.DEV) {
       window.setInterval(() => {

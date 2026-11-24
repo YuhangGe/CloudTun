@@ -45,6 +45,12 @@ class CloudTunVpnService : VpnService() {
           return
         }
         val status = JSONObject(raw)
+        if (status.optString("eventKind") == "cloudLost") {
+          val message = status.optString("eventMessage")
+          disconnect()
+          showEvent("云主机实例已丢失", message, 5000)
+          return
+        }
         updateWakeLock(status.optBoolean("autoSwitch"))
         val sample = vpn.stats()
         val trafficText = if (sample == "null") "速率 0 B/s · 累计 0 B" else JSONObject(sample).let {
@@ -96,14 +102,14 @@ class CloudTunVpnService : VpnService() {
       .addAction(R.drawable.ic_stat_vpn, "断开连接", stop)
       .build()
   }
-  private fun showEvent(title: String, message: String) {
+  private fun showEvent(title: String, message: String, timeoutMs: Long = 0) {
     if (!manager().areNotificationsEnabled()) return
     try {
       manager().notify(EVENT_ID, NotificationCompat.Builder(this, EVENT_CHANNEL)
         .setContentTitle("CloudTun · $title").setContentText(message)
         .setStyle(NotificationCompat.BigTextStyle().bigText(message))
         .setSmallIcon(R.drawable.ic_stat_vpn).setContentIntent(openIntent())
-        .setAutoCancel(true).build())
+        .setAutoCancel(true).setTimeoutAfter(timeoutMs).build())
     } catch (error: SecurityException) { Log.w("CloudTunVpnService", "Notification permission unavailable") }
   }
   private fun updateWakeLock(enabled: Boolean) {
@@ -133,7 +139,8 @@ class CloudTunVpnService : VpnService() {
         .addRoute("0.0.0.0", 0).addDnsServer("198.18.0.2").setMtu(1500)
       builder.addDisallowedApplication(packageName)
       vpnInterface = checkNotNull(builder.establish()) { "未获得 VPN 授权" }
-      val result = vpn.start(vpnInterface!!.fd, 1500, checkNotNull(intent.getStringExtra("config")) { "缺少 VPN 配置" })
+      val config = checkNotNull(intent.getStringExtra("config")) { "缺少 VPN 配置" }
+      val result = try { vpn.start(vpnInterface!!.fd, 1500, config) } finally { java.io.File(config).delete() }
       check(result == 0) { "启动 VPN 内核失败 ($result)" }
       isVpnConnected = true
       handler.post(healthCheck)
@@ -147,7 +154,7 @@ class CloudTunVpnService : VpnService() {
     return START_NOT_STICKY
   }
   private fun finishStart(error: String?) { val callback = startCallback; startCallback = null; callback?.invoke(error) }
-  fun disconnect() { closeVpn(); manager().cancel(EVENT_ID); stopSelf() }
+  fun disconnect() { val connected = isVpnConnected; closeVpn(); if (connected) manager().cancel(EVENT_ID); stopSelf() }
   private fun closeVpn() {
     handler.removeCallbacks(healthCheck)
     isVpnConnected = false

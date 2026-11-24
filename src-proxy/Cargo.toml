@@ -12,7 +12,7 @@ required-features = ["bin"]
 bin = ["clap", "ctrlc2", "cloudtun-common/ping"]
 
 [dependencies]
-cloudtun-common = { path = "../src-common", features = ["proxy"] }
+cloudtun-common = { path = "../src-common", features = ["proxy", "tencent"] }
 axum = { version = "0.8.9", features = ["ws"] }
 tokio = { version = "1.54.1", features = ["full"] }
 tokio-util = { version = "0.7.20", features = ["rt"] }

@@ -38,6 +38,7 @@ pub async fn tauri_android_start_vpn<R: Runtime>(
     server_ip.into(),
     cvm_id.into(),
     cloudtun_proxy::RoutingMode::default(),
+    None,
   )
   .await?;
   Ok(true)
@@ -71,6 +72,14 @@ pub async fn tauri_android_get_vpn_connected<R: Runtime>(
 pub struct Vpn<R: Runtime>(PluginHandle<R>);
 
 impl<R: Runtime> Vpn<R> {
+  pub fn service_connected(&self) -> anyhow::Result<bool> {
+    Ok(
+      self
+        .0
+        .run_mobile_plugin::<CheckVpnConnectedResponse>("getVpnConnected", ())?
+        .connected,
+    )
+  }
   pub fn start_vpn(&self, h: AppHandle<R>, config: String) -> TAResult<bool> {
     let ret = self
       .0

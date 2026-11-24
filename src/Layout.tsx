@@ -42,7 +42,6 @@ export function Layout(props: { initialView: StartupView }) {
     }
   }
   function navigate(view: string) {
-    if (desktop.connecting || desktop.updating) return;
     state.view = view;
   }
   return (
@@ -63,12 +62,11 @@ export function Layout(props: { initialView: StartupView }) {
               type="button"
               key={item.value}
               className={cx(
-                'flex min-h-12 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-0 px-1 py-2 text-[10px] transition-colors hover:bg-primary/5 disabled:cursor-wait disabled:opacity-50 sm:mb-1 sm:flex-row sm:justify-start sm:gap-3 sm:px-3.5 sm:py-3 sm:text-sm',
+                'flex min-h-12 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-0 px-1 py-2 text-[10px] transition-colors hover:bg-primary/5 sm:mb-1 sm:flex-row sm:justify-start sm:gap-3 sm:px-3.5 sm:py-3 sm:text-sm',
                 state.view === item.value
                   ? 'bg-primary/10 font-semibold text-primary'
                   : 'bg-transparent text-normal-text',
               )}
-              disabled={desktop.connecting || desktop.updating}
               aria-current={state.view === item.value ? 'page' : undefined}
               on:click={() => {
                 navigate(item.value);

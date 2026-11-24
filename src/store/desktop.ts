@@ -462,7 +462,15 @@ export async function connectCloudProxy(serverIp: string, cvmId: string) {
     desktop.status.name === serverIp
   ) {
     if (!IS_MOBILE)
-      await desktopInvoke('tauri_interval_ping_start', { ip: serverIp, token: cvmId });
+      await desktopInvoke('tauri_interval_ping_start', {
+        ip: serverIp,
+        token: cvmId,
+        cloud: {
+          secretId: globalSettings.secretId,
+          secretKey: globalSettings.secretKey,
+          region: globalSettings.region,
+        },
+      });
     return true;
   }
   desktop.connecting = true;
@@ -472,10 +480,23 @@ export async function connectCloudProxy(serverIp: string, cvmId: string) {
       serverIp,
       cvmId,
       mode: globalSettings.routingMode,
+      cloud: {
+        secretId: globalSettings.secretId,
+        secretKey: globalSettings.secretKey,
+        region: globalSettings.region,
+      },
     });
     await refreshStatus();
     if (!IS_MOBILE)
-      await desktopInvoke('tauri_interval_ping_start', { ip: serverIp, token: cvmId });
+      await desktopInvoke('tauri_interval_ping_start', {
+        ip: serverIp,
+        token: cvmId,
+        cloud: {
+          secretId: globalSettings.secretId,
+          secretKey: globalSettings.secretKey,
+          region: globalSettings.region,
+        },
+      });
     appendLog('云上主机代理已连接');
     return true;
   } catch (error) {
